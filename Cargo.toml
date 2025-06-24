@@ -1,0 +1,29 @@
+[package]
+name = "quickemu-manager"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dioxus = { version = "0.6", features = ["desktop"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+notify = "8"
+sysinfo = "0.35"
+anyhow = "1"
+thiserror = "2"
+dirs = "6"
+chrono = "0.4"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+which = "8"
+reqwest = { version = "0.12", features = ["blocking"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+procfs = "0.17"
+
+[profile.release]
+lto = true
+opt-level = 3
+strip = true
