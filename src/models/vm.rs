@@ -50,6 +50,7 @@ pub struct VMTemplate {
     pub name: String,
     pub os: String,
     pub version: String,
+    pub edition: Option<String>,
     pub ram: String,
     pub disk_size: String,
     pub cpu_cores: u32,

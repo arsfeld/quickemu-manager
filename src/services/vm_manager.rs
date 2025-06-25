@@ -300,20 +300,54 @@ impl VMManager {
         let template_version = template.version.clone();
         
         thread::spawn(move || {
+            println!("Attempting to run quickget at: {}", quickget_path.display());
+            println!("Working directory: {}", output_dir.display());
+            let cmd_str = if let Some(ref edition) = template.edition {
+                format!("{} {} {} {}", quickget_path.display(), template_os, template_version, edition)
+            } else {
+                format!("{} {} {}", quickget_path.display(), template_os, template_version)
+            };
+            println!("Command: {}", cmd_str);
+            
+            // Ensure output directory exists
+            if let Err(e) = std::fs::create_dir_all(&output_dir) {
+                let _ = tx.send(format!("Failed to create directory {}: {}", output_dir.display(), e));
+                return;
+            }
+            
             let mut cmd = Command::new(&quickget_path);
             cmd.arg(&template_os)
-                .arg(&template_version)
-                .current_dir(&output_dir)
+                .arg(&template_version);
+            
+            // Add edition if specified
+            if let Some(ref edition) = template.edition {
+                cmd.arg(edition);
+            }
+            
+            cmd.current_dir(&output_dir)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
             
             match cmd.spawn() {
                 Ok(mut child) => {
+                    let _ = tx.send("Quickget process started successfully".to_string());
+                    
+                    // Handle stdout
                     if let Some(stdout) = child.stdout.take() {
                         let reader = BufReader::new(stdout);
                         for line in reader.lines() {
                             if let Ok(line) = line {
-                                let _ = tx.send(line);
+                                let _ = tx.send(format!("STDOUT: {}", line));
+                            }
+                        }
+                    }
+                    
+                    // Handle stderr
+                    if let Some(stderr) = child.stderr.take() {
+                        let reader = BufReader::new(stderr);
+                        for line in reader.lines() {
+                            if let Ok(line) = line {
+                                let _ = tx.send(format!("STDERR: {}", line));
                             }
                         }
                     }
@@ -324,7 +358,7 @@ impl VMManager {
                                 let config_path = output_dir.join(format!("{}-{}.conf", template_os, template_version));
                                 let _ = tx.send(format!("VM created successfully: {}", config_path.display()));
                             } else {
-                                let _ = tx.send("VM creation failed".to_string());
+                                let _ = tx.send(format!("VM creation failed with exit code: {}", status.code().unwrap_or(-1)));
                             }
                         }
                         Err(e) => {
@@ -333,7 +367,7 @@ impl VMManager {
                     }
                 }
                 Err(e) => {
-                    let _ = tx.send(format!("Failed to start quickget: {}", e));
+                    let _ = tx.send(format!("Failed to start quickget: {} (working dir: {})", e, output_dir.display()));
                 }
             }
         });

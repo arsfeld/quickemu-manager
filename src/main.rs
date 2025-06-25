@@ -7,7 +7,7 @@ use gtk::{gio, glib, Application};
 use std::sync::Arc;
 
 use models::AppConfig;
-use services::{VMManager, ProcessMonitor, MetricsService, QuickgetService};
+use services::{VMManager, ProcessMonitor, MetricsService, QuickgetService, ToolManager};
 use ui::MainWindow;
 
 const APP_ID: &str = "com.github.quickemu_manager";
@@ -45,20 +45,43 @@ fn build_ui(app: &Application) {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
     let app_state = rt.block_on(async {
         let config = AppConfig::load().unwrap_or_default();
-        let mut vm_manager = VMManager::new().unwrap_or_else(|_| {
-            VMManager::with_paths(
-                std::path::PathBuf::from("quickemu"),
-                None
-            )
-        });
+        
+        // Initialize tool manager and ensure tools are available
+        let tool_manager = ToolManager::new();
+        println!("Checking for quickemu/quickget tools...");
+        
+        let (quickemu_path, quickget_path) = match tool_manager.ensure_tools_available().await {
+            Ok(paths) => {
+                println!("✅ Tools available");
+                // Verify tools work
+                if let Err(e) = tool_manager.verify_tools(&paths.0, &paths.1).await {
+                    eprintln!("⚠️  Tool verification failed: {}", e);
+                }
+                paths
+            }
+            Err(e) => {
+                eprintln!("❌ Failed to ensure tools are available: {}", e);
+                eprintln!("VM creation will be disabled");
+                (std::path::PathBuf::from("quickemu"), std::path::PathBuf::from("quickget"))
+            }
+        };
+        
+        // Check for missing dependencies
+        if let Ok(missing_deps) = tool_manager.check_dependencies().await {
+            if !missing_deps.is_empty() {
+                eprintln!("⚠️  Missing dependencies: {}", missing_deps.join(", "));
+                eprintln!("VM functionality may be limited");
+            }
+        }
+        
+        let mut vm_manager = VMManager::with_paths(quickemu_path.clone(), Some(quickget_path.clone()));
         
         let process_monitor = Arc::new(ProcessMonitor::new());
         vm_manager.set_process_monitor(process_monitor.clone());
         
-        let quickget_service = if vm_manager.is_quickget_available() {
-            which::which("quickget")
-                .ok()
-                .map(|path| Arc::new(QuickgetService::new(path)))
+        // Create quickget service if tools are properly available  
+        let quickget_service = if quickget_path.exists() {
+            Some(Arc::new(QuickgetService::new(quickget_path)))
         } else {
             None
         };

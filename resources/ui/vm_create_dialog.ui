@@ -50,7 +50,7 @@
                         <child>
                           <object class="AdwEntryRow" id="name_entry">
                             <property name="title">VM Name</property>
-                            <property name="text">my-vm</property>
+                            <property name="text"></property>
                           </object>
                         </child>
                         <child>
@@ -83,6 +83,18 @@
                                   <item>20.04</item>
                                   <item>24.04</item>
                                 </items>
+                              </object>
+                            </property>
+                            <property name="selected">0</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwComboRow" id="edition_row">
+                            <property name="title">Edition</property>
+                            <property name="subtitle">Required for some distributions like Fedora</property>
+                            <property name="visible">false</property>
+                            <property name="model">
+                              <object class="GtkStringList" id="edition_list">
                               </object>
                             </property>
                             <property name="selected">0</property>

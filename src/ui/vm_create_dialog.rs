@@ -35,6 +35,8 @@ mod imp {
         #[template_child]
         pub version_row: TemplateChild<ComboRow>,
         #[template_child]
+        pub edition_row: TemplateChild<ComboRow>,
+        #[template_child]
         pub ram_row: TemplateChild<ComboRow>,
         #[template_child]
         pub cpu_row: TemplateChild<SpinRow>,
@@ -61,6 +63,7 @@ mod imp {
         
         pub app_state: RefCell<Option<AppState>>,
         pub current_template: RefCell<Option<VMTemplate>>,
+        pub os_data: RefCell<Vec<crate::services::OSInfo>>,
     }
 
     #[glib::object_subclass]
@@ -99,6 +102,7 @@ mod imp {
                 name_entry: TemplateChild::default(),
                 os_row: TemplateChild::default(),
                 version_row: TemplateChild::default(),
+                edition_row: TemplateChild::default(),
                 ram_row: TemplateChild::default(),
                 cpu_row: TemplateChild::default(),
                 disk_row: TemplateChild::default(),
@@ -111,6 +115,7 @@ mod imp {
                 done_button: TemplateChild::default(),
                 app_state: RefCell::new(None),
                 current_template: RefCell::new(None),
+                os_data: RefCell::new(Vec::new()),
             }
         }
     }
@@ -148,6 +153,9 @@ impl VMCreateDialog {
         imp.main_stack.set_visible_child_name("config");
         imp.action_button.set_label("Create VM");
         imp.back_button.set_visible(false);
+        
+        // Load OS and version data from quickget
+        self.load_os_data();
         
         // Connect cancel button
         let dialog_weak = self.downgrade();
@@ -190,6 +198,297 @@ impl VMCreateDialog {
         });
     }
     
+    fn load_os_data(&self) {
+        let imp = self.imp();
+        let app_state = imp.app_state.borrow().as_ref().unwrap().clone();
+        
+        // First, populate with popular systems
+        if let Some(quickget_service) = &app_state.quickget_service {
+            let dialog_weak = self.downgrade();
+            let quickget_service = quickget_service.clone();
+            
+            glib::spawn_future_local(async move {
+                match quickget_service.get_popular_systems().await {
+                    Ok(popular_systems) => {
+                        if let Some(dialog) = dialog_weak.upgrade() {
+                            let imp = dialog.imp();
+                            
+                            // Clear existing items and populate OS dropdown
+                            let os_model = gtk::StringList::new(&[]);
+                            
+                            for os in &popular_systems {
+                                os_model.append(&os.name);
+                            }
+                            
+                            imp.os_row.set_model(Some(&os_model));
+                            
+                            // Store the OS data for version lookup
+                            dialog.store_os_data(popular_systems);
+                            
+                            // Load versions for the first OS
+                            if os_model.n_items() > 0 {
+                                dialog.load_versions_for_os(0);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to load OS data from quickget: {}", e);
+                        // Show error state - no fallback
+                        if let Some(dialog) = dialog_weak.upgrade() {
+                            dialog.show_quickget_error();
+                        }
+                    }
+                }
+            });
+        } else {
+            // No quickget service available - show error
+            self.show_quickget_error();
+        }
+        
+        // Setup OS row change handler
+        let dialog_weak = self.downgrade();
+        imp.os_row.connect_selected_notify(move |combo_row| {
+            if let Some(dialog) = dialog_weak.upgrade() {
+                dialog.load_versions_for_os(combo_row.selected());
+                dialog.update_vm_name();
+            }
+        });
+        
+        // Setup version row change handler
+        let dialog_weak = self.downgrade();
+        imp.version_row.connect_selected_notify(move |_| {
+            if let Some(dialog) = dialog_weak.upgrade() {
+                dialog.update_vm_name();
+            }
+        });
+        
+        // Setup edition row change handler
+        let dialog_weak = self.downgrade();
+        imp.edition_row.connect_selected_notify(move |_| {
+            if let Some(dialog) = dialog_weak.upgrade() {
+                dialog.update_vm_name();
+            }
+        });
+    }
+    
+    fn store_os_data(&self, os_data: Vec<crate::services::OSInfo>) {
+        let imp = self.imp();
+        imp.os_data.replace(os_data);
+    }
+    
+    fn get_stored_os_data(&self) -> Option<Vec<crate::services::OSInfo>> {
+        let imp = self.imp();
+        let data = imp.os_data.borrow();
+        if data.is_empty() {
+            None
+        } else {
+            Some(data.clone())
+        }
+    }
+    
+    fn load_versions_for_os(&self, os_index: u32) {
+        let imp = self.imp();
+        
+        if let Some(os_data) = self.get_stored_os_data() {
+            if let Some(os_info) = os_data.get(os_index as usize) {
+                // Clear existing versions
+                let version_model = gtk::StringList::new(&[]);
+                
+                // Add versions for this OS
+                for version in &os_info.versions {
+                    version_model.append(version);
+                }
+                
+                imp.version_row.set_model(Some(&version_model));
+                
+                // Select first version by default
+                if version_model.n_items() > 0 {
+                    imp.version_row.set_selected(0);
+                }
+                
+                // Load editions for this OS
+                self.load_editions_for_os(&os_info.name);
+                
+                // Update VM name after loading versions
+                self.update_vm_name();
+            }
+        }
+    }
+    
+    fn load_editions_for_os(&self, os_name: &str) {
+        let imp = self.imp();
+        let app_state = imp.app_state.borrow().as_ref().unwrap().clone();
+        
+        // Hide edition row by default
+        imp.edition_row.set_visible(false);
+        
+        if let Some(quickget_service) = &app_state.quickget_service {
+            let dialog_weak = self.downgrade();
+            let quickget_service = quickget_service.clone();
+            let os_name = os_name.to_string();
+            
+            glib::spawn_future_local(async move {
+                match quickget_service.get_editions(&os_name).await {
+                    Ok(editions) => {
+                        if let Some(dialog) = dialog_weak.upgrade() {
+                            let imp = dialog.imp();
+                            
+                            if !editions.is_empty() {
+                                // Show edition row and populate it
+                                let edition_model = gtk::StringList::new(&[]);
+                                for edition in &editions {
+                                    edition_model.append(edition);
+                                }
+                                
+                                imp.edition_row.set_model(Some(&edition_model));
+                                imp.edition_row.set_selected(0);
+                                imp.edition_row.set_visible(true);
+                                
+                                // Set preferred default edition for known OSes
+                                match os_name.as_str() {
+                                    "fedora" => {
+                                        // Default to Workstation for Fedora
+                                        for (i, edition) in editions.iter().enumerate() {
+                                            if edition == "Workstation" {
+                                                imp.edition_row.set_selected(i as u32);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                                
+                                // Update VM name after edition is set
+                                if let Some(dialog) = dialog_weak.upgrade() {
+                                    dialog.update_vm_name();
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to load editions for {}: {}", os_name, e);
+                    }
+                }
+            });
+        }
+    }
+    
+    fn update_vm_name(&self) {
+        let imp = self.imp();
+        
+        // Get current selections
+        let os_name = if let Some(os_data) = self.get_stored_os_data() {
+            let os_index = imp.os_row.selected() as usize;
+            os_data.get(os_index).map(|os| os.name.clone())
+        } else {
+            None
+        };
+        
+        let version = if let Some(model) = imp.version_row.model() {
+            if let Some(string_list) = model.downcast_ref::<gtk::StringList>() {
+                let version_index = imp.version_row.selected() as u32;
+                if version_index < string_list.n_items() {
+                    string_list.string(version_index).map(|s| s.to_string())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        let edition = if imp.edition_row.is_visible() {
+            if let Some(model) = imp.edition_row.model() {
+                if let Some(string_list) = model.downcast_ref::<gtk::StringList>() {
+                    let edition_index = imp.edition_row.selected() as u32;
+                    if edition_index < string_list.n_items() {
+                        string_list.string(edition_index).map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        // Generate VM name
+        if let (Some(os), Some(ver)) = (os_name, version) {
+            let vm_name = if let Some(ed) = edition {
+                // For OSes with editions, include edition in name
+                format!("{}-{}-{}", os, ver, ed.to_lowercase())
+            } else {
+                // For simple OSes, just use OS and version
+                format!("{}-{}", os, ver)
+            };
+            
+            // Only update if the current text is empty or matches a previous auto-generated pattern
+            let current_text = imp.name_entry.text().to_string();
+            if current_text.is_empty() || self.is_auto_generated_name(&current_text) {
+                imp.name_entry.set_text(&vm_name);
+            }
+        }
+    }
+    
+    fn is_auto_generated_name(&self, name: &str) -> bool {
+        // Check if the name follows the pattern of OS-version or OS-version-edition
+        let parts: Vec<&str> = name.split('-').collect();
+        
+        // Should have at least 2 parts (os-version) or 3 parts (os-version-edition)
+        if parts.len() < 2 || parts.len() > 3 {
+            return false;
+        }
+        
+        // Check if it matches current OS data
+        if let Some(os_data) = self.get_stored_os_data() {
+            let imp = self.imp();
+            let os_index = imp.os_row.selected() as usize;
+            
+            if let Some(os_info) = os_data.get(os_index) {
+                // First part should match OS name
+                if parts[0] != os_info.name {
+                    return false;
+                }
+                
+                // Second part should be a valid version
+                if !os_info.versions.contains(&parts[1].to_string()) {
+                    return false;
+                }
+                
+                // If there's a third part, it should be an edition (if editions are visible)
+                if parts.len() == 3 && imp.edition_row.is_visible() {
+                    // We could check if it's a valid edition, but for simplicity just accept it
+                    return true;
+                } else if parts.len() == 2 && !imp.edition_row.is_visible() {
+                    return true;
+                }
+            }
+        }
+        
+        false
+    }
+    
+    fn show_quickget_error(&self) {
+        let imp = self.imp();
+        
+        // Clear dropdowns and disable form
+        imp.os_row.set_model(None::<&gtk::StringList>);
+        imp.version_row.set_model(None::<&gtk::StringList>);
+        imp.action_button.set_sensitive(false);
+        
+        // Show error message
+        imp.os_row.set_subtitle("Quickget not available - cannot create VMs");
+        imp.version_row.set_subtitle("Install quickget/quickemu to enable VM creation");
+        
+        // TODO: Add button to download/install quickget
+    }
+    
     fn handle_action_button(&self) {
         let imp = self.imp();
         let current_page = imp.main_stack.visible_child_name().unwrap_or_default();
@@ -229,13 +528,50 @@ impl VMCreateDialog {
             return;
         }
         
-        let os_options = vec!["ubuntu", "fedora", "debian", "archlinux", "manjaro", "opensuse", "centos-stream", "windows"];
-        let version_options = vec!["22.04", "20.04", "24.04"];
+        // Get selected OS, version, and edition from stored data
+        let (os, version, edition) = if let Some(os_data) = self.get_stored_os_data() {
+            let os_index = imp.os_row.selected() as usize;
+            let version_index = imp.version_row.selected() as usize;
+            
+            if let Some(os_info) = os_data.get(os_index) {
+                let os_name = os_info.name.clone();
+                let version_name = os_info.versions.get(version_index)
+                    .cloned()
+                    .unwrap_or_else(|| "latest".to_string());
+                
+                // Get edition if available and visible
+                let edition = if imp.edition_row.is_visible() {
+                    if let Some(model) = imp.edition_row.model() {
+                        if let Some(string_list) = model.downcast_ref::<gtk::StringList>() {
+                            let edition_index = imp.edition_row.selected() as usize;
+                            if edition_index < string_list.n_items() as usize {
+                                string_list.string(edition_index as u32)
+                                    .map(|s| s.to_string())
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                
+                (os_name, version_name, edition)
+            } else {
+                ("ubuntu".to_string(), "22.04".to_string(), None)
+            }
+        } else {
+            ("ubuntu".to_string(), "22.04".to_string(), None)
+        };
+        
+        // Hardware configuration options
         let ram_options = vec!["2G", "4G", "8G", "16G", "32G"];
         let disk_options = vec!["32G", "64G", "128G", "256G", "512G"];
         
-        let os = os_options.get(imp.os_row.selected() as usize).unwrap_or(&"ubuntu").to_string();
-        let version = version_options.get(imp.version_row.selected() as usize).unwrap_or(&"22.04").to_string();
         let ram = ram_options.get(imp.ram_row.selected() as usize).unwrap_or(&"4G").to_string();
         let cpu_cores = imp.cpu_row.value() as u32;
         let disk_size = disk_options.get(imp.disk_row.selected() as usize).unwrap_or(&"64G").to_string();
@@ -244,6 +580,7 @@ impl VMCreateDialog {
             name: name.clone(),
             os: os.clone(),
             version: version.clone(),
+            edition: edition.clone(),
             ram,
             disk_size,
             cpu_cores,
@@ -260,7 +597,12 @@ impl VMCreateDialog {
         
         // Update progress page with VM details
         imp.progress_page.set_title(&format!("Creating {}", name));
-        imp.progress_page.set_description(Some(&format!("Setting up {} {} with {} RAM", os, version, template.ram)));
+        let description = if let Some(ref edition) = edition {
+            format!("Setting up {} {} {} with {} RAM", os, version, edition, template.ram)
+        } else {
+            format!("Setting up {} {} with {} RAM", os, version, template.ram)
+        };
+        imp.progress_page.set_description(Some(&description));
         
         // Clear and setup console view
         let console_buffer = imp.console_view.buffer();
