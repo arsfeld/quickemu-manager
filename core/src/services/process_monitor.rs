@@ -27,9 +27,9 @@ impl ProcessMonitor {
     
     pub async fn update_metrics(&self) {
         let mut system = self.system.write().await;
-        system.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::everything());
+        system.refresh_processes_specifics(ProcessesToUpdate::All, false, ProcessRefreshKind::everything());
         system.refresh_memory();
-        system.refresh_cpu_all();
+        system.refresh_cpu_usage();
     }
     
     pub async fn get_vm_metrics(&self, vm_id: &VMId) -> Option<VMMetrics> {

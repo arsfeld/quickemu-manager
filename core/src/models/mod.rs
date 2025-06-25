@@ -1,6 +1,6 @@
-pub mod vm;
-pub mod config;
-pub mod metrics;
+mod vm;
+mod config;
+mod metrics;
 
 pub use vm::*;
 pub use config::*;

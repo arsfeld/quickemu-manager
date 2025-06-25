@@ -1,8 +1,8 @@
 use gtk::prelude::*;
 use adw::prelude::*;
 
-use crate::{AppState, models::VM};
-use crate::services::ConfigParser;
+use crate::AppState;
+use quickemu_core::{VM, ConfigParser};
 
 pub struct VMEditDialog {
     dialog: adw::Window,

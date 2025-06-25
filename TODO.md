@@ -52,19 +52,20 @@
 - [ ] Resource usage charts
 - [ ] Enhanced error handling and recovery
 
-### Phase 4: Web UI Development - **NEW PHASE**
-- [ ] Add optional web server capability to GTK4 app
-- [ ] Create Dioxus web frontend structure
-- [ ] Implement web API for VM operations
-- [ ] Build responsive web interface
+### Phase 4: Multi-Platform UI Development - **NEW PHASE**
+- [ ] Extract core library from GTK4 app
+- [ ] Create independent Dioxus multi-platform app
+- [ ] Implement desktop mode (native window)
+- [ ] Implement web server mode
+- [ ] Build responsive UI that works on both platforms
 - [ ] Add real-time status updates
-- [ ] Test cross-platform web access
+- [ ] Test on Linux, Windows, macOS
 
 ### Phase 5: Polish
 - [ ] Platform-specific theming
 - [ ] Performance optimization
-- [ ] Binary packaging (both GTK4 and web builds)
-- [ ] Documentation (including web UI setup)
+- [ ] Binary packaging (GTK4, Dioxus desktop, Dioxus web)
+- [ ] Documentation (including multi-platform setup)
 - [ ] Release preparation
 
 ## 📋 Detailed Tasks
@@ -106,15 +107,15 @@
 - [ ] File system watching
 - [ ] Platform-specific adaptors
 
-### Web UI Implementation - **NEW**
-- [ ] Add optional web server feature flag to Cargo.toml
-- [ ] Implement HTTP API endpoints for VM operations
+### Multi-Platform Implementation - **NEW**
+- [ ] Create core/ library crate
+- [ ] Extract VM management logic to core library
+- [ ] Update GTK4 app to use core library
 - [ ] Create dioxus-app/ directory structure
-- [ ] Build Dioxus web frontend components
-- [ ] Add shared data models for web/desktop communication
-- [ ] Implement web UI VM listing and controls
-- [ ] Add real-time status updates via WebSocket/SSE
-- [ ] Configure build scripts for both GTK4 and Dioxus builds
+- [ ] Build Dioxus multi-platform components
+- [ ] Implement platform-agnostic VM operations
+- [ ] Add real-time status updates
+- [ ] Configure build scripts for all targets (GTK4, Dioxus desktop, Dioxus web)
 
 ## 🐛 Known Issues
 - GTK warning: "'titlebar' is not a valid child type" (cosmetic, doesn't affect functionality)
@@ -140,6 +141,8 @@
 - Focus on MVP features first
 - Successfully migrated from Dioxus to GTK4 for better native integration
 - All core VM management features implemented (list, start/stop, edit, status tracking)
+- Architecture updated: GTK4 and Dioxus are now independent frontends
+- Dioxus supports both desktop (native window) and web server modes
 - Keep binary size minimal
 - Prioritize user experience
 
@@ -165,9 +168,9 @@
 11. **Created integration tests** - Added end-to-end test scenarios
 12. **Created justfile** - Added build, test, and development automation commands
 
-## 🌐 Web UI Development Path
-1. **Add web server feature** - Optional HTTP API to existing GTK4 app
-2. **Create Dioxus structure** - Set up dioxus-app/ directory with minimal web frontend
-3. **Implement basic web controls** - VM listing, start/stop, status display
-4. **Add real-time updates** - WebSocket or SSE for live VM status
-5. **Test and integrate** - Ensure both GTK4 and web UIs work together
+## 🌐 Multi-Platform Development Path
+1. **Extract core library** - Create shared VM management logic
+2. **Create Dioxus app** - Set up multi-platform Dioxus application
+3. **Implement desktop mode** - Native window without GTK4 dependencies
+4. **Implement web mode** - Standalone web server with browser UI
+5. **Test all platforms** - Ensure GTK4, Dioxus desktop, and Dioxus web all work independently

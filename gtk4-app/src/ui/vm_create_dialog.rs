@@ -3,7 +3,8 @@ use gtk::{glib, Button, ProgressBar, TextView};
 use adw::{prelude::*, ComboRow, EntryRow, SpinRow, ActionRow, PreferencesGroup, ExpanderRow, ViewStack, StatusPage, WindowTitle};
 use adw::subclass::prelude::*;
 
-use crate::{AppState, models::VMTemplate};
+use crate::AppState;
+use quickemu_core::VMTemplate;
 
 mod imp {
     use super::*;
@@ -63,7 +64,7 @@ mod imp {
         
         pub app_state: RefCell<Option<AppState>>,
         pub current_template: RefCell<Option<VMTemplate>>,
-        pub os_data: RefCell<Vec<crate::services::OSInfo>>,
+        pub os_data: RefCell<Vec<quickemu_core::OSInfo>>,
     }
 
     #[glib::object_subclass]
@@ -271,12 +272,12 @@ impl VMCreateDialog {
         });
     }
     
-    fn store_os_data(&self, os_data: Vec<crate::services::OSInfo>) {
+    fn store_os_data(&self, os_data: Vec<quickemu_core::OSInfo>) {
         let imp = self.imp();
         imp.os_data.replace(os_data);
     }
     
-    fn get_stored_os_data(&self) -> Option<Vec<crate::services::OSInfo>> {
+    fn get_stored_os_data(&self) -> Option<Vec<quickemu_core::OSInfo>> {
         let imp = self.imp();
         let data = imp.os_data.borrow();
         if data.is_empty() {

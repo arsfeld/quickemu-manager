@@ -1,5 +1,10 @@
 use dioxus::prelude::*;
+
+#[cfg(feature = "web")]
 use crate::api::{ApiClient, VM, VMStatus};
+
+#[cfg(any(feature = "desktop", feature = "server"))]
+use crate::services::{VM, VMStatus, VMManager};
 
 #[derive(Props, Clone, PartialEq)]
 pub struct VMCardProps {
@@ -11,7 +16,6 @@ pub struct VMCardProps {
 pub fn VMCard(props: VMCardProps) -> Element {
     let mut is_loading = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
-    let api_client = ApiClient::new();
 
     let vm = &props.vm;
     let status_class = match vm.status {
@@ -23,24 +27,39 @@ pub fn VMCard(props: VMCardProps) -> Element {
 
     let start_vm = {
         let vm_id = vm.id.clone();
-        let api = api_client.clone();
         let on_refresh = props.on_refresh;
         move || {
             let vm_id = vm_id.clone();
-            let api = api.clone();
             spawn(async move {
                 is_loading.set(true);
                 error.set(None);
                 
-                match api.start_vm(&vm_id).await {
-                    Ok(_) => {
-                        // Refresh the VM list after successful start
-                        on_refresh(());
-                    }
-                    Err(e) => {
-                        error.set(Some(format!("Failed to start VM: {}", e)));
+                #[cfg(feature = "web")]
+                {
+                    let api = ApiClient::new();
+                    match api.start_vm(&vm_id).await {
+                        Ok(_) => {
+                            on_refresh(());
+                        }
+                        Err(e) => {
+                            error.set(Some(format!("Failed to start VM: {}", e)));
+                        }
                     }
                 }
+                
+                #[cfg(any(feature = "desktop", feature = "server"))]
+                {
+                    let manager = VMManager::new();
+                    match manager.start_vm(&vm_id).await {
+                        Ok(_) => {
+                            on_refresh(());
+                        }
+                        Err(e) => {
+                            error.set(Some(format!("Failed to start VM: {}", e)));
+                        }
+                    }
+                }
+                
                 is_loading.set(false);
             });
         }
@@ -48,24 +67,39 @@ pub fn VMCard(props: VMCardProps) -> Element {
 
     let stop_vm = {
         let vm_id = vm.id.clone();
-        let api = api_client.clone();
         let on_refresh = props.on_refresh;
         move || {
             let vm_id = vm_id.clone();
-            let api = api.clone();
             spawn(async move {
                 is_loading.set(true);
                 error.set(None);
                 
-                match api.stop_vm(&vm_id).await {
-                    Ok(_) => {
-                        // Refresh the VM list after successful stop
-                        on_refresh(());
-                    }
-                    Err(e) => {
-                        error.set(Some(format!("Failed to stop VM: {}", e)));
+                #[cfg(feature = "web")]
+                {
+                    let api = ApiClient::new();
+                    match api.stop_vm(&vm_id).await {
+                        Ok(_) => {
+                            on_refresh(());
+                        }
+                        Err(e) => {
+                            error.set(Some(format!("Failed to stop VM: {}", e)));
+                        }
                     }
                 }
+                
+                #[cfg(any(feature = "desktop", feature = "server"))]
+                {
+                    let manager = VMManager::new();
+                    match manager.stop_vm(&vm_id).await {
+                        Ok(_) => {
+                            on_refresh(());
+                        }
+                        Err(e) => {
+                            error.set(Some(format!("Failed to stop VM: {}", e)));
+                        }
+                    }
+                }
+                
                 is_loading.set(false);
             });
         }

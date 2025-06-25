@@ -4,7 +4,8 @@ use gtk::subclass::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::{AppState, models::{VM, VMStatus}};
+use crate::AppState;
+use quickemu_core::{VM, VMStatus};
 use super::VMEditDialog;
 
 mod imp {

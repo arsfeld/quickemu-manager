@@ -3,7 +3,8 @@ use gtk::{glib, Button};
 use adw::{prelude::*, SwitchRow, ComboRow};
 use adw::subclass::prelude::*;
 
-use crate::{AppState, models::Theme};
+use crate::AppState;
+use quickemu_core::Theme;
 
 mod imp {
     use super::*;
