@@ -1,5 +1,5 @@
 use crate::models::{VM, VMId, VMStatus, VMTemplate, DisplayProtocol};
-use crate::services::ProcessMonitor;
+use crate::services::process_monitor::ProcessMonitor;
 use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -80,7 +80,7 @@ impl VMManager {
     pub async fn stop_vm(&self, vm_id: &VMId) -> Result<()> {
         // First try using sysinfo crate
         let mut system = sysinfo::System::new();
-        system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        system.refresh_processes(sysinfo::ProcessesToUpdate::All, false);
         
         for process in system.processes().values() {
             if let Some(cmd) = process.cmd().get(0) {
@@ -151,7 +151,7 @@ impl VMManager {
     async fn check_vm_running_externally(&self, vm_id: &VMId) -> VMStatus {
         // First try using sysinfo crate
         let mut system = System::new();
-        system.refresh_processes(ProcessesToUpdate::All, true);
+        system.refresh_processes(ProcessesToUpdate::All, false);
         
         for process in system.processes().values() {
             if let Some(cmd) = process.cmd().get(0) {
@@ -391,7 +391,7 @@ impl VMManager {
                 }
             }
             DisplayProtocol::Vnc { port } => {
-                let url = format!("vnc://localhost:{}", port);
+                let _url = format!("vnc://localhost:{}", port);
                 // Try to open with system's default vnc client
                 if let Err(e) = std::process::Command::new("vncviewer")
                     .arg(&format!("localhost:{}", port))

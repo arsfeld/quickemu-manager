@@ -3,7 +3,8 @@ use gtk::{glib, gio, CompositeTemplate, TemplateChild};
 use adw::subclass::prelude::*;
 use adw::prelude::AdwApplicationWindowExt;
 
-use crate::{AppState, models::VM};
+use crate::AppState;
+use quickemu_core::VM;
 use super::{VMCard, VMCreateDialog, SettingsDialog};
 
 mod imp {
@@ -223,7 +224,7 @@ impl MainWindow {
         app_state: &AppState,
         dir: &std::path::Path,
     ) -> Result<Vec<VM>, anyhow::Error> {
-        use crate::services::{VMDiscovery, DiscoveryEvent};
+        use quickemu_core::{VMDiscovery, DiscoveryEvent};
         use tokio::sync::mpsc;
         
         let (event_tx, _) = mpsc::unbounded_channel::<DiscoveryEvent>();

@@ -16,16 +16,16 @@
 
 ## Architecture Overview
 
-### Minimalist Multi-UI Architecture
+### Independent Multi-UI Architecture
 
-Simple architecture with two frontend options sharing core business logic:
+Two independent frontend applications sharing core business logic:
 
 ```
 ┌─────────────────────────────────────────────────┐
-│              UI Frontends                       │
+│              Independent Frontends              │
 │  ┌──────────────┐      ┌──────────────┐       │
-│  │ GTK4 Desktop │      │ Dioxus Web   │       │
-│  │  (Native)    │      │   (WASM)     │       │
+│  │ GTK4 Desktop │      │    Dioxus    │       │
+│  │  (Native)    │      │(Web+Desktop) │       │
 │  └──────────────┘      └──────────────┘       │
 └─────────────────────────────────────────────────┘
            │                       │
@@ -48,23 +48,48 @@ Simple architecture with two frontend options sharing core business logic:
 └─────────────────────────────────────────────────┘
 ```
 
-### Simple Project Structure
+### Project Structure
 
 ```
 quickemu-manager/
-├── src/                     # Current GTK4 implementation
-│   ├── main.rs             # GTK4 entry point
-│   ├── models/             # Shared data models
-│   ├── services/           # Core business logic
-│   └── ui/                 # GTK4 UI components
-├── dioxus-app/             # Dioxus web frontend
+├── core/                    # Shared core library
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── models/         # Shared data models
+│       │   ├── vm.rs
+│       │   ├── config.rs
+│       │   └── metrics.rs
+│       └── services/       # Core business logic
+│           ├── vm_manager.rs
+│           ├── parser.rs
+│           ├── discovery.rs
+│           ├── process_monitor.rs
+│           └── metrics.rs
+├── gtk4-app/               # GTK4 desktop application
+│   ├── Cargo.toml
+│   ├── build.rs            # Build script for resources
+│   ├── resources/          # GTK4 UI templates
+│   │   ├── org.quickemu.Manager.gresource.xml
+│   │   └── ui/
+│   │       ├── main_window.ui
+│   │       ├── vm_card.ui
+│   │       └── ...
+│   └── src/
+│       ├── main.rs         # GTK4 entry point
+│       └── ui/             # GTK4 UI components
+│           ├── main_window.rs
+│           ├── vm_card.rs
+│           └── ...
+├── dioxus-app/             # Multi-platform application
 │   ├── Cargo.toml
 │   ├── src/
-│   │   ├── main.rs         # Dioxus entry point
-│   │   ├── components/     # Dioxus UI components
-│   │   └── api.rs          # Web API client
+│   │   ├── main.rs         # Platform-aware entry point
+│   │   ├── components/     # UI components
+│   │   ├── api.rs          # Web API client
+│   │   └── services/       # Platform wrappers
 │   └── index.html          # HTML template
-├── Cargo.toml              # Main workspace
+├── Cargo.toml              # Workspace root
 └── README.md
 
 ## Simple UI Strategy
@@ -75,17 +100,17 @@ quickemu-manager/
 - Direct access to VM management services
 - Keep existing implementation as-is
 
-### 2. Dioxus Web Application
-- **Browser-based interface**
-- Compiles to WASM for client-side execution
-- Communicates with simple HTTP API backend
-- Cross-platform access via any modern browser
+### 2. Dioxus Multi-Platform Application
+- **Single codebase for web and desktop**
+- Desktop mode: Native window using WebView (no GTK4 dependencies)
+- Web mode: Standalone server with browser access
+- Cross-platform: Linux, Windows, macOS support
 
 ### Implementation Approach
 
 #### Shared Core Logic
 ```rust
-// src/models/vm.rs - Shared between both UIs
+// core/src/models/vm.rs - Shared between all UIs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VM {
     pub id: VMId,
@@ -95,7 +120,7 @@ pub struct VM {
     pub config: VMConfig,
 }
 
-// src/services/vm_manager.rs - Same business logic
+// core/src/services/vm_manager.rs - Same business logic
 impl VMManager {
     pub async fn list_vms(&self) -> Result<Vec<VM>>;
     pub async fn start_vm(&self, id: &VMId) -> Result<()>;
@@ -103,45 +128,46 @@ impl VMManager {
 }
 ```
 
-#### Dioxus Web Frontend
+#### Dioxus Multi-Platform App
 ```rust
-// dioxus-app/src/components/vm_card.rs
+// dioxus-app/src/main.rs - Desktop & Web modes
+fn main() {
+    // Configure for desktop or web based on features
+    #[cfg(feature = "desktop")]
+    dioxus_desktop::launch(app);
+    
+    #[cfg(feature = "web")]
+    dioxus_web::launch(app);
+    
+    #[cfg(feature = "server")]
+    tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(launch_server());
+}
+
 #[component]
-fn VMCard(vm: ReadOnlySignal<VM>) -> Element {
+fn app() -> Element {
+    let vm_manager = use_context_provider(|| Arc::new(VMManager::new()));
+    let vms = use_signal(|| vec![]);
+    
     rsx! {
-        div { class: "vm-card",
-            div { class: "vm-header",
-                h3 { "{vm().name}" }
-                span { class: "status-{vm().status}", "{vm().status}" }
-            }
-            div { class: "vm-actions",
-                if vm().status == VMStatus::Stopped {
-                    button { 
-                        onclick: move |_| start_vm(vm().id),
-                        "Start"
-                    }
-                } else {
-                    button { 
-                        onclick: move |_| stop_vm(vm().id),
-                        "Stop"
-                    }
-                }
-            }
-        }
+        Router::<Route> {}
     }
 }
 
-// Simple HTTP client for web UI
-async fn start_vm(vm_id: VMId) -> Result<()> {
-    let response = reqwest::Client::new()
-        .post(&format!("/api/vms/{}/start", vm_id))
-        .send()
-        .await?;
+// Platform-agnostic VM operations
+async fn start_vm(vm_id: String) -> Result<()> {
+    #[cfg(not(feature = "server"))]
+    {
+        // Desktop mode - direct VM management
+        let manager = use_context::<Arc<VMManager>>();
+        manager.start_vm(&vm_id).await
+    }
     
-    if response.status().is_success() {
-        Ok(())
-    } else {
-        Err(anyhow!("Failed to start VM"))
+    #[cfg(feature = "server")]
+    {
+        // Web mode - API calls
+        api::start_vm(&vm_id).await
     }
 }
 ```
@@ -295,33 +321,29 @@ fn launch_display(vm: &VM) -> Result<()> {
 - Throttle UI updates to 1Hz
 - Cache metrics between updates
 
-### Challenge: Simple Multi-UI Support
-**Solution**: Keep GTK4 app as-is, add minimal Dioxus web frontend
+### Challenge: Independent Multi-UI Support
+**Solution**: Two independent applications sharing core library
 ```toml
-# Main Cargo.toml (GTK4 app)
-[features]
-default = []
-web-server = ["axum", "tower"]
-
+# gtk4-app/Cargo.toml
 [dependencies]
-# Core dependencies (current)
 gtk4 = "0.9"
 libadwaita = "0.7"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
-sysinfo = "0.30"
+quickemu-core = { path = "../core" }
 
-# Optional web server
-axum = { version = "0.7", optional = true }
-tower = { version = "0.4", optional = true }
-
-# dioxus-app/Cargo.toml (Web frontend)
+# dioxus-app/Cargo.toml (Multi-platform app)
 [dependencies]
-dioxus = "0.4"
-dioxus-web = "0.4"
+dioxus = { version = "0.4", features = ["desktop", "web", "fullstack"] }
+tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
-reqwest = { version = "0.11", features = ["json"] }
-wasm-bindgen = "0.2"
+quickemu-core = { path = "../core" }
+
+# core/Cargo.toml (Shared business logic)
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+sysinfo = "0.30"
 ```
 
 ### Challenge: Single Binary Distribution
@@ -342,45 +364,57 @@ wasm-bindgen = "0.2"
 
 ### Build Commands
 
-#### Current GTK4 Desktop App
+#### GTK4 Desktop App
 ```bash
+cd gtk4-app
+
 # Development build
 cargo build
 
 # Release build
 cargo build --release
 
-# With GTK4 features
-cargo build --features desktop-gtk
+# Run the app
+cargo run
 ```
 
-#### Dioxus Web Application
+#### Dioxus Multi-Platform Application
 ```bash
-# Build web application (WASM)
 cd dioxus-app
+
+# Desktop mode (native window)
+cargo run --features desktop
+
+# Web server mode
+cargo run --features server
+
+# Build for desktop
+cargo build --release --features desktop
+
+# Build for web (WASM)
 dx build --platform web
 
 # Development with hot reload
-cd dioxus-app
-dx serve --platform web
-
-# Build web server component (optional)
-cargo build --features web-server
+dx serve --platform desktop  # or web
 ```
 
 #### Development Workflow
 ```bash
-# Run GTK4 desktop app (current)
-cargo run
+# Run GTK4 desktop app
+cd gtk4-app && cargo run
 
-# Run GTK4 app with web server enabled
-cargo run --features web-server
+# Run Dioxus desktop app
+cd dioxus-app && cargo run --features desktop
 
-# Run web frontend (separate terminal)
-cd dioxus-app && dx serve
+# Run Dioxus web server
+cd dioxus-app && cargo run --features server
 
-# Build both applications
-cargo build && cd dioxus-app && dx build
+# Build all applications from workspace root
+cargo build --workspace
+
+# Build specific app
+cargo build -p quickemu-manager-gtk
+cargo build -p quickemu-manager-ui --features desktop
 ```
 
 ### Testing Strategy
@@ -391,34 +425,36 @@ cargo build && cd dioxus-app && dx build
 
 ## Simple Migration Strategy
 
-### Phase 1: Add Web Server Capability (Minimal Change)
-1. **Add optional web server** to existing GTK4 app
-   - Use feature flag `web-server` to add HTTP API
-   - Reuse existing VM management code
-   - Simple REST endpoints for basic operations
+### Phase 1: Extract Core Library
+1. **Create shared core library**
+   - Move VM management logic to `core/` crate
+   - Extract models, services, and business logic
+   - Make it UI-agnostic
 
-2. **Keep GTK4 app unchanged**
-   - Primary desktop experience remains the same
-   - Optional web access for remote management
-   - No architectural changes needed
+2. **Update GTK4 app**
+   - Use shared core library
+   - Keep UI code in main crate
+   - No functional changes
 
-### Phase 2: Create Dioxus Web Frontend
-1. **Build simple web interface**
+### Phase 2: Create Dioxus Multi-Platform App
+1. **Build multi-platform application**
    - Separate `dioxus-app/` directory
-   - Basic VM listing and controls
-   - Communicate with GTK4 app's web server
+   - Desktop mode for native experience
+   - Web server mode for browser access
+   - Uses same core library as GTK4 app
 
-2. **Minimal feature set**
+2. **Full feature parity**
    - List VMs and their status
    - Start/stop VM controls
-   - Basic VM information display
+   - VM creation and configuration
    - Real-time status updates
+   - Works on Linux, Windows, macOS
 
 ### Implementation Benefits
-- **Minimal complexity**: Only two UIs to maintain
+- **Complete independence**: Each UI can run without the other
 - **Shared core logic**: VM management code reused directly
-- **Independent development**: Web UI can be developed separately
-- **Low maintenance**: Simple architecture with clear separation
+- **Independent development**: UIs can be developed and deployed separately
+- **No GTK4 dependencies**: Web UI builds without desktop libraries
 
 ## Security Considerations
 
@@ -437,56 +473,66 @@ cargo build && cd dioxus-app && dx build
 
 ## Dependencies
 
-### Main Application (GTK4 Desktop)
+### GTK4 Desktop Application
 ```toml
-# Cargo.toml
+# gtk4-app/Cargo.toml
+[package]
+name = "quickemu-manager-gtk"
+version = "0.1.0"
+edition = "2021"
+
 [dependencies]
-# Current core dependencies
+# GTK4 UI dependencies
 gtk4 = { version = "0.9", package = "gtk4", features = ["v4_10"] }
 libadwaita = { version = "0.7", package = "libadwaita", features = ["v1_6"] }
 glib = "0.20"
 gio = "0.20"
+
+# Shared core
+quickemu-core = { path = "../core" }
+
+# Additional dependencies
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+anyhow = "1.0"
+
+[build-dependencies]
+glib-build-tools = "0.20"
+```
+
+### Dioxus Multi-Platform App
+```toml
+# dioxus-app/Cargo.toml
+[dependencies]
+# Dioxus framework
+dioxus = "0.4"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+
+# Shared core business logic
+quickemu-core = { path = "../core" }
+
+# Platform-specific dependencies
+dioxus-desktop = { version = "0.4", optional = true }
+dioxus-web = { version = "0.4", optional = true }
+dioxus-fullstack = { version = "0.4", optional = true }
+axum = { version = "0.7", optional = true }
+
+[features]
+default = ["desktop"]
+desktop = ["dioxus-desktop"]
+web = ["dioxus-web"]
+server = ["dioxus-fullstack", "axum"]
+```
+
+### Shared Core Library
+```toml
+# core/Cargo.toml
+[dependencies]
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 anyhow = "1.0"
 sysinfo = "0.30"
 notify = "6"
 which = "4.0"
-
-# Optional web server
-axum = { version = "0.7", optional = true }
-tower = { version = "0.4", optional = true }
-tower-http = { version = "0.5", features = ["cors"], optional = true }
-
-[build-dependencies]
-glib-build-tools = "0.20"
-
-[features]
-default = []
-web-server = ["axum", "tower", "tower-http"]
-```
-
-### Dioxus Web Frontend
-```toml
-# dioxus-app/Cargo.toml
-[dependencies]
-# Minimal Dioxus dependencies
-dioxus = "0.4"
-dioxus-web = "0.4"
-serde = { version = "1", features = ["derive"] }
-reqwest = { version = "0.11", features = ["json"] }
-wasm-bindgen = "0.2"
-console_error_panic_hook = "0.1"
-
-# Only the data models needed for web UI
-[dependencies.quickemu-types]
-path = "../src/models"
-features = ["serde"]
-```
-
-### Shared Types Only (Minimal)
-```toml
-# src/models/Cargo.toml (optional separate crate)
-[dependencies]
-serde = { version = "1", features = ["derive"] }
 ```

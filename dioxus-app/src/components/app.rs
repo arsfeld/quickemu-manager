@@ -1,6 +1,11 @@
 use dioxus::prelude::*;
-use crate::api::{ApiClient, VM};
 use crate::components::vm_card::VMCard;
+
+#[cfg(feature = "web")]
+use crate::api::{ApiClient, VM};
+
+#[cfg(any(feature = "desktop", feature = "server"))]
+use crate::services::{VM, VMManager};
 
 #[component]
 pub fn App() -> Element {
@@ -9,18 +14,37 @@ pub fn App() -> Element {
     let mut error = use_signal(|| None::<String>);
     
     let load_vms = move || {
-        let api = ApiClient::new();
         spawn(async move {
             loading.set(true);
             error.set(None);
-            match api.list_vms().await {
-                Ok(vm_list) => {
-                    vms.set(vm_list);
-                    loading.set(false);
+            
+            #[cfg(feature = "web")]
+            {
+                let api = ApiClient::new();
+                match api.list_vms().await {
+                    Ok(vm_list) => {
+                        vms.set(vm_list);
+                        loading.set(false);
+                    }
+                    Err(e) => {
+                        error.set(Some(format!("Failed to load VMs: {}", e)));
+                        loading.set(false);
+                    }
                 }
-                Err(e) => {
-                    error.set(Some(format!("Failed to load VMs: {}", e)));
-                    loading.set(false);
+            }
+            
+            #[cfg(any(feature = "desktop", feature = "server"))]
+            {
+                let manager = VMManager::new();
+                match manager.list_vms().await {
+                    Ok(vm_list) => {
+                        vms.set(vm_list);
+                        loading.set(false);
+                    }
+                    Err(e) => {
+                        error.set(Some(format!("Failed to load VMs: {}", e)));
+                        loading.set(false);
+                    }
                 }
             }
         });
@@ -29,6 +53,20 @@ pub fn App() -> Element {
     // Load VMs on component mount
     use_effect(move || {
         load_vms();
+    });
+
+    // Set up periodic refresh
+    use_effect(move || {
+        let handle = spawn(async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                load_vms();
+            }
+        });
+        
+        move || {
+            handle.cancel();
+        }
     });
 
     rsx! {
@@ -54,10 +92,10 @@ pub fn App() -> Element {
                 }
             } else if vms.read().is_empty() {
                 div { class: "loading",
-                    "No VMs found. Make sure the GTK4 application is running with web server enabled."
+                    "No VMs found."
                 }
             } else {
-                div {
+                div { class: "vm-grid",
                     for vm in vms.read().iter() {
                         VMCard {
                             key: "{vm.id}",

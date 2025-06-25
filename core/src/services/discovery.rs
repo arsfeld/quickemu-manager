@@ -1,7 +1,7 @@
 use crate::models::{VM, VMId, VMStatus};
-use crate::services::{ConfigParser, VMManager};
+use crate::services::parser::ConfigParser;
+use crate::services::vm_manager::VMManager;
 use anyhow::Result;
-use gtk::glib;
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -124,7 +124,7 @@ impl VMDiscovery {
         let event_tx = self.event_tx.clone();
         let vm_manager = self.vm_manager.clone();
         
-        glib::spawn_future_local(async move {
+        tokio::spawn(async move {
             while let Some(event) = rx.recv().await {
                 match event.kind {
                     EventKind::Create(_) | EventKind::Modify(_) => {

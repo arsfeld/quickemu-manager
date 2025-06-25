@@ -1,0 +1,39 @@
+[package]
+name = "quickemu-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# System information
+sysinfo = "0.35"
+
+# File watching
+notify = "8.0"
+
+# Command execution
+which = "8.0"
+
+# Path handling
+dirs = "6.0"
+
+# Logging
+log = "0.4"
+
+# Process management
+nix = { version = "0.30", features = ["process"] }
+
+[dev-dependencies]
+tempfile = "3.20"
+mockall = "0.13"
