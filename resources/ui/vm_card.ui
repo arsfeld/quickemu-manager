@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="QEMVMCard" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <property name="spacing">0</property>
+    <property name="width-request">350</property>
+    <style>
+      <class name="card"/>
+    </style>
+    <child>
+      <object class="GtkBox" id="header_box">
+        <property name="orientation">horizontal</property>
+        <property name="spacing">12</property>
+        <property name="margin-top">16</property>
+        <property name="margin-bottom">12</property>
+        <property name="margin-start">16</property>
+        <property name="margin-end">16</property>
+        <child>
+          <object class="GtkImage" id="os_icon">
+            <property name="icon-name">computer-symbolic</property>
+            <property name="icon-size">large</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="title_box">
+            <property name="orientation">vertical</property>
+            <property name="spacing">4</property>
+            <property name="hexpand">true</property>
+            <child>
+              <object class="GtkLabel" id="vm_name">
+                <property name="label">VM Name</property>
+                <property name="halign">start</property>
+                <property name="ellipsize">end</property>
+                <style>
+                  <class name="heading"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="vm_os">
+                <property name="label">Operating System</property>
+                <property name="halign">start</property>
+                <property name="ellipsize">end</property>
+                <style>
+                  <class name="dim-label"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="status_box">
+            <property name="orientation">vertical</property>
+            <property name="spacing">4</property>
+            <property name="halign">end</property>
+            <property name="valign">center</property>
+            <child>
+              <object class="GtkImage" id="status_icon">
+                <property name="icon-name">media-playback-stop-symbolic</property>
+                <property name="icon-size">normal</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="status_label">
+                <property name="label">Stopped</property>
+                <style>
+                  <class name="caption"/>
+                  <class name="dim-label"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparator" id="separator">
+        <property name="orientation">horizontal</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox" id="metrics_box">
+        <property name="orientation">horizontal</property>
+        <property name="spacing">24</property>
+        <property name="margin-top">12</property>
+        <property name="margin-bottom">12</property>
+        <property name="margin-start">16</property>
+        <property name="margin-end">16</property>
+        <property name="homogeneous">true</property>
+        <child>
+          <object class="GtkBox" id="cpu_box">
+            <property name="orientation">vertical</property>
+            <property name="spacing">4</property>
+            <property name="halign">center</property>
+            <child>
+              <object class="GtkLabel" id="cpu_label">
+                <property name="label">CPU</property>
+                <style>
+                  <class name="caption"/>
+                  <class name="dim-label"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="cpu_value">
+                <property name="label">0%</property>
+                <style>
+                  <class name="heading"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="ram_box">
+            <property name="orientation">vertical</property>
+            <property name="spacing">4</property>
+            <property name="halign">center</property>
+            <child>
+              <object class="GtkLabel" id="ram_label">
+                <property name="label">RAM</property>
+                <style>
+                  <class name="caption"/>
+                  <class name="dim-label"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="ram_value">
+                <property name="label">0 MB</property>
+                <style>
+                  <class name="heading"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="uptime_box">
+            <property name="orientation">vertical</property>
+            <property name="spacing">4</property>
+            <property name="halign">center</property>
+            <child>
+              <object class="GtkLabel" id="uptime_label">
+                <property name="label">Uptime</property>
+                <style>
+                  <class name="caption"/>
+                  <class name="dim-label"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="uptime_value">
+                <property name="label">--</property>
+                <style>
+                  <class name="heading"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparator">
+        <property name="orientation">horizontal</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox" id="actions_box">
+        <property name="orientation">horizontal</property>
+        <property name="spacing">8</property>
+        <property name="margin-top">12</property>
+        <property name="margin-bottom">16</property>
+        <property name="margin-start">16</property>
+        <property name="margin-end">16</property>
+        <property name="homogeneous">true</property>
+        <child>
+          <object class="GtkButton" id="start_button">
+            <property name="label">Start</property>
+            <property name="sensitive">true</property>
+            <style>
+              <class name="suggested-action"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="stop_button">
+            <property name="label">Stop</property>
+            <property name="sensitive">false</property>
+            <style>
+              <class name="destructive-action"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="connect_button">
+            <property name="label">Connect</property>
+            <property name="sensitive">false</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="edit_button">
+            <property name="label">Edit</property>
+            <property name="sensitive">true</property>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

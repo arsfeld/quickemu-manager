@@ -48,8 +48,13 @@ impl ConfigParser {
             config.disk_size = Some(disk_size.trim_matches('"').to_string());
         }
         
-        if let Some(display) = vars.get("display") {
-            config.display = Self::parse_display_protocol(display.trim_matches('"'));
+        // Parse display settings
+        if let Some(display_server) = vars.get("display_server") {
+            config.display = match display_server.trim_matches('"') {
+                "spice" => DisplayProtocol::Spice { port: 5930 },
+                "vnc" => DisplayProtocol::Vnc { port: 5900 },
+                _ => config.display,
+            };
         }
         
         if let Some(ssh_port) = vars.get("ssh_port") {
@@ -61,67 +66,183 @@ impl ConfigParser {
         Ok(config)
     }
     
+    pub fn save_config(path: &Path, config: &VMConfig) -> Result<()> {
+        let mut lines = Vec::new();
+        
+        // Basic config
+        lines.push(format!("guest_os=\"{}\"", config.guest_os));
+        lines.push(format!("ram=\"{}\"", config.ram));
+        lines.push(format!("cpu_cores={}", config.cpu_cores));
+        
+        if let Some(disk_img) = &config.disk_img {
+            lines.push(format!("disk_img=\"{}\"", disk_img.display()));
+        }
+        
+        if let Some(iso) = &config.iso {
+            lines.push(format!("iso=\"{}\"", iso.display()));
+        }
+        
+        if let Some(disk_size) = &config.disk_size {
+            lines.push(format!("disk_size=\"{}\"", disk_size));
+        }
+        
+        // Display settings
+        match &config.display {
+            DisplayProtocol::Spice { port: _ } => {
+                lines.push("display_server=\"spice\"".to_string());
+            }
+            DisplayProtocol::Vnc { port: _ } => {
+                lines.push("display_server=\"vnc\"".to_string());
+            }
+            _ => {}
+        }
+        
+        if let Some(ssh_port) = config.ssh_port {
+            lines.push(format!("ssh_port={}", ssh_port));
+        }
+        
+        let content = lines.join("\n") + "\n";
+        std::fs::write(path, content)?;
+        
+        Ok(())
+    }
+    
     fn extract_variables(content: &str) -> HashMap<String, String> {
         let mut vars = HashMap::new();
         
         for line in content.lines() {
             let line = line.trim();
-            
-            if line.is_empty() || line.starts_with('#') {
+            if line.starts_with('#') || line.is_empty() {
                 continue;
             }
             
-            if let Some((key, value)) = line.split_once('=') {
-                let key = key.trim();
-                let value = value.trim();
-                vars.insert(key.to_string(), value.to_string());
+            if let Some(eq_pos) = line.find('=') {
+                let key = line[..eq_pos].trim().to_string();
+                let value = line[eq_pos + 1..].trim().to_string();
+                vars.insert(key, value);
             }
         }
         
         vars
     }
-    
-    fn parse_display_protocol(display: &str) -> DisplayProtocol {
-        match display.to_lowercase().as_str() {
-            "spice" => DisplayProtocol::Spice { port: 5930 },
-            "vnc" => DisplayProtocol::Vnc { port: 5900 },
-            "sdl" => DisplayProtocol::Sdl,
-            _ => DisplayProtocol::None,
-        }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_extract_variables() {
+        let content = r#"
+# Comment line
+guest_os="ubuntu"
+cpu_cores=4
+ram="4G"
+
+disk_img="/path/to/disk.qcow2"
+        "#;
+        
+        let vars = ConfigParser::extract_variables(content);
+        
+        assert_eq!(vars.get("guest_os"), Some(&"\"ubuntu\"".to_string()));
+        assert_eq!(vars.get("cpu_cores"), Some(&"4".to_string()));
+        assert_eq!(vars.get("ram"), Some(&"\"4G\"".to_string()));
+        assert_eq!(vars.get("disk_img"), Some(&"\"/path/to/disk.qcow2\"".to_string()));
+        assert!(!vars.contains_key("# Comment line"));
     }
-    
-    pub fn save_config(path: &Path, config: &VMConfig) -> Result<()> {
-        let mut content = String::new();
+
+    #[test]
+    fn test_parse_basic_config() -> Result<()> {
+        let content = r#"
+guest_os="ubuntu"
+cpu_cores=4
+ram="4G"
+disk_img="/path/to/disk.qcow2"
+display_server="spice"
+ssh_port=22220
+        "#;
         
-        content.push_str(&format!("guest_os=\"{}\"\n", config.guest_os));
+        let temp_file = NamedTempFile::new()?;
+        fs::write(&temp_file, content)?;
         
-        if let Some(disk_img) = &config.disk_img {
-            content.push_str(&format!("disk_img=\"{}\"\n", disk_img.display()));
+        let config = ConfigParser::parse_quickemu_config(temp_file.path())?;
+        
+        assert_eq!(config.guest_os, "ubuntu");
+        assert_eq!(config.cpu_cores, 4);
+        assert_eq!(config.ram, "4G");
+        assert_eq!(config.disk_img, Some("/path/to/disk.qcow2".into()));
+        assert_eq!(config.ssh_port, Some(22220));
+        
+        match config.display {
+            DisplayProtocol::Spice { port } => assert_eq!(port, 5930),
+            _ => panic!("Expected Spice display protocol"),
         }
         
-        if let Some(iso) = &config.iso {
-            content.push_str(&format!("iso=\"{}\"\n", iso.display()));
-        }
-        
-        content.push_str(&format!("ram=\"{}\"\n", config.ram));
-        content.push_str(&format!("cpu_cores={}\n", config.cpu_cores));
-        
-        if let Some(disk_size) = &config.disk_size {
-            content.push_str(&format!("disk_size=\"{}\"\n", disk_size));
-        }
-        
-        match &config.display {
-            DisplayProtocol::Spice { .. } => content.push_str("display=\"spice\"\n"),
-            DisplayProtocol::Vnc { .. } => content.push_str("display=\"vnc\"\n"),
-            DisplayProtocol::Sdl => content.push_str("display=\"sdl\"\n"),
-            DisplayProtocol::None => content.push_str("display=\"none\"\n"),
-        }
-        
-        if let Some(ssh_port) = config.ssh_port {
-            content.push_str(&format!("ssh_port={}\n", ssh_port));
-        }
-        
-        std::fs::write(path, content)?;
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_minimal_config() -> Result<()> {
+        let content = r#"
+guest_os="fedora"
+        "#;
+        
+        let temp_file = NamedTempFile::new()?;
+        fs::write(&temp_file, content)?;
+        
+        let config = ConfigParser::parse_quickemu_config(temp_file.path())?;
+        
+        assert_eq!(config.guest_os, "fedora");
+        assert_eq!(config.cpu_cores, 2); // Default value
+        assert_eq!(config.ram, "2G"); // Default value
+        assert_eq!(config.disk_img, None);
+        
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_vnc_display() -> Result<()> {
+        let content = r#"
+guest_os="debian"
+display_server="vnc"
+        "#;
+        
+        let temp_file = NamedTempFile::new()?;
+        fs::write(&temp_file, content)?;
+        
+        let config = ConfigParser::parse_quickemu_config(temp_file.path())?;
+        
+        match config.display {
+            DisplayProtocol::Vnc { port } => assert_eq!(port, 5900),
+            _ => panic!("Expected VNC display protocol"),
+        }
+        
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_invalid_cpu_cores() -> Result<()> {
+        let content = r#"
+guest_os="arch"
+cpu_cores=invalid
+        "#;
+        
+        let temp_file = NamedTempFile::new()?;
+        fs::write(&temp_file, content)?;
+        
+        let config = ConfigParser::parse_quickemu_config(temp_file.path())?;
+        
+        // Should fall back to default when parsing fails
+        assert_eq!(config.cpu_cores, 2);
+        
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_nonexistent_file() {
+        let result = ConfigParser::parse_quickemu_config(Path::new("/nonexistent/file.conf"));
+        assert!(result.is_err());
     }
 }

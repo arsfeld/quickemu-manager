@@ -1,6 +1,7 @@
 use crate::models::{VM, VMId, VMStatus};
-use crate::services::ConfigParser;
+use crate::services::{ConfigParser, VMManager};
 use anyhow::Result;
+use gtk::glib;
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -17,6 +18,7 @@ pub struct VMDiscovery {
     vms: Arc<RwLock<HashMap<VMId, VM>>>,
     watched_dirs: Vec<PathBuf>,
     event_tx: mpsc::UnboundedSender<DiscoveryEvent>,
+    vm_manager: Option<Arc<VMManager>>,
 }
 
 impl VMDiscovery {
@@ -25,6 +27,16 @@ impl VMDiscovery {
             vms: Arc::new(RwLock::new(HashMap::new())),
             watched_dirs: Vec::new(),
             event_tx,
+            vm_manager: None,
+        }
+    }
+    
+    pub fn with_vm_manager(event_tx: mpsc::UnboundedSender<DiscoveryEvent>, vm_manager: Arc<VMManager>) -> Self {
+        Self {
+            vms: Arc::new(RwLock::new(HashMap::new())),
+            watched_dirs: Vec::new(),
+            event_tx,
+            vm_manager: Some(vm_manager),
         }
     }
     
@@ -35,16 +47,24 @@ impl VMDiscovery {
             return Ok(discovered_vms);
         }
         
-        let entries = std::fs::read_dir(path)?;
+        // Use a stack-based approach to avoid async recursion
+        let mut directories_to_scan = vec![path.to_path_buf()];
         
-        for entry in entries {
-            let entry = entry?;
-            let path = entry.path();
+        while let Some(current_dir) = directories_to_scan.pop() {
+            let entries = std::fs::read_dir(&current_dir)?;
             
-            if path.extension().and_then(|s| s.to_str()) == Some("conf") {
-                if let Ok(vm) = self.load_vm_from_config(&path).await {
-                    discovered_vms.push(vm.clone());
-                    self.vms.write().await.insert(vm.id.clone(), vm);
+            for entry in entries {
+                let entry = entry?;
+                let entry_path = entry.path();
+                
+                if entry_path.is_file() && entry_path.extension().and_then(|s| s.to_str()) == Some("conf") {
+                    if let Ok(vm) = self.load_vm_from_config(&entry_path).await {
+                        discovered_vms.push(vm.clone());
+                        self.vms.write().await.insert(vm.id.clone(), vm);
+                    }
+                } else if entry_path.is_dir() {
+                    // Add subdirectory to scan queue
+                    directories_to_scan.push(entry_path);
                 }
             }
         }
@@ -68,14 +88,21 @@ impl VMDiscovery {
         let metadata = std::fs::metadata(config_path)?;
         let last_modified = metadata.modified()?;
         
-        Ok(VM {
+        let mut vm = VM {
             id,
             name,
             config_path: config_path.to_path_buf(),
             config,
             status: VMStatus::Stopped,
             last_modified,
-        })
+        };
+        
+        // Check if VM is running
+        if let Some(vm_manager) = &self.vm_manager {
+            vm_manager.update_vm_status_from_running_processes(&mut vm).await;
+        }
+        
+        Ok(vm)
     }
     
     pub async fn start_watching(&self) -> Result<()> {
@@ -95,14 +122,15 @@ impl VMDiscovery {
         
         let vms = self.vms.clone();
         let event_tx = self.event_tx.clone();
+        let vm_manager = self.vm_manager.clone();
         
-        tokio::spawn(async move {
+        glib::spawn_future_local(async move {
             while let Some(event) = rx.recv().await {
                 match event.kind {
                     EventKind::Create(_) | EventKind::Modify(_) => {
                         for path in event.paths {
                             if path.extension().and_then(|s| s.to_str()) == Some("conf") {
-                                if let Ok(vm) = Self::load_vm_from_config_static(&path).await {
+                                if let Ok(vm) = Self::load_vm_from_config_static(&path, vm_manager.as_ref()).await {
                                     let mut vms_lock = vms.write().await;
                                     let is_new = !vms_lock.contains_key(&vm.id);
                                     vms_lock.insert(vm.id.clone(), vm.clone());
@@ -144,7 +172,7 @@ impl VMDiscovery {
         Ok(())
     }
     
-    async fn load_vm_from_config_static(config_path: &Path) -> Result<VM> {
+    async fn load_vm_from_config_static(config_path: &Path, vm_manager: Option<&Arc<VMManager>>) -> Result<VM> {
         let config = ConfigParser::parse_quickemu_config(config_path)?;
         let name = config_path
             .file_stem()
@@ -156,14 +184,21 @@ impl VMDiscovery {
         let metadata = std::fs::metadata(config_path)?;
         let last_modified = metadata.modified()?;
         
-        Ok(VM {
+        let mut vm = VM {
             id,
             name,
             config_path: config_path.to_path_buf(),
             config,
             status: VMStatus::Stopped,
             last_modified,
-        })
+        };
+        
+        // Check if VM is running
+        if let Some(vm_manager) = vm_manager {
+            vm_manager.update_vm_status_from_running_processes(&mut vm).await;
+        }
+        
+        Ok(vm)
     }
     
     pub async fn get_all_vms(&self) -> Vec<VM> {

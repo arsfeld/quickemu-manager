@@ -4,8 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-dioxus = { version = "0.6", features = ["desktop"] }
+gtk = { version = "0.9", package = "gtk4", features = ["v4_10"] }
+glib = "0.20"
+gio = "0.20"
+adw = { version = "0.7", package = "libadwaita", features = ["v1_6"] }
 tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
@@ -20,8 +24,23 @@ tracing-subscriber = "0.3"
 which = "8"
 reqwest = { version = "0.12", features = ["blocking"] }
 
+# Optional web server dependencies
+axum = { version = "0.7", optional = true }
+tower = { version = "0.4", optional = true }
+tower-http = { version = "0.5", features = ["cors"], optional = true }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = "0.17"
+
+[dev-dependencies]
+tempfile = "3"
+
+[build-dependencies]
+glib-build-tools = "0.20"
+
+[features]
+default = []
+web-server = ["axum", "tower", "tower-http"]
 
 [profile.release]
 lto = true
