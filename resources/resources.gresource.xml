@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/org/quickemu/Manager">
+    <file>ui/main_window.ui</file>
+    <file>ui/header_bar.ui</file>
+    <file>ui/vm_card.ui</file>
+    <file>ui/vm_create_dialog.ui</file>
+    <file>ui/settings_dialog.ui</file>
+  </gresource>
+</gresources>

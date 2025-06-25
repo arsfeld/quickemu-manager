@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="QEMSettingsDialog" parent="AdwWindow">
+    <property name="title">Preferences</property>
+    <property name="modal">true</property>
+    <property name="default-width">500</property>
+    <property name="default-height">400</property>
+    <property name="content">
+      <object class="AdwToolbarView">
+        <child type="top">
+          <object class="AdwHeaderBar">
+            <property name="title-widget">
+              <object class="AdwWindowTitle">
+                <property name="title">Preferences</property>
+              </object>
+            </property>
+            <child type="end">
+              <object class="GtkButton" id="close_button">
+                <property name="label">Close</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <property name="content">
+          <object class="AdwPreferencesPage">
+            <child>
+              <object class="AdwPreferencesGroup">
+                <property name="title">VM Directories</property>
+                <property name="description">Configure where to look for virtual machines</property>
+                <child>
+                  <object class="AdwActionRow">
+                    <property name="title">VM Directories</property>
+                    <child type="suffix">
+                      <object class="GtkButton" id="add_dir_button">
+                        <property name="label">Add Directory</property>
+                        <property name="halign">start</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="AdwPreferencesGroup">
+                <property name="title">Tools</property>
+                <property name="description">Configure quickemu tools behavior</property>
+                <child>
+                  <object class="AdwSwitchRow" id="auto_download_switch">
+                    <property name="title">Auto-download Tools</property>
+                    <property name="subtitle">Automatically download quickemu tools if not found</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="AdwPreferencesGroup">
+                <property name="title">Appearance</property>
+                <child>
+                  <object class="AdwComboRow" id="theme_row">
+                    <property name="title">Theme</property>
+                    <property name="subtitle">Choose the application theme</property>
+                    <property name="model">
+                      <object class="GtkStringList" id="theme_list">
+                        <items>
+                          <item>System</item>
+                          <item>Light</item>
+                          <item>Dark</item>
+                        </items>
+                      </object>
+                    </property>
+                    <property name="selected">0</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </property>
+      </object>
+    </property>
+  </template>
+</interface>

@@ -3,76 +3,188 @@
 ## Technology Stack
 
 ### Core Framework
-- **Dioxus**: Rust-based reactive UI framework
-- **Target Platforms**: Desktop (native) with WebUI capability
-- **Rendering**: Native rendering via WebView or platform-specific backends
+- **GTK4**: Native Rust-based desktop UI framework via gtk4-rs
+- **Target Platforms**: Linux (primary), with potential Windows/macOS support
+- **Rendering**: Native GTK4 rendering with composite templates
 
 ### Language & Tools
 - **Language**: Rust (stable channel)
-- **Build System**: Cargo with Dioxus CLI
+- **Build System**: Cargo with standard Rust toolchain
+- **UI Templates**: GTK4 composite templates (.ui files)
 - **Package Format**: Single static binary
 - **Target Architectures**: x86_64, aarch64
 
 ## Architecture Overview
 
+### Minimalist Multi-UI Architecture
+
+Simple architecture with two frontend options sharing core business logic:
+
 ```
 ┌─────────────────────────────────────────────────┐
-│                 Dioxus Frontend                 │
-│  ┌─────────────┐ ┌──────────────┐ ┌──────────┐ │
-│  │ VM Gallery  │ │ VM Details   │ │ Settings │ │
-│  │ Component   │ │ Component    │ │ Component│ │
-│  └─────────────┘ └──────────────┘ └──────────┘ │
+│              UI Frontends                       │
+│  ┌──────────────┐      ┌──────────────┐       │
+│  │ GTK4 Desktop │      │ Dioxus Web   │       │
+│  │  (Native)    │      │   (WASM)     │       │
+│  └──────────────┘      └──────────────┘       │
 └─────────────────────────────────────────────────┘
-                         │
-                    State Store
-                    (Fermi/Redux)
-                         │
+           │                       │
+           └───────────┬───────────┘
+                       │
 ┌─────────────────────────────────────────────────┐
-│                Backend Services                 │
+│              Core Library                       │
 │  ┌────────────┐ ┌──────────────┐ ┌───────────┐ │
-│  │VM Manager  │ │Process       │ │File       │ │
-│  │Service     │ │Monitor       │ │Watcher    │ │
+│  │VM Manager  │ │Process       │ │Discovery  │ │
+│  │            │ │Monitor       │ │           │ │
 │  └────────────┘ └──────────────┘ └───────────┘ │
 └─────────────────────────────────────────────────┘
-                         │
+                       │
 ┌─────────────────────────────────────────────────┐
-│              System Integration                 │
+│            System Integration                   │
 │  ┌────────────┐ ┌──────────────┐ ┌───────────┐ │
-│  │quickemu/   │ │OS APIs       │ │Display    │ │
-│  │quickget    │ │(CPU/RAM)     │ │Protocols  │ │
+│  │quickemu/   │ │OS APIs       │ │Config     │ │
+│  │quickget    │ │(sysinfo)     │ │Parser     │ │
 │  └────────────┘ └──────────────┘ └───────────┘ │
 └─────────────────────────────────────────────────┘
+```
+
+### Simple Project Structure
+
+```
+quickemu-manager/
+├── src/                     # Current GTK4 implementation
+│   ├── main.rs             # GTK4 entry point
+│   ├── models/             # Shared data models
+│   ├── services/           # Core business logic
+│   └── ui/                 # GTK4 UI components
+├── dioxus-app/             # Dioxus web frontend
+│   ├── Cargo.toml
+│   ├── src/
+│   │   ├── main.rs         # Dioxus entry point
+│   │   ├── components/     # Dioxus UI components
+│   │   └── api.rs          # Web API client
+│   └── index.html          # HTML template
+├── Cargo.toml              # Main workspace
+└── README.md
+
+## Simple UI Strategy
+
+### 1. GTK4 Desktop (Current)
+- **Primary Linux desktop experience**
+- Native performance and OS integration
+- Direct access to VM management services
+- Keep existing implementation as-is
+
+### 2. Dioxus Web Application
+- **Browser-based interface**
+- Compiles to WASM for client-side execution
+- Communicates with simple HTTP API backend
+- Cross-platform access via any modern browser
+
+### Implementation Approach
+
+#### Shared Core Logic
+```rust
+// src/models/vm.rs - Shared between both UIs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VM {
+    pub id: VMId,
+    pub name: String,
+    pub config_path: PathBuf,
+    pub status: VMStatus,
+    pub config: VMConfig,
+}
+
+// src/services/vm_manager.rs - Same business logic
+impl VMManager {
+    pub async fn list_vms(&self) -> Result<Vec<VM>>;
+    pub async fn start_vm(&self, id: &VMId) -> Result<()>;
+    pub async fn stop_vm(&self, id: &VMId) -> Result<()>;
+}
+```
+
+#### Dioxus Web Frontend
+```rust
+// dioxus-app/src/components/vm_card.rs
+#[component]
+fn VMCard(vm: ReadOnlySignal<VM>) -> Element {
+    rsx! {
+        div { class: "vm-card",
+            div { class: "vm-header",
+                h3 { "{vm().name}" }
+                span { class: "status-{vm().status}", "{vm().status}" }
+            }
+            div { class: "vm-actions",
+                if vm().status == VMStatus::Stopped {
+                    button { 
+                        onclick: move |_| start_vm(vm().id),
+                        "Start"
+                    }
+                } else {
+                    button { 
+                        onclick: move |_| stop_vm(vm().id),
+                        "Stop"
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Simple HTTP client for web UI
+async fn start_vm(vm_id: VMId) -> Result<()> {
+    let response = reqwest::Client::new()
+        .post(&format!("/api/vms/{}/start", vm_id))
+        .send()
+        .await?;
+    
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        Err(anyhow!("Failed to start VM"))
+    }
+}
 ```
 
 ## Component Specifications
 
-### Frontend Components
+### Core Dioxus Components
 
-#### VM Gallery View
+#### VM Gallery Widget
 ```rust
+#[derive(CompositeTemplate)]
+#[template(resource = "/org/quickemu/Manager/vm_gallery.ui")]
 struct VMGallery {
-    vms: Vec<VMSummary>,
-    selected: Option<VMId>,
-    sort_by: SortCriteria,
+    #[template_child]
+    vm_list: TemplateChild<gtk::ListView>,
+    #[template_child] 
+    view_toggle: TemplateChild<gtk::ToggleButton>,
+    
+    model: gio::ListStore,
 }
 ```
-- Grid/List view toggle
-- Real-time status indicators
-- Resource usage sparklines
-- Quick action buttons
+- GTK4 ListView with custom VM items
+- Real-time status indicators via property bindings
+- Resource usage with custom Cairo drawing
+- Quick action buttons in each row
 
-#### VM Detail Panel
+#### VM Detail Widget  
 ```rust
+#[derive(CompositeTemplate)]
+#[template(resource = "/org/quickemu/Manager/vm_detail.ui")]
 struct VMDetail {
-    vm: VMConfig,
-    metrics: VMMetrics,
-    console_url: Option<String>,
+    #[template_child]
+    config_group: TemplateChild<adw::PreferencesGroup>,
+    #[template_child]
+    metrics_chart: TemplateChild<gtk::DrawingArea>,
+    #[template_child]
+    action_bar: TemplateChild<gtk::ActionBar>,
 }
 ```
-- Full VM configuration display
-- Real-time metrics charts
-- Console preview/launch
-- Action toolbar
+- AdwPreferencesGroup for configuration display
+- Custom DrawingArea for real-time metrics
+- Console launch via GtkActionBar
+- Property bindings for live updates
 
 ### Backend Services
 
@@ -183,13 +295,33 @@ fn launch_display(vm: &VM) -> Result<()> {
 - Throttle UI updates to 1Hz
 - Cache metrics between updates
 
-### Challenge: WebUI Mode Support
-**Solution**: Conditional compilation with feature flags
+### Challenge: Simple Multi-UI Support
+**Solution**: Keep GTK4 app as-is, add minimal Dioxus web frontend
 ```toml
+# Main Cargo.toml (GTK4 app)
 [features]
-default = ["desktop"]
-desktop = ["dioxus-desktop"]
-web = ["dioxus-web", "axum"]
+default = []
+web-server = ["axum", "tower"]
+
+[dependencies]
+# Core dependencies (current)
+gtk4 = "0.9"
+libadwaita = "0.7"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+sysinfo = "0.30"
+
+# Optional web server
+axum = { version = "0.7", optional = true }
+tower = { version = "0.4", optional = true }
+
+# dioxus-app/Cargo.toml (Web frontend)
+[dependencies]
+dioxus = "0.4"
+dioxus-web = "0.4"
+serde = { version = "1", features = ["derive"] }
+reqwest = { version = "0.11", features = ["json"] }
+wasm-bindgen = "0.2"
 ```
 
 ### Challenge: Single Binary Distribution
@@ -203,25 +335,90 @@ web = ["dioxus-web", "axum"]
 ### Prerequisites
 - Rust 1.75+ (for Dioxus support)
 - Dioxus CLI: `cargo install dioxus-cli`
-- Platform SDKs (GTK4 for Linux, Cocoa for macOS)
+- Platform SDKs:
+  - Linux: GTK4 development libraries
+  - Web: `wasm-pack` for WASM builds
+  - macOS: Xcode Command Line Tools
 
 ### Build Commands
+
+#### Current GTK4 Desktop App
 ```bash
-# Development
-dx serve --platform desktop
+# Development build
+cargo build
 
 # Release build
-dx build --release
+cargo build --release
 
-# WebUI mode
-dx build --features web
+# With GTK4 features
+cargo build --features desktop-gtk
+```
+
+#### Dioxus Web Application
+```bash
+# Build web application (WASM)
+cd dioxus-app
+dx build --platform web
+
+# Development with hot reload
+cd dioxus-app
+dx serve --platform web
+
+# Build web server component (optional)
+cargo build --features web-server
+```
+
+#### Development Workflow
+```bash
+# Run GTK4 desktop app (current)
+cargo run
+
+# Run GTK4 app with web server enabled
+cargo run --features web-server
+
+# Run web frontend (separate terminal)
+cd dioxus-app && dx serve
+
+# Build both applications
+cargo build && cd dioxus-app && dx build
 ```
 
 ### Testing Strategy
-- Unit tests for parsers and business logic
+- Unit tests for core business logic
 - Integration tests for quickemu interaction
-- UI testing with Dioxus test utilities
-- Manual testing on target platforms
+- Basic web UI testing with Dioxus
+- Manual testing on Linux desktop and web browsers
+
+## Simple Migration Strategy
+
+### Phase 1: Add Web Server Capability (Minimal Change)
+1. **Add optional web server** to existing GTK4 app
+   - Use feature flag `web-server` to add HTTP API
+   - Reuse existing VM management code
+   - Simple REST endpoints for basic operations
+
+2. **Keep GTK4 app unchanged**
+   - Primary desktop experience remains the same
+   - Optional web access for remote management
+   - No architectural changes needed
+
+### Phase 2: Create Dioxus Web Frontend
+1. **Build simple web interface**
+   - Separate `dioxus-app/` directory
+   - Basic VM listing and controls
+   - Communicate with GTK4 app's web server
+
+2. **Minimal feature set**
+   - List VMs and their status
+   - Start/stop VM controls
+   - Basic VM information display
+   - Real-time status updates
+
+### Implementation Benefits
+- **Minimal complexity**: Only two UIs to maintain
+- **Shared core logic**: VM management code reused directly
+- **Independent development**: Web UI can be developed separately
+- **Low maintenance**: Simple architecture with clear separation
 
 ## Security Considerations
 
@@ -240,21 +437,56 @@ dx build --features web
 
 ## Dependencies
 
-### Core Dependencies
+### Main Application (GTK4 Desktop)
 ```toml
+# Cargo.toml
 [dependencies]
-dioxus = "0.5"
+# Current core dependencies
+gtk4 = { version = "0.9", package = "gtk4", features = ["v4_10"] }
+libadwaita = { version = "0.7", package = "libadwaita", features = ["v1_6"] }
+glib = "0.20"
+gio = "0.20"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
-notify = "6"
+anyhow = "1.0"
 sysinfo = "0.30"
+notify = "6"
+which = "4.0"
+
+# Optional web server
+axum = { version = "0.7", optional = true }
+tower = { version = "0.4", optional = true }
+tower-http = { version = "0.5", features = ["cors"], optional = true }
+
+[build-dependencies]
+glib-build-tools = "0.20"
+
+[features]
+default = []
+web-server = ["axum", "tower", "tower-http"]
 ```
 
-### Platform-specific
+### Dioxus Web Frontend
 ```toml
-[target.'cfg(target_os = "macos")'.dependencies]
-cocoa = "0.25"
+# dioxus-app/Cargo.toml
+[dependencies]
+# Minimal Dioxus dependencies
+dioxus = "0.4"
+dioxus-web = "0.4"
+serde = { version = "1", features = ["derive"] }
+reqwest = { version = "0.11", features = ["json"] }
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
 
-[target.'cfg(target_os = "linux")'.dependencies]
-gtk4 = "0.7"
+# Only the data models needed for web UI
+[dependencies.quickemu-types]
+path = "../src/models"
+features = ["serde"]
+```
+
+### Shared Types Only (Minimal)
+```toml
+# src/models/Cargo.toml (optional separate crate)
+[dependencies]
+serde = { version = "1", features = ["derive"] }
 ```

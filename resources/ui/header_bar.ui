@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="QEMHeaderBar" parent="GtkBox">
+    <property name="orientation">horizontal</property>
+    <property name="spacing">8</property>
+    <property name="margin-top">8</property>
+    <property name="margin-bottom">8</property>
+    <property name="margin-start">8</property>
+    <property name="margin-end">8</property>
+    <child>
+      <object class="GtkButton" id="refresh_button">
+        <property name="icon-name">view-refresh-symbolic</property>
+        <property name="tooltip-text">Refresh VM List</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel">
+        <property name="label">Quickemu Manager</property>
+        <property name="hexpand">true</property>
+        <property name="halign">center</property>
+        <style>
+          <class name="title"/>
+        </style>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuButton" id="menu_button">
+        <property name="icon-name">open-menu-symbolic</property>
+        <property name="tooltip-text">Main Menu</property>
+        <property name="popover">
+          <object class="GtkPopoverMenu" id="main_menu">
+            <property name="menu-model">main_menu_model</property>
+          </object>
+        </property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkButton" id="create_vm_button">
+        <property name="icon-name">list-add-symbolic</property>
+        <property name="tooltip-text">Create New VM</property>
+        <style>
+          <class name="suggested-action"/>
+        </style>
+      </object>
+    </child>
+  </template>
+  <menu id="main_menu_model">
+    <section>
+      <item>
+        <attribute name="label">Settings</attribute>
+        <attribute name="action">app.settings</attribute>
+      </item>
+      <item>
+        <attribute name="label">About</attribute>
+        <attribute name="action">app.about</attribute>
+      </item>
+    </section>
+  </menu>
+</interface>
