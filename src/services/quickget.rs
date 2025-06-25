@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::process::Command;
 use tokio::sync::OnceCell;
@@ -9,6 +9,7 @@ use tokio::sync::OnceCell;
 pub struct OSInfo {
     pub name: String,
     pub versions: Vec<String>,
+    pub editions: Option<Vec<String>>,
     pub homepage: Option<String>,
 }
 
@@ -43,35 +44,43 @@ impl QuickgetService {
         }
 
         let json_str = String::from_utf8(output.stdout)?;
-        let os_data: HashMap<String, serde_json::Value> = serde_json::from_str(&json_str)
-            .map_err(|_| anyhow!("Failed to parse quickget JSON output"))?;
+        
+        #[derive(serde::Deserialize)]
+        struct QuickgetEntry {
+            #[serde(rename = "Display Name")]
+            display_name: String,
+            #[serde(rename = "OS")]
+            os: String,
+            #[serde(rename = "Release")]
+            release: String,
+            #[serde(rename = "Option")]
+            option: Option<String>,
+        }
+        
+        let entries: Vec<QuickgetEntry> = serde_json::from_str(&json_str)
+            .map_err(|e| anyhow!("Failed to parse quickget JSON output: {}", e))?;
+
+        // Group by OS and collect versions
+        let mut os_map: HashMap<String, (String, HashSet<String>)> = HashMap::new();
+        
+        for entry in entries {
+            let entry_key = entry.os.clone();
+            let (display_name, versions) = os_map.entry(entry_key.clone()).or_insert_with(|| {
+                (entry.display_name.clone(), std::collections::HashSet::new())
+            });
+            versions.insert(entry.release);
+        }
 
         let mut os_list = Vec::new();
-        
-        for (os_name, os_info) in os_data {
-            let versions = if let Some(releases) = os_info.get("releases") {
-                if let Some(releases_obj) = releases.as_object() {
-                    releases_obj.keys().cloned().collect()
-                } else if let Some(releases_arr) = releases.as_array() {
-                    releases_arr
-                        .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect()
-                } else {
-                    vec!["latest".to_string()]
-                }
-            } else {
-                vec!["latest".to_string()]
-            };
-
-            let homepage = os_info.get("homepage")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-
+        for (os_name, (display_name, versions)) in os_map {
+            let mut versions_vec: Vec<String> = versions.into_iter().collect();
+            versions_vec.sort();
+            
             os_list.push(OSInfo {
                 name: os_name,
-                versions,
-                homepage,
+                versions: versions_vec,
+                editions: None, // Will be populated separately when needed
+                homepage: None, // Not provided in the new format
             });
         }
 
@@ -114,6 +123,27 @@ impl QuickgetService {
 
         let url = String::from_utf8(output.stdout)?.trim().to_string();
         Ok(url)
+    }
+
+    pub async fn get_editions(&self, os: &str) -> Result<Vec<String>> {
+        let output = Command::new(&self.quickget_path)
+            .arg(os)
+            .output()?;
+
+        let output_str = String::from_utf8(output.stdout)?;
+        
+        // Parse the output to extract editions
+        let mut editions = Vec::new();
+        for line in output_str.lines() {
+            if line.trim().starts_with("- Editions:") {
+                // Extract editions from the line like "- Editions: Budgie COSMIC KDE..."
+                let editions_line = line.trim().strip_prefix("- Editions:").unwrap_or("").trim();
+                editions = editions_line.split_whitespace().map(|s| s.to_string()).collect();
+                break;
+            }
+        }
+        
+        Ok(editions)
     }
 
     pub async fn open_homepage(&self, os: &str) -> Result<()> {
