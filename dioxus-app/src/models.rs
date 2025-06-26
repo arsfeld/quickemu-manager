@@ -5,7 +5,7 @@ use quickemu_core::models::{VM as CoreVM, VMTemplate as CoreVMTemplate};
 
 // Re-export core types for server side only
 #[cfg(not(target_arch = "wasm32"))]
-pub use quickemu_core::models::{VMStatus as CoreVMStatus, VMMetrics as CoreVMMetrics};
+pub use quickemu_core::models::{VMStatus as CoreVMStatus};
 
 // Define our own VMStatus for cross-platform compatibility
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

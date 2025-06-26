@@ -4,6 +4,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::process::Command;
 use tokio::sync::OnceCell;
+use std::time::{SystemTime, Duration};
+use std::fs;
+use std::io::Write;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OSInfo {
@@ -11,6 +14,14 @@ pub struct OSInfo {
     pub versions: Vec<String>,
     pub editions: Option<Vec<String>>,
     pub homepage: Option<String>,
+    pub png_icon: Option<String>,
+    pub svg_icon: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct QuickgetCache {
+    os_list: Vec<OSInfo>,
+    timestamp: SystemTime,
 }
 
 pub struct QuickgetService {
@@ -26,6 +37,51 @@ impl QuickgetService {
         }
     }
 
+    fn get_cache_path() -> PathBuf {
+        let cache_dir = dirs::cache_dir()
+            .unwrap_or_else(|| PathBuf::from("/tmp"))
+            .join("quickemu-manager");
+        
+        // Ensure cache directory exists
+        let _ = fs::create_dir_all(&cache_dir);
+        
+        cache_dir.join("quickget_cache.json")
+    }
+
+    fn load_cache() -> Option<QuickgetCache> {
+        let cache_path = Self::get_cache_path();
+        
+        if cache_path.exists() {
+            if let Ok(contents) = fs::read_to_string(&cache_path) {
+                if let Ok(cache) = serde_json::from_str::<QuickgetCache>(&contents) {
+                    // Check if cache is less than 24 hours old
+                    if let Ok(elapsed) = cache.timestamp.elapsed() {
+                        if elapsed < Duration::from_secs(24 * 60 * 60) {
+                            return Some(cache);
+                        }
+                    }
+                }
+            }
+        }
+        
+        None
+    }
+
+    fn save_cache(os_list: &[OSInfo]) -> Result<()> {
+        let cache = QuickgetCache {
+            os_list: os_list.to_vec(),
+            timestamp: SystemTime::now(),
+        };
+        
+        let cache_path = Self::get_cache_path();
+        let cache_json = serde_json::to_string_pretty(&cache)?;
+        
+        let mut file = fs::File::create(cache_path)?;
+        file.write_all(cache_json.as_bytes())?;
+        
+        Ok(())
+    }
+
     pub async fn get_supported_systems(&self) -> Result<&Vec<OSInfo>> {
         self.os_cache
             .get_or_try_init(|| async {
@@ -35,6 +91,14 @@ impl QuickgetService {
     }
 
     async fn fetch_supported_systems(&self) -> Result<Vec<OSInfo>> {
+        // Try to load from cache first
+        if let Some(cache) = Self::load_cache() {
+            log::info!("Loaded OS list from cache");
+            return Ok(cache.os_list);
+        }
+
+        // Cache miss or expired, fetch from quickget
+        log::info!("Fetching OS list from quickget...");
         let output = Command::new(&self.quickget_path)
             .arg("--list-json")
             .output()?;
@@ -54,25 +118,29 @@ impl QuickgetService {
             #[serde(rename = "Release")]
             release: String,
             #[serde(rename = "Option")]
-            option: Option<String>,
+            _option: Option<String>,
+            #[serde(rename = "PNG")]
+            png: Option<String>,
+            #[serde(rename = "SVG")]
+            svg: Option<String>,
         }
         
         let entries: Vec<QuickgetEntry> = serde_json::from_str(&json_str)
             .map_err(|e| anyhow!("Failed to parse quickget JSON output: {}", e))?;
 
-        // Group by OS and collect versions
-        let mut os_map: HashMap<String, (String, HashSet<String>)> = HashMap::new();
+        // Group by OS and collect versions, icons
+        let mut os_map: HashMap<String, (String, HashSet<String>, Option<String>, Option<String>)> = HashMap::new();
         
         for entry in entries {
             let entry_key = entry.os.clone();
-            let (display_name, versions) = os_map.entry(entry_key.clone()).or_insert_with(|| {
-                (entry.display_name.clone(), std::collections::HashSet::new())
+            let (display_name, versions, png_icon, svg_icon) = os_map.entry(entry_key.clone()).or_insert_with(|| {
+                (entry.display_name.clone(), std::collections::HashSet::new(), entry.png.clone(), entry.svg.clone())
             });
             versions.insert(entry.release);
         }
 
         let mut os_list = Vec::new();
-        for (os_name, (display_name, versions)) in os_map {
+        for (os_name, (_display_name, versions, png_icon, svg_icon)) in os_map {
             let mut versions_vec: Vec<String> = versions.into_iter().collect();
             versions_vec.sort();
             
@@ -81,11 +149,20 @@ impl QuickgetService {
                 versions: versions_vec,
                 editions: None, // Will be populated separately when needed
                 homepage: None, // Not provided in the new format
+                png_icon,
+                svg_icon,
             });
         }
 
         // Sort by name for consistent ordering
         os_list.sort_by(|a, b| a.name.cmp(&b.name));
+        
+        // Save to cache
+        if let Err(e) = Self::save_cache(&os_list) {
+            log::warn!("Failed to save quickget cache: {}", e);
+        } else {
+            log::info!("Saved OS list to cache");
+        }
         
         Ok(os_list)
     }

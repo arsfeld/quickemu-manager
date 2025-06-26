@@ -1,0 +1,282 @@
+@import "tailwindcss";
+@source "./src/**/*.{rs,html,css}";
+
+/* macOS Color Variables */
+@theme {
+  /* macOS System Colors */
+  --color-macos-background: #ffffff;
+  --color-macos-surface: #f5f5f7;
+  --color-macos-card: #ffffff;
+  --color-macos-border: #d2d2d7;
+  --color-macos-border-focus: #007aff;
+  --color-macos-text: #1d1d1f;
+  --color-macos-text-secondary: #6e6e73;
+  --color-macos-text-tertiary: #8e8e93;
+  
+  /* macOS Blue */
+  --color-macos-blue-50: #e5f3ff;
+  --color-macos-blue-100: #cce6ff;
+  --color-macos-blue-200: #99cdff;
+  --color-macos-blue-300: #66b5ff;
+  --color-macos-blue-400: #339cff;
+  --color-macos-blue-500: #007aff;
+  --color-macos-blue-600: #0056cc;
+  --color-macos-blue-700: #003d99;
+  --color-macos-blue-800: #002966;
+  --color-macos-blue-900: #001433;
+  
+  /* macOS Gray */
+  --color-macos-gray-50: #fafafa;
+  --color-macos-gray-100: #f5f5f7;
+  --color-macos-gray-200: #e5e5ea;
+  --color-macos-gray-300: #d2d2d7;
+  --color-macos-gray-400: #aeaeb2;
+  --color-macos-gray-500: #8e8e93;
+  --color-macos-gray-600: #6e6e73;
+  --color-macos-gray-700: #48484a;
+  --color-macos-gray-800: #2c2c2e;
+  --color-macos-gray-900: #1c1c1e;
+  
+  /* macOS System Colors */
+  --color-macos-green-500: #30d158;
+  --color-macos-green-600: #28cd41;
+  --color-macos-red-500: #ff3b30;
+  --color-macos-red-600: #d70015;
+  --color-macos-orange-500: #ff9500;
+  --color-macos-orange-600: #ff8c00;
+  --color-macos-yellow-500: #ffcc00;
+  --color-macos-yellow-600: #ffb000;
+  --color-macos-purple-500: #af52de;
+  --color-macos-purple-600: #9542be;
+  
+  /* Custom Border Radius */
+  --radius-macos: 10px;
+  --radius-macos-lg: 12px;
+  --radius-macos-xl: 16px;
+  
+  /* Custom Shadows */
+  --shadow-macos: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-macos-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-macos-xl: 0 8px 32px rgba(0, 0, 0, 0.16);
+  --shadow-macos-focus: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+/* macOS Base Styles */
+@layer base {
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background-color: var(--color-macos-surface);
+    color: var(--color-macos-text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* macOS Component Styles */
+@layer components {
+  .btn-macos {
+    background-color: var(--color-macos-background);
+    color: var(--color-macos-text);
+    font-weight: 400;
+    font-size: 13px;
+    padding: 6px 16px;
+    min-width: 80px;
+    border: 1px solid var(--color-macos-border);
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.1s ease-out;
+    cursor: pointer;
+    text-align: center;
+    white-space: nowrap;
+  }
+  
+  .btn-macos:hover {
+    background-color: var(--color-macos-gray-100);
+    border-color: #b8b8b8;
+  }
+  
+  .btn-macos:active {
+    background-color: var(--color-macos-gray-200);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+  
+  .btn-macos:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  .btn-macos-primary {
+    background-color: var(--color-macos-background);
+    color: var(--color-macos-text);
+    font-weight: 400;
+    font-size: 13px;
+    padding: 6px 16px;
+    min-width: 80px;
+    border: 1px solid var(--color-macos-border);
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.1s ease-out;
+    cursor: pointer;
+    text-align: center;
+    white-space: nowrap;
+    
+    background-color: var(--color-macos-blue-500);
+    color: white;
+    border-color: var(--color-macos-blue-500);
+    font-weight: 500;
+  }
+  
+  .btn-macos-primary:hover {
+    background-color: var(--color-macos-blue-600);
+    border-color: var(--color-macos-blue-600);
+  }
+  
+  .btn-macos-primary:active {
+    background-color: #0051a5;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+  
+  .btn-macos-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  .btn-macos-destructive {
+    background-color: var(--color-macos-background);
+    color: var(--color-macos-text);
+    font-weight: 400;
+    font-size: 13px;
+    padding: 6px 16px;
+    min-width: 80px;
+    border: 1px solid var(--color-macos-border);
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.1s ease-out;
+    cursor: pointer;
+    text-align: center;
+    white-space: nowrap;
+    
+    background-color: var(--color-macos-red-500);
+    color: white;
+    border-color: var(--color-macos-red-500);
+  }
+  
+  .btn-macos-destructive:hover {
+    background-color: var(--color-macos-red-600);
+    border-color: var(--color-macos-red-600);
+  }
+  
+  .btn-macos-destructive:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  .card-macos {
+    background-color: var(--color-macos-card);
+    border-radius: var(--radius-macos-lg);
+    box-shadow: var(--shadow-macos);
+    border: 1px solid var(--color-macos-border);
+    padding: 16px;
+  }
+  
+  .input-macos {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--color-macos-border);
+    border-radius: var(--radius-macos);
+    background-color: var(--color-macos-background);
+    color: var(--color-macos-text);
+    transition: all 0.15s ease-out;
+  }
+  
+  .input-macos:focus {
+    border-color: var(--color-macos-border-focus);
+    box-shadow: var(--shadow-macos-focus);
+    outline: none;
+  }
+  
+  .sidebar-item {
+    padding: 8px 12px;
+    color: var(--color-macos-text);
+    border-radius: var(--radius-macos);
+    transition: all 0.15s ease-out;
+    cursor: pointer;
+  }
+  
+  .sidebar-item:hover {
+    background-color: var(--color-macos-gray-200);
+  }
+  
+  .sidebar-item-selected {
+    background-color: var(--color-macos-blue-500);
+    color: white;
+  }
+  
+  .modal-macos {
+    background-color: var(--color-macos-card);
+    border-radius: var(--radius-macos-xl);
+    box-shadow: var(--shadow-macos-xl);
+    border: 1px solid var(--color-macos-border);
+    backdrop-filter: blur(20px);
+  }
+  
+  .status-running {
+    background-color: var(--color-macos-green-500);
+    color: white;
+  }
+  
+  .status-stopped {
+    background-color: var(--color-macos-gray-400);
+    color: white;
+  }
+  
+  .status-error {
+    background-color: var(--color-macos-red-500);
+    color: white;
+  }
+  
+  .status-warning {
+    background-color: var(--color-macos-orange-500);
+    color: white;
+  }
+}
+
+/* macOS Utilities */
+@layer utilities {
+  .glass-macos {
+    backdrop-filter: blur(20px);
+    background-color: rgba(255, 255, 255, 0.7);
+  }
+  
+  .focus-ring-macos:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-macos-blue-500);
+  }
+}
+
+/* macOS Animations */
+@keyframes macos-bounce {
+  0%, 20%, 53%, 80%, 100% {
+    transform: translate3d(0,0,0);
+  }
+  40%, 43% {
+    transform: translate3d(0, -6px, 0);
+  }
+  70% {
+    transform: translate3d(0, -3px, 0);
+  }
+  90% {
+    transform: translate3d(0, -1px, 0);
+  }
+}
+
+@keyframes macos-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

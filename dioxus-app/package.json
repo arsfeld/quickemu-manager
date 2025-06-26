@@ -1,0 +1,12 @@
+{
+  "name": "dioxus-app",
+  "private": true,
+  "scripts": {
+    "build-css": "npx @tailwindcss/cli -i ./input.css -o ./assets/tailwind.css",
+    "watch-css": "npx @tailwindcss/cli -i ./input.css -o ./assets/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.11",
+    "tailwindcss": "^4.1.11"
+  }
+}
