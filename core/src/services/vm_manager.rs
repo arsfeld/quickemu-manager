@@ -1,5 +1,6 @@
 use crate::models::{VM, VMId, VMStatus, VMTemplate, DisplayProtocol};
 use crate::services::process_monitor::ProcessMonitor;
+use crate::services::binary_discovery::BinaryDiscovery;
 use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -20,12 +21,12 @@ pub struct VMManager {
 }
 
 impl VMManager {
-    pub fn new() -> Result<Self> {
-        let quickemu_path = which::which("quickemu").map_err(|_| {
-            anyhow!("quickemu not found in PATH. Please install quickemu or configure the path.")
-        })?;
+    pub async fn new() -> Result<Self> {
+        let binary_discovery = BinaryDiscovery::new().await;
+        binary_discovery.validate()?;
         
-        let quickget_path = which::which("quickget").ok();
+        let quickemu_path = binary_discovery.quickemu_path()?.to_path_buf();
+        let quickget_path = binary_discovery.quickget_path().map(|p| p.to_path_buf());
         
         Ok(Self {
             quickemu_path,
@@ -42,6 +43,20 @@ impl VMManager {
             processes: Arc::new(RwLock::new(HashMap::new())),
             process_monitor: None,
         }
+    }
+    
+    pub async fn from_binary_discovery(binary_discovery: BinaryDiscovery) -> Result<Self> {
+        binary_discovery.validate()?;
+        
+        let quickemu_path = binary_discovery.quickemu_path()?.to_path_buf();
+        let quickget_path = binary_discovery.quickget_path().map(|p| p.to_path_buf());
+        
+        Ok(Self {
+            quickemu_path,
+            quickget_path,
+            processes: Arc::new(RwLock::new(HashMap::new())),
+            process_monitor: None,
+        })
     }
     
     pub fn set_process_monitor(&mut self, process_monitor: Arc<ProcessMonitor>) {
@@ -409,12 +424,11 @@ impl VMManager {
 
 impl Default for VMManager {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|_| {
-            Self::with_paths(
-                PathBuf::from("quickemu"),
-                Some(PathBuf::from("quickget"))
-            )
-        })
+        // Since we can't make Default async, use a synchronous fallback
+        Self::with_paths(
+            PathBuf::from("quickemu"),
+            Some(PathBuf::from("quickget"))
+        )
     }
 }
 
