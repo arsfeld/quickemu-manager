@@ -1,42 +1,17 @@
 [package]
-name = "quickemu-manager-ui"
+name = "dioxus-app"
 version = "0.1.0"
+authors = ["Alexandre Rosenfeld <alex@rosenfeld.one>"]
 edition = "2021"
 
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 [dependencies]
-# Dioxus core
-dioxus = "0.6"
-
-# Platform-specific dependencies
-dioxus-desktop = { version = "0.6", optional = true }
-dioxus-web = { version = "0.6", optional = true }
-dioxus-fullstack = { version = "0.6", optional = true }
-
-# Web server dependencies
-axum = { version = "0.8", optional = true }
-tower = { version = "0.5", optional = true }
-tower-http = { version = "0.6", features = ["cors"], optional = true }
-tokio = { version = "1", features = ["full"], optional = true }
-
-# Core dependencies
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-anyhow = "1"
-thiserror = "2"
-
-# Web-specific dependencies
-reqwest = { version = "0.12", features = ["json"], optional = true }
-wasm-bindgen = { version = "0.2", optional = true }
-console_error_panic_hook = { version = "0.1", optional = true }
-wasm-logger = { version = "0.2", optional = true }
-web-sys = { version = "0.3", optional = true }
-
-# Shared VM management logic
-quickemu-core = { path = "../core", optional = true }
+dioxus = { version = "0.6.0", features = ["router", "fullstack"] }
+serde = { version = "1.0", features = ["derive"] }
 
 [features]
-default = ["desktop"]
-desktop = ["dioxus-desktop", "quickemu-core"]
-web = ["dioxus-web", "reqwest", "wasm-bindgen", "console_error_panic_hook", "wasm-logger", "web-sys"]
-server = ["dioxus-fullstack", "axum", "tower", "tower-http", "tokio", "quickemu-core"]
-
+default = ["web"]
+web = ["dioxus/web"]
+desktop = ["dioxus/desktop"]
+mobile = ["dioxus/mobile"]
