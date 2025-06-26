@@ -16,3 +16,5 @@ Thumbs.db
 # App specific
 config.toml
 *.log
+
+node_modules/
