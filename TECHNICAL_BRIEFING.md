@@ -24,8 +24,8 @@ Two independent frontend applications sharing core business logic:
 ┌─────────────────────────────────────────────────┐
 │              Independent Frontends              │
 │  ┌──────────────┐      ┌──────────────┐       │
-│  │ GTK4 Desktop │      │    Dioxus    │       │
-│  │  (Native)    │      │(Web+Desktop) │       │
+│  │ GTK4 Desktop │      │   Dioxus     │       │
+│  │  (Native)    │      │ Fullstack    │       │
 │  └──────────────┘      └──────────────┘       │
 └─────────────────────────────────────────────────┘
            │                       │
@@ -81,13 +81,16 @@ quickemu-manager/
 │           ├── main_window.rs
 │           ├── vm_card.rs
 │           └── ...
-├── dioxus-app/             # Multi-platform application
-│   ├── Cargo.toml
+├── dioxus-app/             # Dioxus fullstack application
+│   ├── Cargo.toml          # Fullstack dependencies
+│   ├── Dioxus.toml         # Dioxus configuration
 │   ├── src/
-│   │   ├── main.rs         # Platform-aware entry point
+│   │   ├── main.rs         # Fullstack entry point
 │   │   ├── components/     # UI components
-│   │   ├── api.rs          # Web API client
-│   │   └── services/       # Platform wrappers
+│   │   ├── server_functions.rs # Server functions
+│   │   ├── models/         # Shared data models
+│   │   └── pages/          # Page components
+│   ├── assets/             # Static assets
 │   └── index.html          # HTML template
 ├── Cargo.toml              # Workspace root
 └── README.md
@@ -100,11 +103,25 @@ quickemu-manager/
 - Direct access to VM management services
 - Keep existing implementation as-is
 
-### 2. Dioxus Multi-Platform Application
-- **Single codebase for web and desktop**
-- Desktop mode: Native window using WebView (no GTK4 dependencies)
-- Web mode: Standalone server with browser access
-- Cross-platform: Linux, Windows, macOS support
+### 2. Dioxus Fullstack Application
+
+**Decision: Fullstack Implementation**
+
+Using Dioxus 0.6's fullstack capabilities for unified client-server architecture:
+
+- **Fullstack architecture**: Single application with client (WASM) and server components
+- **Server functions**: Type-safe RPC calls between client and server
+- **Clean separation**: GTK4 handles desktop, Dioxus handles web interface
+- **Benefits**:
+  - Type-safe communication between frontend and backend
+  - Shared data models and business logic
+  - Hot reload for both client and server code
+  - No separate API layer needed
+  - Direct integration with quickemu-core library
+- **Deployment options**:
+  - Self-contained fullstack server
+  - Static site generation for client-only deployment
+  - Containerized deployment for easy distribution
 
 ### Implementation Approach
 
@@ -128,46 +145,70 @@ impl VMManager {
 }
 ```
 
-#### Dioxus Multi-Platform App
+#### Dioxus Fullstack Application
 ```rust
-// dioxus-app/src/main.rs - Desktop & Web modes
+// dioxus-app/src/main.rs - Fullstack implementation
 fn main() {
-    // Configure for desktop or web based on features
-    #[cfg(feature = "desktop")]
-    dioxus_desktop::launch(app);
-    
-    #[cfg(feature = "web")]
-    dioxus_web::launch(app);
-    
-    #[cfg(feature = "server")]
-    tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(launch_server());
+    // Launch as fullstack application
+    dioxus::launch(App);
 }
 
 #[component]
-fn app() -> Element {
-    let vm_manager = use_context_provider(|| Arc::new(VMManager::new()));
-    let vms = use_signal(|| vec![]);
-    
+fn App() -> Element {
     rsx! {
         Router::<Route> {}
     }
 }
 
-// Platform-agnostic VM operations
-async fn start_vm(vm_id: String) -> Result<()> {
-    #[cfg(not(feature = "server"))]
-    {
-        // Desktop mode - direct VM management
-        let manager = use_context::<Arc<VMManager>>();
-        manager.start_vm(&vm_id).await
+// Server functions for VM operations
+#[server(ListVMs)]
+pub async fn list_vms() -> Result<Vec<VM>, ServerFnError> {
+    // Direct access to quickemu-core on server
+    let vm_manager = get_vm_manager().await;
+    let vms = get_vms().await;
+    
+    let mut api_vms = Vec::new();
+    for vm in vms.read().await.values() {
+        let mut vm_copy = vm.clone();
+        vm_manager.update_vm_status(&mut vm_copy).await;
+        api_vms.push(convert_vm(vm_copy));
     }
     
-    #[cfg(feature = "server")]
-    {
-        // Web mode - API calls
-        api::start_vm(&vm_id).await
+    Ok(api_vms)
+}
+
+#[server(StartVM)]
+pub async fn start_vm(vm_id: String) -> Result<(), ServerFnError> {
+    let vm_manager = get_vm_manager().await;
+    let vms = get_vms().await;
+    let vm_id = VMId(vm_id);
+    
+    if let Some(vm) = vms.read().await.get(&vm_id) {
+        vm_manager.start_vm(vm).await?;
+    }
+    
+    Ok(())
+}
+
+// Client-side usage
+#[component]
+fn HomePage() -> Element {
+    let mut vms = use_signal(Vec::<VM>::new);
+    
+    use_effect(move || {
+        spawn(async move {
+            if let Ok(vm_list) = list_vms().await {
+                vms.set(vm_list);
+            }
+        });
+    });
+    
+    rsx! {
+        div {
+            for vm in vms.read().iter() {
+                VMCard { vm: vm.clone() }
+            }
+        }
     }
 }
 ```
@@ -332,9 +373,9 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 quickemu-core = { path = "../core" }
 
-# dioxus-app/Cargo.toml (Multi-platform app)
+# dioxus-app/Cargo.toml (Fullstack app)
 [dependencies]
-dioxus = { version = "0.4", features = ["desktop", "web", "fullstack"] }
+dioxus = { version = "0.6", features = ["fullstack"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 quickemu-core = { path = "../core" }
@@ -378,24 +419,21 @@ cargo build --release
 cargo run
 ```
 
-#### Dioxus Multi-Platform Application
+#### Dioxus Fullstack Application
 ```bash
 cd dioxus-app
 
-# Desktop mode (native window)
-cargo run --features desktop
+# Install Dioxus CLI if not already installed
+cargo install dioxus-cli
 
-# Web server mode
-cargo run --features server
+# Development with hot reload (fullstack)
+dx serve
 
-# Build for desktop
-cargo build --release --features desktop
+# Build for production (creates dist/ folder)
+dx build --release
 
-# Build for web (WASM)
-dx build --platform web
-
-# Development with hot reload
-dx serve --platform desktop  # or web
+# Build and serve
+dx serve --release
 ```
 
 #### Development Workflow
@@ -403,18 +441,18 @@ dx serve --platform desktop  # or web
 # Run GTK4 desktop app
 cd gtk4-app && cargo run
 
-# Run Dioxus desktop app
-cd dioxus-app && cargo run --features desktop
+# Run Dioxus fullstack app with hot reload
+cd dioxus-app && dx serve
 
-# Run Dioxus web server
-cd dioxus-app && cargo run --features server
-
-# Build all applications from workspace root
+# Build everything from workspace root
 cargo build --workspace
 
-# Build specific app
-cargo build -p quickemu-manager-gtk
-cargo build -p quickemu-manager-ui --features desktop
+# Build fullstack app for deployment
+cd dioxus-app && dx build --release
+# Output will be in dioxus-app/dist/
+
+# Deploy the fullstack server
+cd dioxus-app && dx serve --release
 ```
 
 ### Testing Strategy
@@ -436,25 +474,26 @@ cargo build -p quickemu-manager-ui --features desktop
    - Keep UI code in main crate
    - No functional changes
 
-### Phase 2: Create Dioxus Multi-Platform App
-1. **Build multi-platform application**
-   - Separate `dioxus-app/` directory
-   - Desktop mode for native experience
-   - Web server mode for browser access
-   - Uses same core library as GTK4 app
+### Phase 2: Create Dioxus Fullstack Application
+1. **Build fullstack application**
+   - Separate `dioxus-app/` directory for fullstack UI
+   - Client (WASM) and server components in single app
+   - Server functions for VM management
+   - Direct integration with quickemu-core library
 
-2. **Full feature parity**
-   - List VMs and their status
-   - Start/stop VM controls
-   - VM creation and configuration
-   - Real-time status updates
-   - Works on Linux, Windows, macOS
+2. **Fullstack-optimized features**
+   - List VMs and their status via server functions
+   - Start/stop VM controls through type-safe RPC
+   - Real-time updates via reactive signals
+   - Responsive design for mobile and desktop browsers
+   - Progressive Web App capabilities
 
 ### Implementation Benefits
-- **Complete independence**: Each UI can run without the other
-- **Shared core logic**: VM management code reused directly
-- **Independent development**: UIs can be developed and deployed separately
-- **No GTK4 dependencies**: Web UI builds without desktop libraries
+- **Complete independence**: GTK4 and fullstack apps are fully separate
+- **Type safety**: Shared models between client and server
+- **Optimal performance**: Direct function calls instead of HTTP overhead
+- **Unified development**: Single app with hot reload for both client and server
+- **Clear architecture**: Desktop for local, web for remote management
 
 ## Security Considerations
 
@@ -500,29 +539,47 @@ anyhow = "1.0"
 glib-build-tools = "0.20"
 ```
 
-### Dioxus Multi-Platform App
+### Dioxus Web Application
 ```toml
 # dioxus-app/Cargo.toml
 [dependencies]
-# Dioxus framework
-dioxus = "0.4"
+# Dioxus web framework
+dioxus = { version = "0.4", features = ["web"] }
+dioxus-web = "0.4"
 serde = { version = "1", features = ["derive"] }
-tokio = { version = "1", features = ["full"] }
+serde_json = "1"
 
-# Shared core business logic
+# Web-specific dependencies
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["Window", "Document", "Element"] }
+reqwest = { version = "0.11", features = ["json", "wasm"] }
+gloo-timers = { version = "0.3", features = ["futures"] }
+
+# Optional: For connecting to backend API
+url = "2"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+```
+
+### Backend API Server (Optional)
+```toml
+# backend/Cargo.toml
+[dependencies]
+# Web framework
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors"] }
+
+# Shared core
 quickemu-core = { path = "../core" }
 
-# Platform-specific dependencies
-dioxus-desktop = { version = "0.4", optional = true }
-dioxus-web = { version = "0.4", optional = true }
-dioxus-fullstack = { version = "0.4", optional = true }
-axum = { version = "0.7", optional = true }
+# Async runtime
+tokio = { version = "1", features = ["full"] }
 
-[features]
-default = ["desktop"]
-desktop = ["dioxus-desktop"]
-web = ["dioxus-web"]
-server = ["dioxus-fullstack", "axum"]
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 ```
 
 ### Shared Core Library

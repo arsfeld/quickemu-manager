@@ -5,7 +5,7 @@ use gtk::{gio, glib, Application};
 use std::sync::Arc;
 use std::path::PathBuf;
 
-use quickemu_core::{AppConfig, VMManager, QuickgetService};
+use quickemu_core::{AppConfig, VMManager, QuickgetService, BinaryDiscovery};
 use ui::MainWindow;
 
 // Import AppState from lib.rs instead of defining it here
@@ -37,11 +37,17 @@ fn build_ui(app: &Application) {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
     let app_state = rt.block_on(async {
         let config = AppConfig::load().unwrap_or_default();
-        let vm_manager = VMManager::new().expect("Failed to initialize VMManager");
+        
+        // Use unified binary discovery
+        let binary_discovery = BinaryDiscovery::new().await;
+        println!("Binary discovery results:\n{}", binary_discovery.discovery_info());
+        
+        let vm_manager = VMManager::from_binary_discovery(binary_discovery.clone()).await
+            .expect("Failed to initialize VMManager");
 
-        // Try to find quickget binary and initialize service
-        let quickget_service = find_quickget_binary().map(|path| {
-            Arc::new(QuickgetService::new(path))
+        // Initialize quickget service if available
+        let quickget_service = binary_discovery.quickget_path().map(|path| {
+            Arc::new(QuickgetService::new(path.to_path_buf()))
         });
 
         if quickget_service.is_some() {
@@ -60,36 +66,4 @@ fn build_ui(app: &Application) {
     // Create main window
     let window = MainWindow::new(app, app_state, rt);
     window.present();
-}
-
-fn find_quickget_binary() -> Option<PathBuf> {
-    use std::process::Command;
-    
-    // Try using which command to find quickget
-    if let Ok(output) = Command::new("which").arg("quickget").output() {
-        if output.status.success() {
-            let path_string = String::from_utf8_lossy(&output.stdout);
-            let path_str = path_string.trim();
-            if !path_str.is_empty() {
-                return Some(PathBuf::from(path_str));
-            }
-        }
-    }
-    
-    // Try common locations for quickget
-    let possible_paths = [
-        "/usr/bin/quickget",
-        "/usr/local/bin/quickget",
-        "/opt/quickemu/quickget",
-        "./quickget",  // Local development
-    ];
-
-    for path in &possible_paths {
-        let path_buf = PathBuf::from(path);
-        if path_buf.exists() && path_buf.is_file() {
-            return Some(path_buf);
-        }
-    }
-
-    None
 }

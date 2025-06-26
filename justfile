@@ -10,13 +10,13 @@ build:
 build-gtk:
     cargo build -p quickemu-manager-gtk
 
-# Build the Dioxus desktop application
-build-dioxus-desktop:
-    cargo build -p quickemu-manager-ui --features desktop
+# Build the Dioxus fullstack application
+build-dioxus-fullstack:
+    cd dioxus-app && dx build --platform server --release
 
-# Build the Dioxus web server
-build-dioxus-server:
-    cargo build -p quickemu-manager-ui --features server --no-default-features
+# Build the Dioxus web client only
+build-dioxus-web:
+    cd dioxus-app && dx build --platform web --release
 
 # Build the core library
 build-core:
@@ -25,23 +25,32 @@ build-core:
 # Build everything in release mode
 release:
     cargo build --workspace --release
-    cd dioxus-app && dx build --platform web --release
+    cd dioxus-app && dx build --platform server --release
 
 # Run the GTK4 desktop application
 run-gtk:
     cd gtk4-app && cargo run
 
-# Run the Dioxus desktop application
-run-dioxus:
-    cd dioxus-app && cargo run --features desktop
-
-# Run the Dioxus web server
-run-server:
-    cd dioxus-app && cargo run --features server --no-default-features
-
-# Run the Dioxus web application (development)
-web:
+# Run the Dioxus web application (client-side rendering)
+run-dioxus-web:
     cd dioxus-app && dx serve --platform web
+
+# Run the Dioxus fullstack application server (after building)
+run-dioxus-server:
+    cd dioxus-app && cargo run --bin quickemu-manager-ui --release
+
+# Run the Dioxus fullstack application with hot reload
+serve:
+    cd dioxus-app && dx serve --platform server
+
+# Run the Dioxus fullstack application with verbose logging
+serve-verbose:
+    cd dioxus-app && RUST_LOG=info dx serve --platform server
+
+# Serve the Dioxus web client in debug mode
+debug-web:
+    cd dioxus-app && dx build --platform web
+    cd /var/home/arosenfeld/Code/quickemu-manager/target/dx/quickemu-manager-ui/debug/web/public && python3 -m http.server 8080
 
 # Run all tests
 test:
