@@ -1,19 +1,21 @@
 [application]
-name = "quickemu-web"
-default_platform = "web"
 
 [web.app]
-title = "Quickemu Manager"
-base_path = "/"
 
-[web.watcher]
-reload_html = true
-watch_path = ["src", "index.html"]
+# HTML title tag content
+title = "dioxus-app"
+
+# include `assets` in web platform
+[web.resource]
+
+# Additional CSS style files
+style = []
+
+# Additional JavaScript files
+script = []
 
 [web.resource.dev]
 
-[bundle]
-identifier = "org.quickemu.Manager"
-publisher = "Quickemu"
-icon = []
-resources = []
+# Javascript code file
+# serve: [dev-server] only
+script = []
