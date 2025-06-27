@@ -416,49 +416,50 @@ pub fn CreateVMModal(show: Signal<bool>, on_create: EventHandler<()>) -> Element
     
     rsx! {
         div { 
-            class: "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4",
+            class: "fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4",
             onclick: move |_| if !is_creating() { show.set(false) },
             
             div { 
-                class: "modal-macos w-full max-w-4xl max-h-[90vh] overflow-hidden",
+                class: "bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl",
                 onclick: move |e| e.stop_propagation(),
                 
-                // Header with progress
-                div { 
-                    class: "text-white p-6",
-                    style: "background: linear-gradient(135deg, var(--color-macos-blue-500) 0%, var(--color-macos-purple-500) 100%);",
-                    div { class: "flex items-center justify-between mb-4",
-                        h2 { class: "text-2xl font-bold", "Create New Virtual Machine" }
+                // Simplified Header
+                div { class: "border-b border-white/10 px-6 py-4",
+                    div { class: "flex items-center justify-between",
+                        h2 { class: "text-xl font-semibold text-white", "Create Virtual Machine" }
                         if !is_creating() {
                             button {
-                                class: "text-white hover:text-gray-200 transition-colors text-lg font-light",
+                                class: "text-white/60 hover:text-white transition-colors",
                                 onclick: move |_| show.set(false),
-                                "✕"
+                                svg { class: "w-5 h-5",
+                                    xmlns: "http://www.w3.org/2000/svg",
+                                    fill: "none",
+                                    view_box: "0 0 24 24",
+                                    stroke: "currentColor",
+                                    path {
+                                        stroke_linecap: "round",
+                                        stroke_linejoin: "round",
+                                        stroke_width: "2",
+                                        d: "M6 18L18 6M6 6l12 12"
+                                    }
+                                }
                             }
                         }
                     }
                     
-                    // Step indicators
-                    div { class: "flex items-center space-x-4",
-                        for (i, step_name) in ["OS Selection", "Configuration"].iter().enumerate() {
-                            div { class: "flex items-center",
-                                div { 
-                                    class: format!("w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors {}",
-                                        if i <= current_step() as usize { "bg-white text-blue-600" } else { "bg-blue-500 text-white" }
-                                    ),
-                                    "{i + 1}"
-                                }
-                                span { class: "ml-2 text-sm font-medium", "{step_name}" }
-                                if i < 1 {
-                                    div { class: "ml-4 w-8 h-px bg-blue-300" }
-                                }
-                            }
-                        }
+                    // Minimal step indicator
+                    div { class: "flex items-center gap-2 mt-3",
+                        div { class: format!("h-1 flex-1 rounded-full {}", 
+                            if current_step() >= 0 { "bg-blue-500" } else { "bg-white/10" }
+                        ) }
+                        div { class: format!("h-1 flex-1 rounded-full {}", 
+                            if current_step() >= 1 { "bg-blue-500" } else { "bg-white/10" }
+                        ) }
                     }
                 }
                 
                 // Content
-                div { class: "p-6 h-[60vh]",
+                div { class: "p-6 h-[60vh] text-white",
                     if show_console() {
                         // Console Output View (replaces review step)
                         div { class: "h-full flex flex-col",
@@ -533,9 +534,9 @@ pub fn CreateVMModal(show: Signal<bool>, on_create: EventHandler<()>) -> Element
                 }
                 
                 // Footer with navigation
-                div { class: "bg-gray-50 px-6 py-4 flex justify-between items-center",
+                div { class: "border-t border-white/10 px-6 py-4 flex justify-between items-center",
                     button {
-                        class: format!("btn-macos {}",
+                        class: format!("px-4 py-2 text-sm font-medium text-white/80 hover:text-white transition-colors {}",
                             if current_step() == 0 { "invisible" } else { "" }
                         ),
                         disabled: current_step() == 0 || is_creating(),
@@ -545,7 +546,7 @@ pub fn CreateVMModal(show: Signal<bool>, on_create: EventHandler<()>) -> Element
                     
                     div { class: "flex space-x-3",
                         button {
-                            class: "btn-macos",
+                            class: "px-4 py-2 text-sm font-medium text-white/60 hover:text-white/80 transition-colors",
                             disabled: is_creating(),
                             onclick: move |_| {
                                 show.set(false);
@@ -556,7 +557,7 @@ pub fn CreateVMModal(show: Signal<bool>, on_create: EventHandler<()>) -> Element
                         
                         if current_step() == 0 {
                             button {
-                                class: "btn-macos-primary",
+                                class: "px-4 py-2 text-sm font-medium bg-blue-500/20 text-white border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm",
                                 disabled: {
                                     let os_empty = selected_os().is_empty();
                                     let version_empty = selected_version().is_empty();
@@ -571,7 +572,7 @@ pub fn CreateVMModal(show: Signal<bool>, on_create: EventHandler<()>) -> Element
                             }
                         } else if current_step() == 1 {
                             button {
-                                class: "btn-macos-primary",
+                                class: "px-4 py-2 text-sm font-medium bg-blue-500/20 text-white border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm",
                                 disabled: is_creating() || cpu_cores() < 1 || ram_gb() < 1 || disk_size_gb() < 1,
                                 onclick: move |_| {
                                     is_creating.set(true);
