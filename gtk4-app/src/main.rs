@@ -5,7 +5,7 @@ use gtk::{gio, glib, Application};
 use std::sync::Arc;
 use std::path::PathBuf;
 
-use quickemu_core::{AppConfig, VMManager, QuickgetService, BinaryDiscovery};
+use quickemu_core::{ConfigManager, VMManager, QuickgetService, BinaryDiscovery};
 use ui::MainWindow;
 
 // Import AppState from lib.rs instead of defining it here
@@ -36,7 +36,8 @@ fn build_ui(app: &Application) {
     // Initialize application state
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
     let app_state = rt.block_on(async {
-        let config = AppConfig::load().unwrap_or_default();
+        let config_manager = ConfigManager::new().await
+            .expect("Failed to initialize ConfigManager");
         
         // Use unified binary discovery
         let binary_discovery = BinaryDiscovery::new().await;
@@ -57,7 +58,7 @@ fn build_ui(app: &Application) {
         }
 
         AppState {
-            config: Arc::new(tokio::sync::RwLock::new(config)),
+            config_manager,
             vm_manager: Arc::new(vm_manager),
             quickget_service,
         }

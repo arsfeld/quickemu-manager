@@ -678,11 +678,7 @@ impl VMCreateDialog {
         println!("RAM: {}, CPU Cores: {}, Disk: {}", template.ram, template.cpu_cores, template.disk_size);
         
         glib::spawn_future_local(async move {
-            let config = app_state.config.read().await;
-            let target_dir = config.vm_directories
-                .first()
-                .cloned()
-                .unwrap_or_else(|| std::path::PathBuf::from("./vms"))
+            let target_dir = app_state.config_manager.get_primary_vm_directory().await
                 .join(&template.name);
 
             println!("Target directory: {}", target_dir.display());

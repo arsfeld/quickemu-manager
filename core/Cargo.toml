@@ -40,6 +40,17 @@ log = "0.4"
 # Process management
 nix = { version = "0.30", features = ["process"] }
 
+# WebSocket support for SPICE proxy
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+
+# Random token generation
+rand = "0.8"
+hex = "0.4"
+
+# TCP networking
+tokio-util = { version = "0.7", features = ["io"] }
+
 [dev-dependencies]
 tempfile = "3.20"
 mockall = "0.13"

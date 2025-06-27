@@ -65,4 +65,40 @@ impl AppConfig {
         
         Ok(())
     }
+    
+    /// Get the primary VM directory (first directory, used for creating new VMs)
+    pub fn get_primary_vm_directory(&self) -> PathBuf {
+        self.vm_directories.first()
+            .cloned()
+            .unwrap_or_else(|| {
+                dirs::home_dir()
+                    .map(|home| home.join("VMs"))
+                    .unwrap_or_else(|| PathBuf::from("/tmp/VMs"))
+            })
+    }
+    
+    /// Get all VM directories for discovery
+    pub fn get_all_vm_directories(&self) -> &Vec<PathBuf> {
+        &self.vm_directories
+    }
+    
+    /// Set the primary VM directory (moves it to first position)
+    pub fn set_primary_vm_directory(&mut self, directory: PathBuf) {
+        // Remove the directory if it already exists
+        self.vm_directories.retain(|d| d != &directory);
+        // Insert at the beginning (primary position)
+        self.vm_directories.insert(0, directory);
+    }
+    
+    /// Add a VM directory for discovery
+    pub fn add_vm_directory(&mut self, directory: PathBuf) {
+        if !self.vm_directories.contains(&directory) {
+            self.vm_directories.push(directory);
+        }
+    }
+    
+    /// Remove a VM directory
+    pub fn remove_vm_directory(&mut self, directory: &PathBuf) {
+        self.vm_directories.retain(|d| d != directory);
+    }
 }

@@ -208,4 +208,41 @@ impl VMDiscovery {
     pub async fn get_vm(&self, id: &VMId) -> Option<VM> {
         self.vms.read().await.get(id).cloned()
     }
+    
+    /// Add a directory to be watched for VM configs
+    pub fn add_watch_directory(&mut self, directory: PathBuf) {
+        if !self.watched_dirs.contains(&directory) {
+            self.watched_dirs.push(directory);
+        }
+    }
+    
+    /// Add multiple directories to be watched for VM configs
+    pub fn add_watch_directories(&mut self, directories: Vec<PathBuf>) {
+        for directory in directories {
+            self.add_watch_directory(directory);
+        }
+    }
+    
+    /// Get all watched directories
+    pub fn get_watched_directories(&self) -> &Vec<PathBuf> {
+        &self.watched_dirs
+    }
+    
+    /// Scan all watched directories for VMs
+    pub async fn scan_all_directories(&mut self) -> Result<Vec<VM>> {
+        let mut all_vms = Vec::new();
+        
+        for directory in self.watched_dirs.clone() {
+            let mut vms = self.scan_directory(&directory).await?;
+            all_vms.append(&mut vms);
+        }
+        
+        // Update internal VM cache
+        let mut vms_lock = self.vms.write().await;
+        for vm in &all_vms {
+            vms_lock.insert(vm.id.clone(), vm.clone());
+        }
+        
+        Ok(all_vms)
+    }
 }

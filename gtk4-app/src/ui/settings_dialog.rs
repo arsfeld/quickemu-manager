@@ -93,9 +93,9 @@ impl SettingsDialog {
             let app_state = app_state_clone.clone();
             let active = switch.is_active();
             glib::spawn_future_local(async move {
-                let mut config = app_state.config.write().await;
-                config.auto_download_tools = active;
-                if let Err(e) = config.save() {
+                if let Err(e) = app_state.config_manager.update_config(|config| {
+                    config.auto_download_tools = active;
+                }).await {
                     eprintln!("Failed to save config: {}", e);
                 }
             });
@@ -106,13 +106,13 @@ impl SettingsDialog {
             let app_state = app_state_clone.clone();
             let selected = combo.selected();
             glib::spawn_future_local(async move {
-                let mut config = app_state.config.write().await;
-                config.theme = match selected {
-                    1 => Theme::Light,
-                    2 => Theme::Dark,
-                    _ => Theme::System,
-                };
-                if let Err(e) = config.save() {
+                if let Err(e) = app_state.config_manager.update_config(|config| {
+                    config.theme = match selected {
+                        1 => Theme::Light,
+                        2 => Theme::Dark,
+                        _ => Theme::System,
+                    };
+                }).await {
                     eprintln!("Failed to save config: {}", e);
                 }
             });
@@ -122,7 +122,7 @@ impl SettingsDialog {
         let auto_download_switch = imp.auto_download_switch.clone();
         let theme_row = imp.theme_row.clone();
         glib::spawn_future_local(async move {
-            let config = app_state.config.read().await;
+            let config = app_state.config_manager.get_config().await;
             auto_download_switch.set_active(config.auto_download_tools);
             
             let theme_index = match config.theme {

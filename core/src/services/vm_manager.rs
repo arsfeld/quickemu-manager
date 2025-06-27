@@ -1,6 +1,7 @@
 use crate::models::{VM, VMId, VMStatus, VMTemplate, DisplayProtocol};
 use crate::services::process_monitor::ProcessMonitor;
 use crate::services::binary_discovery::BinaryDiscovery;
+use crate::services::spice_proxy::{SpiceProxyService, ConsoleInfo};
 use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -11,6 +12,8 @@ use std::io::{BufRead, BufReader};
 use std::thread;
 use std::sync::mpsc;
 use sysinfo::{System, ProcessesToUpdate};
+use std::net::TcpStream;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct VMManager {
@@ -18,6 +21,7 @@ pub struct VMManager {
     quickget_path: Option<PathBuf>,
     processes: Arc<RwLock<HashMap<VMId, Child>>>,
     process_monitor: Option<Arc<ProcessMonitor>>,
+    spice_proxy: Option<Arc<SpiceProxyService>>,
 }
 
 impl VMManager {
@@ -33,6 +37,7 @@ impl VMManager {
             quickget_path,
             processes: Arc::new(RwLock::new(HashMap::new())),
             process_monitor: None,
+            spice_proxy: None,
         })
     }
     
@@ -42,6 +47,7 @@ impl VMManager {
             quickget_path,
             processes: Arc::new(RwLock::new(HashMap::new())),
             process_monitor: None,
+            spice_proxy: None,
         }
     }
     
@@ -56,6 +62,7 @@ impl VMManager {
             quickget_path,
             processes: Arc::new(RwLock::new(HashMap::new())),
             process_monitor: None,
+            spice_proxy: None,
         })
     }
     
@@ -78,15 +85,24 @@ impl VMManager {
             .current_dir(config_dir);
         
         let child = cmd.spawn()?;
-        let pid = child.id();
+        let wrapper_pid = child.id();
         
-        // Don't track the quickemu wrapper process since it exits quickly
-        // Instead, rely on external process detection to find the actual qemu process
-        println!("Starting VM {}: quickemu wrapper launched with PID {}", vm.id.0, pid);
+        println!("Starting VM {}: quickemu wrapper launched with PID {}", vm.id.0, wrapper_pid);
+        
+        // Wait a bit for the actual QEMU process to start
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        
+        // Find the actual QEMU process PID
+        let actual_status = self.get_vm_status(&vm.id).await;
         
         // Register with process monitor if available
         if let Some(monitor) = &self.process_monitor {
-            monitor.register_vm_process(vm.id.clone(), pid).await;
+            if let VMStatus::Running { pid } = actual_status {
+                println!("Registering VM {} with ProcessMonitor: QEMU PID {}", vm.id.0, pid);
+                monitor.register_vm_process(vm.id.clone(), pid).await;
+            } else {
+                println!("Warning: Could not find running QEMU process for VM {}", vm.id.0);
+            }
         }
         
         Ok(())
@@ -107,12 +123,13 @@ impl VMManager {
                        arg_str.contains(&vm_id.0) || arg_str.contains(&format!("{}.conf", vm_id.0))
                    }) {
                     println!("Stopping VM {}: Killing qemu process PID {}", vm_id.0, process.pid().as_u32());
-                    process.kill();
                     
-                    // Unregister from process monitor if available
+                    // Unregister from process monitor BEFORE killing if available
                     if let Some(monitor) = &self.process_monitor {
                         monitor.unregister_vm_process(vm_id).await;
                     }
+                    
+                    process.kill();
                     
                     return Ok(());
                 }
@@ -419,6 +436,79 @@ impl VMManager {
             }
         }
         Ok(())
+    }
+
+    /// Set the SPICE proxy service for this VM manager
+    pub fn set_spice_proxy(&mut self, spice_proxy: Arc<SpiceProxyService>) {
+        self.spice_proxy = Some(spice_proxy);
+    }
+
+    /// Detect the actual SPICE port being used by a running VM
+    pub async fn detect_spice_port(&self, vm_id: &VMId) -> Result<Option<u16>> {
+        // First check if VM is running
+        let status = self.get_vm_status(vm_id).await;
+        if !matches!(status, VMStatus::Running { .. }) {
+            return Ok(None);
+        }
+
+        // Try common SPICE ports (5930 is default, but quickemu might use others)
+        for port in 5930..5940 {
+            if self.is_port_open("127.0.0.1", port).await {
+                return Ok(Some(port));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Check if a port is open and responsive
+    async fn is_port_open(&self, host: &str, port: u16) -> bool {
+        TcpStream::connect_timeout(
+            &format!("{}:{}", host, port).parse().unwrap(),
+            Duration::from_millis(100),
+        ).is_ok()
+    }
+
+    /// Create a console session for a VM
+    pub async fn create_console_session(&self, vm_id: &VMId) -> Result<ConsoleInfo> {
+        let spice_proxy = self.spice_proxy
+            .as_ref()
+            .ok_or_else(|| anyhow!("SPICE proxy not initialized"))?;
+
+        // Detect the SPICE port
+        let spice_port = self.detect_spice_port(vm_id).await?
+            .ok_or_else(|| anyhow!("VM '{}' does not have an active SPICE server", vm_id.0))?;
+
+        // Create console session
+        spice_proxy.create_console_session(vm_id.0.clone(), spice_port).await
+    }
+
+    /// Remove a console session
+    pub async fn remove_console_session(&self, connection_id: &str) -> Result<()> {
+        let spice_proxy = self.spice_proxy
+            .as_ref()
+            .ok_or_else(|| anyhow!("SPICE proxy not initialized"))?;
+
+        spice_proxy.remove_console_session(connection_id).await
+    }
+
+    /// Get console session status
+    pub async fn get_console_status(&self, connection_id: &str) -> Result<Option<crate::services::spice_proxy::ConnectionStatus>> {
+        let spice_proxy = self.spice_proxy
+            .as_ref()
+            .ok_or_else(|| anyhow!("SPICE proxy not initialized"))?;
+
+        Ok(spice_proxy.get_console_status(connection_id).await)
+    }
+
+    /// Check if a VM supports SPICE console access
+    pub async fn supports_console_access(&self, vm: &VM) -> bool {
+        match &vm.config.display {
+            DisplayProtocol::Spice { .. } => {
+                vm.is_running() && self.detect_spice_port(&vm.id).await.unwrap_or(None).is_some()
+            }
+            _ => false,
+        }
     }
 }
 

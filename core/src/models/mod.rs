@@ -1,5 +1,5 @@
 mod vm;
-mod config;
+pub mod config;
 mod metrics;
 
 pub use vm::*;

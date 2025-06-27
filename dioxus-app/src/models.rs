@@ -18,7 +18,7 @@ pub enum VMStatus {
 }
 
 // Define our own VMMetrics for cross-platform compatibility
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VMMetrics {
     pub cpu_percent: f32,
     pub memory_mb: u32,
@@ -27,6 +27,16 @@ pub struct VMMetrics {
     pub disk_write_bytes: u64,
     pub network_rx_bytes: u64,
     pub network_tx_bytes: u64,
+}
+
+// Historical metrics for graphing
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VMMetricsHistory {
+    pub timestamps: Vec<u64>,
+    pub cpu_history: Vec<f32>,
+    pub memory_history: Vec<f32>,
+    pub network_rx_history: Vec<u64>,
+    pub network_tx_history: Vec<u64>,
 }
 
 // Extension trait to add UI-specific methods to VMStatus
@@ -88,7 +98,7 @@ impl From<&CoreVM> for VM {
             status,
             cpu_cores: core_vm.config.cpu_cores,
             ram_mb,
-            disk_size: core_vm.config.disk_size.clone().unwrap_or_else(|| "Unknown".to_string()),
+            disk_size: core_vm.config.disk_size.clone().unwrap_or_else(|| "N/A".to_string()),
             config_path: core_vm.config_path.to_string_lossy().to_string(),
         }
     }
@@ -102,6 +112,14 @@ pub struct CreateVMRequest {
     pub name: Option<String>,
     pub ram: Option<String>,
     pub disk_size: Option<String>,
+    pub cpu_cores: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EditVMRequest {
+    pub vm_id: String,
+    pub name: Option<String>,
+    pub ram: Option<String>,
     pub cpu_cores: Option<u32>,
 }
 
@@ -148,10 +166,92 @@ mod helpers {
         if let Some(dash_pos) = guest_os.rfind('-') {
             guest_os[dash_pos + 1..].to_string()
         } else {
-            "Unknown".to_string()
+            "N/A".to_string()
+        }
+    }
+}
+
+// Console information for SPICE connections - cross-platform compatible
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsoleInfo {
+    pub websocket_url: String,
+    pub auth_token: String,
+    pub connection_id: String,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl From<quickemu_core::services::spice_proxy::ConsoleInfo> for ConsoleInfo {
+    fn from(core_info: quickemu_core::services::spice_proxy::ConsoleInfo) -> Self {
+        Self {
+            websocket_url: core_info.websocket_url,
+            auth_token: core_info.auth_token,
+            connection_id: core_info.connection_id,
         }
     }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 use helpers::*;
+
+// Cross-platform configuration data transfer object
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppConfigDto {
+    pub vm_directories: Vec<String>,
+    pub auto_download_tools: bool,
+    pub theme: ThemeDto,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ThemeDto {
+    System,
+    Light,
+    Dark,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl From<quickemu_core::models::config::AppConfig> for AppConfigDto {
+    fn from(config: quickemu_core::models::config::AppConfig) -> Self {
+        Self {
+            vm_directories: config.vm_directories.into_iter().map(|p| p.to_string_lossy().to_string()).collect(),
+            auto_download_tools: config.auto_download_tools,
+            theme: match config.theme {
+                quickemu_core::models::config::Theme::System => ThemeDto::System,
+                quickemu_core::models::config::Theme::Light => ThemeDto::Light,
+                quickemu_core::models::config::Theme::Dark => ThemeDto::Dark,
+            },
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl From<AppConfigDto> for quickemu_core::models::config::AppConfig {
+    fn from(dto: AppConfigDto) -> Self {
+        use std::path::PathBuf;
+        Self {
+            vm_directories: dto.vm_directories.into_iter().map(PathBuf::from).collect(),
+            quickemu_path: None,
+            quickget_path: None,
+            auto_download_tools: dto.auto_download_tools,
+            theme: match dto.theme {
+                ThemeDto::System => quickemu_core::models::config::Theme::System,
+                ThemeDto::Light => quickemu_core::models::config::Theme::Light,
+                ThemeDto::Dark => quickemu_core::models::config::Theme::Dark,
+            },
+            update_interval_ms: 1000, // Fixed 1 second for file watching
+        }
+    }
+}
+
+impl AppConfigDto {
+    pub fn get_primary_vm_directory(&self) -> String {
+        self.vm_directories.first()
+            .cloned()
+            .unwrap_or_else(|| {
+                if let Some(home) = std::env::var("HOME").ok() {
+                    format!("{}/VMs", home)
+                } else {
+                    "/tmp/VMs".to_string()
+                }
+            })
+    }
+}
