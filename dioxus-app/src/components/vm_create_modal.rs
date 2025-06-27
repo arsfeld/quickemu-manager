@@ -420,16 +420,16 @@ pub fn CreateVMModal(show: Signal<bool>, on_create: EventHandler<()>) -> Element
             onclick: move |_| if !is_creating() { show.set(false) },
             
             div { 
-                class: "bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl",
+                class: "modal-macos w-full max-w-4xl max-h-[90vh] overflow-hidden",
                 onclick: move |e| e.stop_propagation(),
                 
                 // Simplified Header
-                div { class: "border-b border-white/10 px-6 py-4",
+                div { class: "border-b border-gray-200 px-6 py-4 bg-white",
                     div { class: "flex items-center justify-between",
-                        h2 { class: "text-xl font-semibold text-white", "Create Virtual Machine" }
+                        h2 { class: "text-xl font-semibold text-gray-900", "Create Virtual Machine" }
                         if !is_creating() {
                             button {
-                                class: "text-white/60 hover:text-white transition-colors",
+                                class: "text-gray-400 hover:text-gray-600 transition-colors",
                                 onclick: move |_| show.set(false),
                                 svg { class: "w-5 h-5",
                                     xmlns: "http://www.w3.org/2000/svg",
@@ -450,43 +450,19 @@ pub fn CreateVMModal(show: Signal<bool>, on_create: EventHandler<()>) -> Element
                     // Minimal step indicator
                     div { class: "flex items-center gap-2 mt-3",
                         div { class: format!("h-1 flex-1 rounded-full {}", 
-                            if current_step() >= 0 { "bg-blue-500" } else { "bg-white/10" }
+                            if current_step() >= 0 { "bg-blue-500" } else { "bg-gray-200" }
                         ) }
                         div { class: format!("h-1 flex-1 rounded-full {}", 
-                            if current_step() >= 1 { "bg-blue-500" } else { "bg-white/10" }
+                            if current_step() >= 1 { "bg-blue-500" } else { "bg-gray-200" }
                         ) }
                     }
                 }
                 
                 // Content
-                div { class: "p-6 h-[60vh] text-white",
+                div { class: "p-6 h-[60vh] bg-white",
                     if show_console() {
-                        // Console Output View (replaces review step)
+                        // Console Output View
                         div { class: "h-full flex flex-col",
-                                div { class: "flex items-center justify-between mb-4",
-                                    h2 { class: "text-xl font-bold text-gray-900", "Creating Virtual Machine" }
-                                    if !is_creating() {
-                                        button {
-                                            class: "btn-macos text-sm",
-                                            onclick: move |_| {
-                                                show_console.set(false);
-                                                current_step.set(1); // Go back to configuration
-                                            },
-                                            "Back to Configuration"
-                                        }
-                                    }
-                                }
-                                
-                                // VM Summary
-                                div { class: "mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200",
-                                    div { class: "text-sm text-blue-800",
-                                        span { class: "font-medium", "Creating: " }
-                                        span { 
-                                            "{selected_os()} {selected_version()}"
-                                            {if !selected_edition().is_empty() { format!(" ({})", selected_edition()) } else { "".to_string() }}
-                                        }
-                                    }
-                                }
                                 
                                 // Console Terminal
                                 div { class: "flex-1 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden flex flex-col",
@@ -534,9 +510,9 @@ pub fn CreateVMModal(show: Signal<bool>, on_create: EventHandler<()>) -> Element
                 }
                 
                 // Footer with navigation
-                div { class: "border-t border-white/10 px-6 py-4 flex justify-between items-center",
+                div { class: "border-t border-gray-200 bg-gray-50 px-6 py-4 flex justify-between items-center",
                     button {
-                        class: format!("px-4 py-2 text-sm font-medium text-white/80 hover:text-white transition-colors {}",
+                        class: format!("btn-macos {}",
                             if current_step() == 0 { "invisible" } else { "" }
                         ),
                         disabled: current_step() == 0 || is_creating(),
@@ -546,7 +522,7 @@ pub fn CreateVMModal(show: Signal<bool>, on_create: EventHandler<()>) -> Element
                     
                     div { class: "flex space-x-3",
                         button {
-                            class: "px-4 py-2 text-sm font-medium text-white/60 hover:text-white/80 transition-colors",
+                            class: "btn-macos",
                             disabled: is_creating(),
                             onclick: move |_| {
                                 show.set(false);
@@ -557,7 +533,7 @@ pub fn CreateVMModal(show: Signal<bool>, on_create: EventHandler<()>) -> Element
                         
                         if current_step() == 0 {
                             button {
-                                class: "px-4 py-2 text-sm font-medium bg-blue-500/20 text-white border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm",
+                                class: "btn-macos-primary",
                                 disabled: {
                                     let os_empty = selected_os().is_empty();
                                     let version_empty = selected_version().is_empty();
@@ -572,7 +548,7 @@ pub fn CreateVMModal(show: Signal<bool>, on_create: EventHandler<()>) -> Element
                             }
                         } else if current_step() == 1 {
                             button {
-                                class: "px-4 py-2 text-sm font-medium bg-blue-500/20 text-white border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm",
+                                class: "btn-macos-primary",
                                 disabled: is_creating() || cpu_cores() < 1 || ram_gb() < 1 || disk_size_gb() < 1,
                                 onclick: move |_| {
                                     is_creating.set(true);
