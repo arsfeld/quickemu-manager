@@ -1,9 +1,12 @@
 /* App-wide styling */
 body {
-    background-color: #0f1116;
-    color: #ffffff;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    /* Use macOS theme colors from tailwind.css */
+    background-color: var(--color-macos-surface, #f5f5f7);
+    color: var(--color-macos-text, #1d1d1f);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
     margin: 20px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 #hero {
@@ -18,23 +21,23 @@ body {
     width: 400px;
     text-align: left;
     font-size: x-large;
-    color: white;
+    color: var(--color-macos-text, #1d1d1f);
     display: flex;
     flex-direction: column;
 }
 
 #links a {
-    color: white;
+    color: var(--color-macos-text, #1d1d1f);
     text-decoration: none;
     margin-top: 20px;
     margin: 10px 0px;
-    border: white 1px solid;
+    border: var(--color-macos-border, #d2d2d7) 1px solid;
     border-radius: 5px;
     padding: 10px;
 }
 
 #links a:hover {
-    background-color: #1f1f1f;
+    background-color: var(--color-macos-gray-100, #f5f5f7);
     cursor: pointer;
 }
 
@@ -49,7 +52,7 @@ body {
   }
   
 #navbar a {
-    color: #ffffff;
+    color: var(--color-macos-text, #1d1d1f);
     margin-right: 20px;
     text-decoration: none;
     transition: color 0.2s ease;
@@ -57,7 +60,7 @@ body {
 
 #navbar a:hover {
     cursor: pointer;
-    color: #91a4d2;
+    color: var(--color-macos-blue-500, #007aff);
 }
 
 /* Blog page */
@@ -66,7 +69,7 @@ body {
   }
   
 #blog a {
-    color: #ffffff;
+    color: var(--color-macos-blue-500, #007aff);
     margin-top: 50px;
 }
 
@@ -76,9 +79,11 @@ body {
     margin-left: auto;
     margin-right: auto;
     margin-top: 50px;
-    background-color: #1e222d;
+    background-color: var(--color-macos-card, #ffffff);
+    border: 1px solid var(--color-macos-border, #d2d2d7);
     padding: 20px;
     border-radius: 10px;
+    box-shadow: var(--shadow-macos, 0 2px 8px rgba(0, 0, 0, 0.08));
 }
 
 #echo>h4 {
@@ -88,9 +93,9 @@ body {
 
 #echo>input {
     border: none;
-    border-bottom: 1px white solid;
+    border-bottom: 1px solid var(--color-macos-border, #d2d2d7);
     background-color: transparent;
-    color: #ffffff;
+    color: var(--color-macos-text, #1d1d1f);
     transition: border-bottom-color 0.2s ease;
     outline: none;
     display: block;
@@ -99,7 +104,7 @@ body {
 }
 
 #echo>input:focus {
-    border-bottom-color: #6d85c6;
+    border-bottom-color: var(--color-macos-blue-500, #007aff);
 }
 
 #echo>p {
