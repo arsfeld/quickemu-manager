@@ -1,47 +1,54 @@
 use dioxus::prelude::*;
 
 use crate::models::{VM};
-use crate::server_functions::{get_vms};
+use crate::server_functions::{get_vms, get_vm_cache_version};
 use crate::components::vm_card::VMCard;
 use crate::components::vm_create_modal::CreateVMModal;
-use crate::components::vm_screen_modal::VMScreenModal;
+use crate::components::basic_console::BasicConsole;
+use crate::components::settings_modal::SettingsModal;
 
 /// Home page - VM Management Dashboard
 #[component]
 pub fn Home() -> Element {
     let mut vms = use_signal(Vec::<VM>::new);
     let mut show_create_modal = use_signal(|| false);
-    let mut show_screen_modal = use_signal(|| None::<VM>);
-    let mut last_updated = use_signal(|| None::<String>);
+    let mut show_console = use_signal(|| None::<VM>);
+    let mut show_settings = use_signal(|| false);
+    let mut cache_version = use_signal(|| 0u64);
     
     // Function to refresh VM list
     let refresh_vms = move || {
         spawn(async move {
             if let Ok(vm_list) = get_vms().await {
                 vms.set(vm_list);
-                last_updated.set(Some("Updated".to_string()));
             }
         });
     };
     
-    // Load VMs on component mount and set up periodic refresh
+    // Load VMs on component mount and set up smart refresh
     use_effect(move || {
         // Initial load
         refresh_vms();
         
-        // Set up periodic refresh every 3 seconds
+        // Set up background task to check for file system changes
         spawn(async move {
             loop {
                 #[cfg(target_arch = "wasm32")]
-                gloo_timers::future::TimeoutFuture::new(3000).await;
+                gloo_timers::future::TimeoutFuture::new(2000).await;
                 
                 #[cfg(not(target_arch = "wasm32"))]
-                tokio::time::sleep(tokio::time::Duration::from_millis(3000)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
                 
-                // Refresh VM list
-                if let Ok(vm_list) = get_vms().await {
-                    vms.set(vm_list);
-                    last_updated.set(Some("Updated".to_string()));
+                // Check if cache version has changed
+                if let Ok(new_version) = get_vm_cache_version().await {
+                    let current_version = cache_version();
+                    if new_version != current_version {
+                        cache_version.set(new_version);
+                        // Cache has changed, refresh VMs
+                        if let Ok(vm_list) = get_vms().await {
+                            vms.set(vm_list);
+                        }
+                    }
                 }
             }
         });
@@ -53,23 +60,42 @@ pub fn Home() -> Element {
             div { class: "flex items-center justify-between mb-8",
                 div { class: "flex items-center space-x-4",
                     h1 { class: "text-3xl font-bold text-gray-800", "Virtual Machines" }
-                    if let Some(_) = last_updated() {
-                        div { 
-                            class: "flex items-center space-x-2 text-sm text-gray-500",
-                            div { class: "w-2 h-2 bg-green-500 rounded-full animate-pulse" }
-                            span { "Auto-refresh: 3s" }
-                        }
-                    }
                 }
-                button {
-                    class: "btn-macos-primary",
-                    onclick: move |_| show_create_modal.set(true),
-                    "Create VM"
+                div { class: "flex items-center space-x-3",
+                    button {
+                        class: "btn-macos flex items-center gap-2",
+                        onclick: move |_| show_settings.set(true),
+                        svg { class: "w-4 h-4",
+                            xmlns: "http://www.w3.org/2000/svg",
+                            fill: "none",
+                            view_box: "0 0 24 24",
+                            stroke: "currentColor",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                stroke_width: "2",
+                                d: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                            }
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                stroke_width: "2",
+                                d: "M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                            }
+                        }
+                        "Settings"
+                    }
+                    
+                    button {
+                        class: "btn-macos-primary",
+                        onclick: move |_| show_create_modal.set(true),
+                        "Create VM"
+                    }
                 }
             }
             
             // VM Grid
-            div { class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
+            div { class: "grid grid-cols-1 lg:grid-cols-2 gap-8",
                 for vm in vms().iter() {
                     VMCard { 
                         vm: vm.clone(),
@@ -84,7 +110,7 @@ pub fn Home() -> Element {
                             refresh_vms();
                         },
                         on_card_click: move |vm| {
-                            show_screen_modal.set(Some(vm));
+                            show_console.set(Some(vm));
                         }
                     }
                 }
@@ -101,12 +127,17 @@ pub fn Home() -> Element {
                 }
             }
 
-            // VM Screen Modal
-            if let Some(vm) = show_screen_modal() {
-                VMScreenModal {
+            // Enhanced Console with eyeos SPICE client
+            if let Some(vm) = show_console() {
+                BasicConsole {
                     vm: vm,
-                    on_close: move |_| show_screen_modal.set(None)
+                    on_close: move |_| show_console.set(None)
                 }
+            }
+
+            // Settings Modal
+            SettingsModal {
+                show: show_settings
             }
         }
     }

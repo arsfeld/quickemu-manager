@@ -40,44 +40,21 @@ pub fn VMMetricsCard(vm_id: String, vm_name: String, metric_type: String) -> Ele
             class: "w-full h-full flex flex-col items-center justify-center",
             
             if let Some(current_metrics) = metrics() {
-                MiniGraph { metrics: current_metrics, metric_type: metric_type.clone() }
+                // Match the parent component's styling
+                div { class: "text-center",
+                    MiniGraph { metrics: current_metrics, metric_type: metric_type.clone() }
+                }
             } else if is_loading() {
-                div {
-                    class: "flex flex-col items-center justify-center h-full bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 shadow-sm p-3",
-                    div {
-                        class: "w-6 h-6 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-2"
-                    }
-                    span {
-                        class: "text-xs font-medium text-blue-600",
-                        "Loading metrics..."
-                    }
+                // Loading state matching the design
+                div { class: "text-center",
+                    div { class: "text-2xl font-bold text-slate-100 mb-1 animate-pulse", "..." }
+                    span { class: "text-xs text-slate-400 uppercase tracking-wide", "Loading" }
                 }
             } else {
-                div {
-                    class: "flex flex-col items-center justify-center h-full bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl border border-slate-200 shadow-sm p-3",
-                    div {
-                        class: "w-8 h-8 rounded-full bg-gray-100 border border-gray-200 mb-2 flex items-center justify-center",
-                        svg {
-                            class: "w-4 h-4 text-gray-400",
-                            fill: "none",
-                            view_box: "0 0 24 24",
-                            stroke: "currentColor",
-                            stroke_width: "2",
-                            path {
-                                stroke_linecap: "round",
-                                stroke_linejoin: "round",
-                                d: "M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-                            }
-                        }
-                    }
-                    span {
-                        class: "text-xs font-medium text-gray-500",
-                        "VM Stopped"
-                    }
-                    span {
-                        class: "text-xs text-gray-400 mt-1",
-                        "No metrics available"
-                    }
+                // Error/Stopped state matching the design
+                div { class: "text-center",
+                    div { class: "text-2xl font-bold text-slate-100 mb-1", "--" }
+                    span { class: "text-xs text-slate-400 uppercase tracking-wide", "Offline" }
                 }
             }
         }
@@ -86,123 +63,42 @@ pub fn VMMetricsCard(vm_id: String, vm_name: String, metric_type: String) -> Ele
 
 #[component]
 fn MiniGraph(metrics: VMMetrics, metric_type: String) -> Element {
-    let (label, value, color, svg_content) = match metric_type.as_str() {
+    let (label, value, unit) = match metric_type.as_str() {
         "cpu" => (
             "CPU",
-            format!("{:.0}%", metrics.cpu_percent),
-            get_metric_color(metrics.cpu_percent, 80.0),
-            create_mini_graph_path(metrics.cpu_percent, 100.0)
+            format!("{:.0}", metrics.cpu_percent),
+            "%"
         ),
         "memory" => (
             "RAM", 
-            format!("{:.0}%", metrics.memory_percent),
-            get_metric_color(metrics.memory_percent, 85.0),
-            create_mini_graph_path(metrics.memory_percent, 100.0)
+            format!("{:.0}", metrics.memory_percent),
+            "%"
         ),
         "network_rx" => (
-            "Download",
+            "RX",
             format_bytes_compact(metrics.network_rx_bytes),
-            "#3b82f6", // Apple-like blue
-            create_network_mini_graph(metrics.network_rx_bytes)
+            "/s"
         ),
         "network_tx" => (
-            "Upload", 
+            "TX", 
             format_bytes_compact(metrics.network_tx_bytes),
-            "#8b5cf6", // Apple-like purple
-            create_network_mini_graph(metrics.network_tx_bytes)
+            "/s"
         ),
-        _ => ("N/A", "0".to_string(), "#gray", String::new())
+        _ => ("N/A", "0".to_string(), "")
     };
 
     rsx! {
-        div {
-            class: "flex flex-col items-center justify-center text-center w-full h-full bg-gradient-to-br from-white to-gray-50 rounded-xl border border-gray-200 shadow-sm p-3 hover:shadow-md transition-all duration-200",
-            
-            // Big Title with modern styling
-            h3 {
-                class: "text-sm font-semibold mb-2 tracking-wide",
-                style: format!("color: {};", color),
-                "{label}"
+        // Match the static block design exactly
+        div { 
+            class: "text-2xl font-bold text-slate-100 mb-1",
+            "{value}"
+            if !unit.is_empty() {
+                span { class: "text-lg text-slate-300", "{unit}" }
             }
-            
-            // Graph in the middle with Apple-like styling
-            div {
-                class: "w-full h-10 mb-3 flex items-center justify-center",
-                svg {
-                    width: "90%",
-                    height: "100%",
-                    view_box: "0 0 90 40",
-                    
-                    // Background with subtle shadow
-                    rect {
-                        x: "5",
-                        y: "30",
-                        width: "80",
-                        height: "6",
-                        rx: "3",
-                        fill: "#f1f5f9",
-                        stroke: "#e2e8f0",
-                        stroke_width: "0.5"
-                    }
-                    
-                    // Data visualization
-                    if !svg_content.is_empty() {
-                        path {
-                            d: "{svg_content}",
-                            fill: "none",
-                            stroke: "{color}",
-                            stroke_width: "2.5",
-                            stroke_linecap: "round",
-                            stroke_linejoin: "round",
-                            opacity: "0.8"
-                        }
-                    }
-                    
-                    // Progress bar for percentage metrics with gradient
-                    if metric_type == "cpu" || metric_type == "memory" {
-                        defs {
-                            linearGradient {
-                                id: format!("gradient-{}", metric_type),
-                                x1: "0%",
-                                y1: "0%",
-                                x2: "100%",
-                                y2: "0%",
-                                stop {
-                                    offset: "0%",
-                                    stop_color: "{color}",
-                                    stop_opacity: "0.8"
-                                }
-                                stop {
-                                    offset: "100%",
-                                    stop_color: "{color}",
-                                    stop_opacity: "1.0"
-                                }
-                            }
-                        }
-                        rect {
-                            x: "5",
-                            y: "30",
-                            width: format!("{:.1}", 
-                                if metric_type == "cpu" {
-                                    (metrics.cpu_percent.min(100.0) / 100.0) * 80.0
-                                } else {
-                                    (metrics.memory_percent.min(100.0) / 100.0) * 80.0
-                                }
-                            ),
-                            height: "6",
-                            rx: "3",
-                            fill: format!("url(#gradient-{})", metric_type)
-                        }
-                    }
-                }
-            }
-            
-            // Big Value with enhanced typography
-            span {
-                class: "text-lg font-bold font-mono tracking-tight",
-                style: format!("color: {};", color),
-                "{value}"
-            }
+        }
+        span { 
+            class: "text-xs text-slate-400 uppercase tracking-wide",
+            "{label}"
         }
     }
 }

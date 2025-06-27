@@ -198,10 +198,7 @@ impl MainWindow {
         if let Some(app_state) = app_state {
             glib::spawn_future_local(glib::clone!(@weak vms_container => async move {
                 let mut all_vms = Vec::new();
-                let vm_directories = {
-                    let config = app_state.config.read().await;
-                    config.vm_directories.clone()
-                };
+                let vm_directories = app_state.config_manager.get_all_vm_directories().await;
                 
                 for dir in &vm_directories {
                     if let Ok(vms) = MainWindow::discover_vms_in_directory(&app_state, dir).await {

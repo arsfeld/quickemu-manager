@@ -34,6 +34,12 @@ use crate::server_only::*;
 // Initialize services
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn init_services() -> Result<()> {
+    // Initialize ConfigManager first
+    let mut config_manager = CONFIG_MANAGER.write().await;
+    if config_manager.is_none() {
+        *config_manager = Some(quickemu_core::ConfigManager::new().await?);
+    }
+    drop(config_manager);
     // Use unified binary discovery
     let binary_discovery = BinaryDiscovery::new().await;
     tracing::info!("Binary discovery results:
@@ -76,7 +82,15 @@ pub async fn init_services() -> Result<()> {
     if vm_discovery.is_none() {
         let (event_tx, mut event_rx) = mpsc::unbounded_channel();
         let vm_manager_ref = VM_MANAGER.read().await.clone().unwrap();
-        let discovery = VMDiscovery::with_vm_manager(event_tx, Arc::new(vm_manager_ref));
+        let mut discovery = VMDiscovery::with_vm_manager(event_tx, Arc::new(vm_manager_ref));
+        
+        // Add VM directories from config
+        let config_manager = CONFIG_MANAGER.read().await;
+        if let Some(ref config_mgr) = config_manager.as_ref() {
+            let vm_directories = config_mgr.get_all_vm_directories().await;
+            discovery.add_watch_directories(vm_directories);
+        }
+        drop(config_manager);
         
         // Spawn background task to handle discovery events
         tokio::spawn(async move {
@@ -84,17 +98,39 @@ pub async fn init_services() -> Result<()> {
                 let mut cache = VM_CACHE.write().await;
                 match event {
                     DiscoveryEvent::VMAdded(vm) => {
+                        tracing::info!("VM added: {}", vm.name);
                         cache.insert(vm.id.0.clone(), vm);
                     }
                     DiscoveryEvent::VMUpdated(vm) => {
+                        tracing::info!("VM updated: {}", vm.name);
                         cache.insert(vm.id.0.clone(), vm);
                     }
                     DiscoveryEvent::VMRemoved(vm_id) => {
+                        tracing::info!("VM removed: {}", vm_id.0);
                         cache.remove(&vm_id.0);
                     }
                 }
+                
+                // Increment cache version to notify clients of changes
+                let mut version = VM_CACHE_VERSION.write().await;
+                *version += 1;
+                tracing::debug!("VM cache updated, version: {}", *version);
             }
         });
+        
+        // Do initial scan of VM directories
+        if let Err(e) = discovery.scan_all_directories().await {
+            tracing::error!("Failed to scan VM directories: {}", e);
+        } else {
+            tracing::info!("Completed initial VM directory scan");
+        }
+        
+        // Start watching for file changes
+        if let Err(e) = discovery.start_watching().await {
+            tracing::error!("Failed to start VM directory watching: {}", e);
+        } else {
+            tracing::info!("Started watching VM directories for changes");
+        }
         
         *vm_discovery = Some(discovery);
     }
@@ -161,15 +197,22 @@ pub async fn get_vms() -> Result<Vec<VM>, ServerFnError> {
     }
     drop(cache);
     
-    // If cache is empty, scan default VM directories
+    // If cache is empty, scan configured VM directories
     let mut discovery = VM_DISCOVERY.write().await;
     if let Some(ref mut discovery) = discovery.as_mut() {
-        // Scan common VM directories
-        let vm_dirs = vec![
-            PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("VMs"),
-            PathBuf::from("/home").join(std::env::var("USER").unwrap_or_default()).join("quickemu"),
-            PathBuf::from("/opt/quickemu/vms"),
-        ];
+        // Get VM directories from config
+        let config_manager = CONFIG_MANAGER.read().await;
+        let vm_dirs = if let Some(ref config_mgr) = config_manager.as_ref() {
+            config_mgr.get_all_vm_directories().await
+        } else {
+            // Fallback to default directories if config is not available
+            vec![
+                PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("VMs"),
+                PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("quickemu"),
+                PathBuf::from("/opt/quickemu/vms"),
+            ]
+        };
+        drop(config_manager);
         
         let mut all_vms = Vec::new();
         let mut cache_update = HashMap::new();
@@ -454,6 +497,8 @@ pub async fn get_vm_metrics(vm_id: String) -> Result<VMMetrics, ServerFnError> {
         let vm_id_obj = VMId(vm_id.clone());
         match monitor.get_vm_metrics(&vm_id_obj).await {
             Some(core_metrics) => {
+                tracing::info!("Got metrics for VM '{}': CPU: {:.1}%, Memory: {} MB ({:.1}%)", 
+                    vm_id, core_metrics.cpu_percent, core_metrics.memory_mb, core_metrics.memory_percent);
                 // Convert from core metrics to our metrics
                 Ok(VMMetrics {
                     cpu_percent: core_metrics.cpu_percent,
@@ -466,7 +511,7 @@ pub async fn get_vm_metrics(vm_id: String) -> Result<VMMetrics, ServerFnError> {
                 })
             }
             None => {
-                tracing::debug!("No metrics available for VM '{}' - VM may not be running or process not tracked", vm_id);
+                tracing::warn!("No metrics available for VM '{}' - VM may not be running or process not tracked", vm_id);
                 // Return default metrics if monitoring fails
                 Ok(VMMetrics {
                     cpu_percent: 0.0,
@@ -549,8 +594,14 @@ pub async fn create_vm(request: CreateVMRequest) -> Result<String, ServerFnError
     if let Some(ref manager) = vm_manager.as_ref() {
         let template: CoreVMTemplate = request.into();
         
-        // Use default VM directory
-        let output_dir = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("VMs");
+        // Get VM directory from config
+        let config_manager = CONFIG_MANAGER.read().await;
+        let output_dir = if let Some(ref config_mgr) = config_manager.as_ref() {
+            config_mgr.get_primary_vm_directory().await
+        } else {
+            PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("VMs")
+        };
+        drop(config_manager);
         
         // Create directory if it doesn't exist
         if !output_dir.exists() {
@@ -587,12 +638,33 @@ pub async fn create_vm(request: CreateVMRequest) -> Result<String, ServerFnError
     }
 }
 
+#[server(GetVMDirectory)]
+pub async fn get_vm_directory() -> Result<String, ServerFnError> {
+    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    let config_manager = CONFIG_MANAGER.read().await;
+    if let Some(ref config_mgr) = config_manager.as_ref() {
+        let vm_dir = config_mgr.get_primary_vm_directory().await;
+        Ok(vm_dir.to_string_lossy().to_string())
+    } else {
+        // Fallback to default if config is not available
+        let vm_dir = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("VMs");
+        Ok(vm_dir.to_string_lossy().to_string())
+    }
+}
+
 #[server(CreateVMWithOutput)]
 pub async fn create_vm_with_output(request: CreateVMRequest) -> Result<String, ServerFnError> {
     init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     
-    // Use default VM directory
-    let output_dir = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("VMs");
+    // Get VM directory from config
+    let config_manager = CONFIG_MANAGER.read().await;
+    let output_dir = if let Some(ref config_mgr) = config_manager.as_ref() {
+        config_mgr.get_primary_vm_directory().await
+    } else {
+        PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("VMs")
+    };
+    drop(config_manager);
     
     // Create directory if it doesn't exist
     if !output_dir.exists() {
@@ -692,12 +764,6 @@ pub async fn create_vm_with_output(request: CreateVMRequest) -> Result<String, S
                 Ok(status) if status.success() => {
                     log_lines.push("✓ VM created successfully!".to_string());
                     
-                    // Ensure SPICE display protocol is set for console access
-                    if let Err(e) = ensure_spice_display(&vm_name).await {
-                        log_lines.push(format!("⚠ Warning: Could not set SPICE display: {}", e));
-                    } else {
-                        log_lines.push("✓ SPICE display protocol configured".to_string());
-                    }
                 }
                 Ok(status) => {
                     log_lines.push(format!("✗ quickget failed with exit code: {:?}", status.code()));
@@ -980,52 +1046,54 @@ pub async fn supports_console_access(vm_id: String) -> Result<bool, ServerFnErro
     }
 }
 
-/// Ensure a VM configuration file has SPICE display protocol set
-#[cfg(not(target_arch = "wasm32"))]
-async fn ensure_spice_display(vm_name: &str) -> Result<(), String> {
-    // Standard quickemu directory location
-    let home_dir = std::env::var("HOME").map_err(|_| "HOME environment variable not set")?;
-    let quickemu_dir = PathBuf::from(home_dir).join(".config/quickemu/my-vm");
+#[server(SetVMDirectory)]
+pub async fn set_vm_directory(directory: String) -> Result<(), ServerFnError> {
+    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     
-    let config_file = quickemu_dir.join(format!("{}.conf", vm_name));
-    
-    if !config_file.exists() {
-        return Err(format!("Config file not found: {}", config_file.display()));
-    }
-    
-    // Read current config
-    let content = fs::read_to_string(&config_file)
-        .map_err(|e| format!("Failed to read config file: {}", e))?;
-    
-    // Check if display_server is already set to spice
-    if content.contains("display_server=\"spice\"") {
-        return Ok(()); // Already configured correctly
-    }
-    
-    // Check if display_server is set to something else
-    if content.contains("display_server=") {
-        // Replace existing display_server setting
-        let new_content = content
-            .lines()
-            .map(|line| {
-                if line.trim_start().starts_with("display_server=") {
-                    "display_server=\"spice\""
-                } else {
-                    line
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        
-        fs::write(&config_file, new_content)
-            .map_err(|e| format!("Failed to write config file: {}", e))?;
+    let config_manager = CONFIG_MANAGER.read().await;
+    if let Some(ref config_mgr) = config_manager.as_ref() {
+        let path = PathBuf::from(directory);
+        config_mgr.set_primary_vm_directory(path).await
+            .map_err(|e| ServerFnError::new(format!("Failed to set VM directory: {}", e)))?;
+        Ok(())
     } else {
-        // Append display_server setting
-        let new_content = format!("{}\ndisplay_server=\"spice\"\n", content);
-        
-        fs::write(&config_file, new_content)
-            .map_err(|e| format!("Failed to write config file: {}", e))?;
+        Err(ServerFnError::new("Configuration manager not initialized".to_string()))
     }
-    
-    Ok(())
 }
+
+#[server(GetAppConfig)]
+pub async fn get_app_config() -> Result<crate::models::AppConfigDto, ServerFnError> {
+    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    let config_manager = CONFIG_MANAGER.read().await;
+    if let Some(ref config_mgr) = config_manager.as_ref() {
+        let config = config_mgr.get_config().await;
+        Ok(config.into())
+    } else {
+        Err(ServerFnError::new("Configuration manager not initialized".to_string()))
+    }
+}
+
+#[server(UpdateAppConfig)]
+pub async fn update_app_config(config: crate::models::AppConfigDto) -> Result<(), ServerFnError> {
+    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    let config_manager = CONFIG_MANAGER.read().await;
+    if let Some(ref config_mgr) = config_manager.as_ref() {
+        let core_config = config.into();
+        config_mgr.update_config(move |current_config| {
+            *current_config = core_config;
+        }).await
+        .map_err(|e| ServerFnError::new(format!("Failed to update config: {}", e)))?;
+        Ok(())
+    } else {
+        Err(ServerFnError::new("Configuration manager not initialized".to_string()))
+    }
+}
+
+#[server(GetVMCacheVersion)]
+pub async fn get_vm_cache_version() -> Result<u64, ServerFnError> {
+    let version = VM_CACHE_VERSION.read().await;
+    Ok(*version)
+}
+

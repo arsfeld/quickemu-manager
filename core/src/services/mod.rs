@@ -5,3 +5,5 @@ pub mod binary_discovery;
 pub mod process_monitor;
 pub mod metrics;
 pub mod quickget;
+pub mod spice_proxy;
+pub mod config_manager;

@@ -7,7 +7,7 @@ pub use quickemu_core::*;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub config: Arc<tokio::sync::RwLock<AppConfig>>,
+    pub config_manager: ConfigManager,
     pub vm_manager: Arc<VMManager>,
     pub quickget_service: Option<Arc<QuickgetService>>,
 }
