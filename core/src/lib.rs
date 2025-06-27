@@ -7,3 +7,4 @@ pub use services::parser::ConfigParser;
 pub use services::quickget::{OSInfo, QuickgetService};
 pub use services::discovery::{VMDiscovery, DiscoveryEvent};
 pub use services::binary_discovery::BinaryDiscovery;
+pub use services::process_monitor::ProcessMonitor;

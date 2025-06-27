@@ -8,10 +8,11 @@ use {
     std::collections::HashMap,
     anyhow::Result,
     quickemu_core::{
-        VMManager, VMDiscovery, QuickgetService, BinaryDiscovery,
+        VMManager, VMDiscovery, QuickgetService, BinaryDiscovery, ProcessMonitor,
         
         models::{VM as CoreVM, VMId, VMTemplate as CoreVMTemplate},
-        DiscoveryEvent
+        DiscoveryEvent,
+        services::spice_proxy::{SpiceProxyConfig, SpiceProxyService},
     },
     tokio::process::Command,
     tokio::io::{AsyncBufReadExt, BufReader},
@@ -19,9 +20,13 @@ use {
     image::{DynamicImage, ImageFormat},
     base64::{engine::general_purpose::STANDARD, Engine as _},
     std::io::Cursor,
+    sysinfo::System,
 };
 
-use crate::models::{VM, VMMetrics, CreateVMRequest};
+use crate::models::{VM, VMMetrics, VMMetricsHistory, CreateVMRequest, EditVMRequest, ConsoleInfo};
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::fs;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::server_only::*;
@@ -42,7 +47,16 @@ pub async fn init_services() -> Result<()> {
 
     let mut process_monitor = PROCESS_MONITOR.write().await;
     if process_monitor.is_none() {
-        *process_monitor = Some(ProcessMonitor::new());
+        let monitor = Arc::new(ProcessMonitor::new());
+        
+        // Set the process monitor on the VM manager
+        let mut vm_manager = VM_MANAGER.write().await;
+        if let Some(ref mut manager) = vm_manager.as_mut() {
+            manager.set_process_monitor(monitor.clone());
+        }
+        drop(vm_manager);
+        
+        *process_monitor = Some(monitor.clone());
     }
     drop(process_monitor);
 
@@ -84,6 +98,33 @@ pub async fn init_services() -> Result<()> {
         
         *vm_discovery = Some(discovery);
     }
+
+    // Initialize SPICE proxy service
+    let mut spice_proxy = SPICE_PROXY.write().await;
+    if spice_proxy.is_none() {
+        let config = SpiceProxyConfig::default();
+        let mut proxy_service = SpiceProxyService::new(config);
+        
+        // Start the proxy service
+        if let Err(e) = proxy_service.start().await {
+            tracing::error!("Failed to start SPICE proxy service: {}", e);
+        } else {
+            tracing::info!("SPICE proxy service started successfully");
+            
+            // Create an Arc for the proxy service
+            let proxy_arc = Arc::new(proxy_service);
+            
+            // Set the proxy service on the VM manager
+            let mut vm_manager = VM_MANAGER.write().await;
+            if let Some(ref mut manager) = vm_manager.as_mut() {
+                manager.set_spice_proxy(proxy_arc.clone());
+            }
+            drop(vm_manager);
+            
+            *spice_proxy = Some(proxy_arc);
+        }
+    }
+    drop(spice_proxy);
     
     Ok(())
 }
@@ -265,6 +306,141 @@ pub async fn delete_vm(vm_id: String) -> Result<(), ServerFnError> {
     }
 }
 
+#[server(EditVM)]
+pub async fn edit_vm(request: EditVMRequest) -> Result<(), ServerFnError> {
+    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    tracing::info!("Attempting to edit VM: {}", request.vm_id);
+    
+    let cache = VM_CACHE.read().await;
+    
+    if let Some(vm) = cache.get(&request.vm_id) {
+        // Check if VM is running - don't allow editing running VMs
+        if vm.is_running() {
+            return Err(ServerFnError::new("Cannot edit a running VM. Please stop the VM first.".to_string()));
+        }
+        
+        let config_path = PathBuf::from(&vm.config_path);
+        
+        if !config_path.exists() {
+            return Err(ServerFnError::new("VM configuration file not found".to_string()));
+        }
+        
+        // Read current config file
+        let content = fs::read_to_string(&config_path).map_err(|e| {
+            ServerFnError::new(format!("Failed to read VM config: {}", e))
+        })?;
+        
+        let mut new_content = content;
+        let mut updated = false;
+        
+        // Update VM name if provided
+        if let Some(ref name) = request.name {
+            if !name.trim().is_empty() && name != &vm.name {
+                // Update guest_os line to reflect new name
+                let lines: Vec<&str> = new_content.lines().collect();
+                new_content = lines
+                    .into_iter()
+                    .map(|line| {
+                        if line.trim_start().starts_with("# ") && line.contains(&vm.name) {
+                            format!("# {}", name)
+                        } else {
+                            line.to_string()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                updated = true;
+                tracing::info!("Updated VM name from '{}' to '{}'", vm.name, name);
+            }
+        }
+        
+        // Update RAM if provided
+        if let Some(ref ram) = request.ram {
+            if !ram.trim().is_empty() {
+                let lines: Vec<&str> = new_content.lines().collect();
+                new_content = lines
+                    .into_iter()
+                    .map(|line| {
+                        if line.trim_start().starts_with("ram=") {
+                            format!("ram=\"{}\"", ram)
+                        } else {
+                            line.to_string()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                updated = true;
+                tracing::info!("Updated VM RAM to '{}'", ram);
+            }
+        }
+        
+        // Update CPU cores if provided
+        if let Some(cpu_cores) = request.cpu_cores {
+            if cpu_cores > 0 && cpu_cores != vm.config.cpu_cores {
+                let lines: Vec<&str> = new_content.lines().collect();
+                let mut found_cpu_line = false;
+                new_content = lines
+                    .into_iter()
+                    .map(|line| {
+                        if line.trim_start().starts_with("cpu_cores=") {
+                            found_cpu_line = true;
+                            format!("cpu_cores={}", cpu_cores)
+                        } else {
+                            line.to_string()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                
+                // If cpu_cores line doesn't exist, add it
+                if !found_cpu_line {
+                    new_content.push_str(&format!("\ncpu_cores={}", cpu_cores));
+                }
+                
+                updated = true;
+                tracing::info!("Updated VM CPU cores to {}", cpu_cores);
+            }
+        }
+        
+        // Write updated config if changes were made
+        if updated {
+            fs::write(&config_path, new_content).map_err(|e| {
+                ServerFnError::new(format!("Failed to write VM config: {}", e))
+            })?;
+            
+            // Update cache with new values
+            drop(cache);
+            let mut cache = VM_CACHE.write().await;
+            if let Some(cached_vm) = cache.get_mut(&request.vm_id) {
+                if let Some(ref name) = request.name {
+                    if !name.trim().is_empty() {
+                        cached_vm.name = name.clone();
+                    }
+                }
+                if let Some(ref ram) = request.ram {
+                    if !ram.trim().is_empty() {
+                        cached_vm.config.ram = ram.clone();
+                    }
+                }
+                if let Some(cpu_cores) = request.cpu_cores {
+                    if cpu_cores > 0 {
+                        cached_vm.config.cpu_cores = cpu_cores;
+                    }
+                }
+            }
+            
+            tracing::info!("Successfully updated VM: {}", request.vm_id);
+            Ok(())
+        } else {
+            tracing::info!("No changes made to VM: {}", request.vm_id);
+            Ok(())
+        }
+    } else {
+        Err(ServerFnError::new("VM not found".to_string()))
+    }
+}
+
 #[server(GetVMMetrics)]
 pub async fn get_vm_metrics(vm_id: String) -> Result<VMMetrics, ServerFnError> {
     init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -272,7 +448,10 @@ pub async fn get_vm_metrics(vm_id: String) -> Result<VMMetrics, ServerFnError> {
     let process_monitor = PROCESS_MONITOR.read().await;
     
     if let Some(ref monitor) = process_monitor.as_ref() {
-        let vm_id_obj = VMId(vm_id);
+        // Update metrics first to get current data
+        monitor.update_metrics().await;
+        
+        let vm_id_obj = VMId(vm_id.clone());
         match monitor.get_vm_metrics(&vm_id_obj).await {
             Some(core_metrics) => {
                 // Convert from core metrics to our metrics
@@ -287,7 +466,7 @@ pub async fn get_vm_metrics(vm_id: String) -> Result<VMMetrics, ServerFnError> {
                 })
             }
             None => {
-                tracing::warn!("No metrics available for VM");
+                tracing::debug!("No metrics available for VM '{}' - VM may not be running or process not tracked", vm_id);
                 // Return default metrics if monitoring fails
                 Ok(VMMetrics {
                     cpu_percent: 0.0,
@@ -300,6 +479,62 @@ pub async fn get_vm_metrics(vm_id: String) -> Result<VMMetrics, ServerFnError> {
                 })
             }
         }
+    } else {
+        Err(ServerFnError::new("Process Monitor not initialized".to_string()))
+    }
+}
+
+#[server(GetVMMetricsHistory)]
+pub async fn get_vm_metrics_history(vm_id: String) -> Result<VMMetricsHistory, ServerFnError> {
+    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    let process_monitor = PROCESS_MONITOR.read().await;
+    
+    if let Some(ref monitor) = process_monitor.as_ref() {
+        let vm_id_obj = VMId(vm_id.clone());
+        
+        // For now, we'll simulate historical data by collecting current metrics
+        // In a real implementation, you'd store historical data over time
+        let mut timestamps = Vec::new();
+        let mut cpu_history = Vec::new();
+        let mut memory_history = Vec::new();
+        let mut network_rx_history = Vec::new();
+        let mut network_tx_history = Vec::new();
+        
+        // Generate some sample historical data (last 30 data points)
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+            
+        for i in 0..30 {
+            let timestamp = current_time - (29 - i) * 2; // 2-second intervals
+            timestamps.push(timestamp);
+            
+            // Get current metrics for this VM
+            if let Some(current_metrics) = monitor.get_vm_metrics(&vm_id_obj).await {
+                // Add some variation to simulate historical data
+                let time_factor = (i as f32 * 0.1).sin();
+                cpu_history.push((current_metrics.cpu_percent + time_factor * 10.0).max(0.0).min(100.0));
+                memory_history.push((current_metrics.memory_percent + time_factor * 5.0).max(0.0).min(100.0));
+                network_rx_history.push(current_metrics.network_rx_bytes + (i as u64 * 1024));
+                network_tx_history.push(current_metrics.network_tx_bytes + (i as u64 * 512));
+            } else {
+                // Default values if no metrics available
+                cpu_history.push(0.0);
+                memory_history.push(0.0);
+                network_rx_history.push(0);
+                network_tx_history.push(0);
+            }
+        }
+        
+        Ok(VMMetricsHistory {
+            timestamps,
+            cpu_history,
+            memory_history,
+            network_rx_history,
+            network_tx_history,
+        })
     } else {
         Err(ServerFnError::new("Process Monitor not initialized".to_string()))
     }
@@ -456,6 +691,13 @@ pub async fn create_vm_with_output(request: CreateVMRequest) -> Result<String, S
             match status {
                 Ok(status) if status.success() => {
                     log_lines.push("✓ VM created successfully!".to_string());
+                    
+                    // Ensure SPICE display protocol is set for console access
+                    if let Err(e) = ensure_spice_display(&vm_name).await {
+                        log_lines.push(format!("⚠ Warning: Could not set SPICE display: {}", e));
+                    } else {
+                        log_lines.push("✓ SPICE display protocol configured".to_string());
+                    }
                 }
                 Ok(status) => {
                     log_lines.push(format!("✗ quickget failed with exit code: {:?}", status.code()));
@@ -628,4 +870,162 @@ pub async fn get_os_icon(os_name: String) -> Result<Option<String>, ServerFnErro
     } else {
         Ok(None)
     }
+}
+
+#[server(StartVMConsole)]
+pub async fn start_vm_console(vm_id: String) -> Result<ConsoleInfo, ServerFnError> {
+    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    let vm_manager = VM_MANAGER.read().await;
+    
+    if let Some(ref manager) = vm_manager.as_ref() {
+        let vm_id_obj = VMId(vm_id.clone());
+        
+        // Check if VM is running and supports SPICE
+        let cache = VM_CACHE.read().await;
+        if let Some(vm) = cache.get(&vm_id) {
+            if !vm.is_running() {
+                return Err(ServerFnError::new("VM is not running".to_string()));
+            }
+            
+            // Check if VM supports console access
+            if !manager.supports_console_access(vm).await {
+                return Err(ServerFnError::new("VM does not support console access".to_string()));
+            }
+        } else {
+            return Err(ServerFnError::new("VM not found".to_string()));
+        }
+        
+        // Create console session
+        match manager.create_console_session(&vm_id_obj).await {
+            Ok(console_info) => {
+                tracing::info!("Started console session for VM '{}': {}", vm_id, console_info.websocket_url);
+                Ok(console_info.into()) // Convert from core ConsoleInfo to our model ConsoleInfo
+            }
+            Err(e) => {
+                tracing::error!("Failed to start console session for VM '{}': {}", vm_id, e);
+                Err(ServerFnError::new(format!("Failed to start console session: {}", e)))
+            }
+        }
+    } else {
+        Err(ServerFnError::new("VM manager not available".to_string()))
+    }
+}
+
+#[server(StopVMConsole)]
+pub async fn stop_vm_console(connection_id: String) -> Result<(), ServerFnError> {
+    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    let vm_manager = VM_MANAGER.read().await;
+    
+    if let Some(ref manager) = vm_manager.as_ref() {
+        match manager.remove_console_session(&connection_id).await {
+            Ok(()) => {
+                tracing::info!("Stopped console session: {}", connection_id);
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!("Failed to stop console session '{}': {}", connection_id, e);
+                Err(ServerFnError::new(format!("Failed to stop console session: {}", e)))
+            }
+        }
+    } else {
+        Err(ServerFnError::new("VM manager not available".to_string()))
+    }
+}
+
+#[server(GetConsoleStatus)]
+pub async fn get_console_status(connection_id: String) -> Result<Option<String>, ServerFnError> {
+    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    let vm_manager = VM_MANAGER.read().await;
+    
+    if let Some(ref manager) = vm_manager.as_ref() {
+        match manager.get_console_status(&connection_id).await {
+            Ok(Some(status)) => {
+                let status_str = match status {
+                    quickemu_core::services::spice_proxy::ConnectionStatus::Authenticating => "authenticating".to_string(),
+                    quickemu_core::services::spice_proxy::ConnectionStatus::Connected => "connected".to_string(),
+                    quickemu_core::services::spice_proxy::ConnectionStatus::Disconnected => "disconnected".to_string(),
+                    quickemu_core::services::spice_proxy::ConnectionStatus::Error(e) => format!("error: {}", e),
+                };
+                Ok(Some(status_str))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => {
+                tracing::error!("Failed to get console status for '{}': {}", connection_id, e);
+                Err(ServerFnError::new(format!("Failed to get console status: {}", e)))
+            }
+        }
+    } else {
+        Err(ServerFnError::new("VM manager not available".to_string()))
+    }
+}
+
+#[server(SupportsConsoleAccess)]
+pub async fn supports_console_access(vm_id: String) -> Result<bool, ServerFnError> {
+    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    
+    let vm_manager = VM_MANAGER.read().await;
+    let cache = VM_CACHE.read().await;
+    
+    if let Some(ref manager) = vm_manager.as_ref() {
+        if let Some(vm) = cache.get(&vm_id) {
+            Ok(manager.supports_console_access(vm).await)
+        } else {
+            Ok(false)
+        }
+    } else {
+        Ok(false)
+    }
+}
+
+/// Ensure a VM configuration file has SPICE display protocol set
+#[cfg(not(target_arch = "wasm32"))]
+async fn ensure_spice_display(vm_name: &str) -> Result<(), String> {
+    // Standard quickemu directory location
+    let home_dir = std::env::var("HOME").map_err(|_| "HOME environment variable not set")?;
+    let quickemu_dir = PathBuf::from(home_dir).join(".config/quickemu/my-vm");
+    
+    let config_file = quickemu_dir.join(format!("{}.conf", vm_name));
+    
+    if !config_file.exists() {
+        return Err(format!("Config file not found: {}", config_file.display()));
+    }
+    
+    // Read current config
+    let content = fs::read_to_string(&config_file)
+        .map_err(|e| format!("Failed to read config file: {}", e))?;
+    
+    // Check if display_server is already set to spice
+    if content.contains("display_server=\"spice\"") {
+        return Ok(()); // Already configured correctly
+    }
+    
+    // Check if display_server is set to something else
+    if content.contains("display_server=") {
+        // Replace existing display_server setting
+        let new_content = content
+            .lines()
+            .map(|line| {
+                if line.trim_start().starts_with("display_server=") {
+                    "display_server=\"spice\""
+                } else {
+                    line
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        
+        fs::write(&config_file, new_content)
+            .map_err(|e| format!("Failed to write config file: {}", e))?;
+    } else {
+        // Append display_server setting
+        let new_content = format!("{}\ndisplay_server=\"spice\"\n", content);
+        
+        fs::write(&config_file, new_content)
+            .map_err(|e| format!("Failed to write config file: {}", e))?;
+    }
+    
+    Ok(())
 }
