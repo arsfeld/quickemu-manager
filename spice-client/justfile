@@ -1,0 +1,45 @@
+# Run unit tests
+test-unit:
+    cargo test --lib --all-features
+
+# Run integration tests with Docker
+test-integration: docker-up
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export SPICE_TEST_HOST=localhost
+    export SPICE_TEST_PORT=5900
+    export SPICE_INTEGRATION_TESTS=1
+    cargo test --test '*' --features test-utils -- --nocapture
+
+# Run all tests
+test: test-unit test-integration
+
+# Docker operations
+docker-up:
+    cd tests/docker && docker compose up -d
+    @sleep 5
+    @docker exec spice-test-server nc -z localhost 5900 && echo "SPICE server ready" || echo "SPICE server failed"
+
+docker-down:
+    cd tests/docker && docker compose down -v
+
+# Clean up after tests
+clean: docker-down
+    cargo clean
+
+# Start WASM development environment with browser interface
+wasm-dev:
+    cd docker && DOCKER_BUILDKIT=1 docker compose -f docker-compose.wasm.yml up --build
+
+# Build WASM only (no server) with cache optimization
+wasm-build:
+    cd docker && DOCKER_BUILDKIT=1 docker compose -f docker-compose.wasm.yml build
+
+# Stop WASM development environment
+wasm-down:
+    cd docker && docker compose -f docker-compose.wasm.yml down -v
+
+# Clean WASM build cache
+wasm-clean:
+    cd docker && docker compose -f docker-compose.wasm.yml down -v --rmi all
+    docker system prune -f --filter label=stage=builder

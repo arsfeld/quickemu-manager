@@ -1,0 +1,14 @@
+FROM python:3.11-alpine
+
+WORKDIR /app
+
+# Install Python WebSocket library
+RUN pip install --no-cache-dir websockets
+
+# Copy proxy script
+COPY websocket-proxy.py .
+RUN chmod +x websocket-proxy.py
+
+EXPOSE 5959
+
+CMD ["python", "websocket-proxy.py"]

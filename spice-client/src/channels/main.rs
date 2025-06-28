@@ -1,7 +1,7 @@
 use crate::channels::{Channel, ChannelConnection};
 use crate::error::{Result, SpiceError};
 use crate::protocol::*;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 pub struct MainChannel {
     connection: ChannelConnection,
@@ -23,6 +23,17 @@ impl MainChannel {
     #[cfg(target_arch = "wasm32")]
     pub async fn new_websocket_with_auth(websocket_url: &str, auth_token: Option<String>) -> Result<Self> {
         let mut connection = ChannelConnection::new_websocket_with_auth(websocket_url, ChannelType::Main, 0, auth_token).await?;
+        connection.handshake().await?;
+        
+        Ok(Self { connection })
+    }
+    
+    #[cfg(target_arch = "wasm32")]
+    pub async fn new_websocket_with_password(websocket_url: &str, auth_token: Option<String>, password: Option<String>) -> Result<Self> {
+        let mut connection = ChannelConnection::new_websocket_with_auth(websocket_url, ChannelType::Main, 0, auth_token).await?;
+        if let Some(password) = password {
+            connection.set_password(password);
+        }
         connection.handshake().await?;
         
         Ok(Self { connection })
@@ -101,60 +112,9 @@ impl MainChannel {
     }
     
     async fn try_client_initiated_flow(&mut self) -> Result<()> {
-        // Some SPICE implementations expect client to send a ping or init first
-        info!("Trying ping to wake up server");
-        
-        match self.connection.send_message(MainChannelMessage::Ping as u16, &[]).await {
-            Ok(()) => {
-                info!("Sent ping to server");
-                // Try to read response
-                #[cfg(target_arch = "wasm32")]
-                {
-                    use gloo_timers::future::TimeoutFuture;
-                    let read_future = self.connection.read_message();
-                    let timeout_future = TimeoutFuture::new(1000);
-                    
-                    match tokio::select! {
-                        result = read_future => result,
-                        _ = timeout_future => {
-                            info!("No ping response, server may not support ping");
-                            return Ok(());
-                        }
-                    } {
-                        Ok((header, data)) => {
-                            info!("Received ping response: type={}, size={}", header.msg_type, header.msg_size);
-                            self.handle_message(&header, &data).await?;
-                        }
-                        Err(e) => {
-                            info!("Ping response error: {}, continuing anyway", e);
-                        }
-                    }
-                }
-                
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    match tokio::time::timeout(
-                        std::time::Duration::from_millis(1000),
-                        self.connection.read_message()
-                    ).await {
-                        Ok(Ok((header, data))) => {
-                            info!("Received ping response: type={}, size={}", header.msg_type, header.msg_size);
-                            self.handle_message(&header, &data).await?;
-                        }
-                        Ok(Err(e)) => {
-                            info!("Ping response error: {}, continuing anyway", e);
-                        }
-                        Err(_) => {
-                            info!("No ping response, server may not support ping");
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                info!("Failed to send ping: {}, continuing anyway", e);
-            }
-        }
-        
+        // According to SPICE protocol, server should send SPICE_MSG_MAIN_INIT
+        // after successful link handshake. Client just waits for it.
+        info!("Waiting for server to send SPICE_MSG_MAIN_INIT");
         Ok(())
     }
 
@@ -285,16 +245,63 @@ impl Channel for MainChannel {
                 debug!("Received ping reply");
             }
             x if x == MainChannelMessage::Init as u16 => {
-                debug!("Received init message");
-                // Handle initialization
+                let init_msg: crate::protocol::SpiceMsgMainInit = bincode::deserialize(data)
+                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse Init: {}", e)))?;
+                info!("Received SPICE_MSG_MAIN_INIT: session_id={}, display_hint={}, mouse_modes={:x}", 
+                      init_msg.session_id, init_msg.display_channels_hint, init_msg.supported_mouse_modes);
+                info!("Server mouse mode: {}, agent_connected: {}", 
+                      init_msg.current_mouse_mode, init_msg.agent_connected);
+                // TODO: Store init_msg data for use by the client
             }
             x if x == MainChannelMessage::ChannelsList as u16 => {
                 debug!("Received channels list");
-                // Handle channels list
+                // Already handled in handle_channels_list_message
+            }
+            x if x == MainChannelMessage::MouseMode as u16 => {
+                let mouse_mode: SpiceMsgMainMouseMode = bincode::deserialize(data)
+                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse MouseMode: {}", e)))?;
+                info!("Mouse mode changed to: {}", mouse_mode.mode);
+                // TODO: Store mouse mode and notify input handling
+            }
+            x if x == MainChannelMessage::MultiMediaTime as u16 => {
+                let mm_time: SpiceMsgMainMultiMediaTime = bincode::deserialize(data)
+                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse MultiMediaTime: {}", e)))?;
+                debug!("Multimedia time: {}", mm_time.time);
+                // TODO: Synchronize with multimedia time
+            }
+            x if x == MainChannelMessage::AgentConnected as u16 => {
+                let agent_connected: SpiceMsgMainAgentConnected = bincode::deserialize(data)
+                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse AgentConnected: {}", e)))?;
+                info!("Agent connected with error code: {}", agent_connected.error_code);
+                // TODO: Initialize agent communication
+            }
+            x if x == MainChannelMessage::AgentDisconnected as u16 => {
+                info!("Agent disconnected");
+                // TODO: Clean up agent state
+            }
+            x if x == MainChannelMessage::AgentData as u16 => {
+                let agent_data: SpiceMsgMainAgentData = bincode::deserialize(data)
+                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse AgentData: {}", e)))?;
+                debug!("Received agent data: protocol {}, type {}, size {}", 
+                       agent_data.protocol, agent_data.type_, agent_data.size);
+                // TODO: Process agent data (clipboard, file transfer, etc.)
+            }
+            x if x == MainChannelMessage::AgentTokens as u16 => {
+                let agent_tokens: SpiceMsgMainAgentTokens = bincode::deserialize(data)
+                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse AgentTokens: {}", e)))?;
+                debug!("Agent tokens: {}", agent_tokens.num_tokens);
+                // TODO: Update agent token count for flow control
             }
             x if x == MainChannelMessage::Notify as u16 => {
-                debug!("Received notification");
-                // Handle notification
+                let notify: SpiceMsgMainNotify = bincode::deserialize(data)
+                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse Notify: {}", e)))?;
+                let message = String::from_utf8_lossy(&notify.message);
+                match notify.severity {
+                    0 => info!("Server info: {}", message),
+                    1 => warn!("Server warning: {}", message),
+                    2 => error!("Server error: {}", message),
+                    _ => debug!("Server notification (severity {}): {}", notify.severity, message),
+                }
             }
             x if x == MainChannelMessage::Disconnecting as u16 => {
                 info!("Server is disconnecting");

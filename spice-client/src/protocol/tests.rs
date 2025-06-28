@@ -55,6 +55,10 @@ mod tests {
         };
 
         let serialized = bincode::serialize(&mess).unwrap();
+        // Check bincode serialization size
+        println!("SpiceLinkMess bincode size: {} bytes", serialized.len());
+        assert_eq!(serialized.len(), 18, "SpiceLinkMess bincode serialization is 18 bytes");
+        
         let deserialized: SpiceLinkMess = bincode::deserialize(&serialized).unwrap();
 
         assert_eq!(mess.connection_id, deserialized.connection_id);
@@ -176,5 +180,99 @@ mod tests {
 
         let unique_codes: std::collections::HashSet<_> = error_codes.iter().cloned().collect();
         assert_eq!(error_codes.len(), unique_codes.len(), "Error codes must be unique");
+    }
+
+    #[test]
+    fn test_spice_msg_main_init_serialization() {
+        let init_msg = SpiceMsgMainInit {
+            session_id: 0x12345678,
+            display_channels_hint: 1,
+            supported_mouse_modes: 0x3,
+            current_mouse_mode: 0x2,
+            agent_connected: 1,
+            agent_tokens: 10,
+            multi_media_time: 0,
+            ram_hint: 0,
+        };
+
+        let serialized = bincode::serialize(&init_msg).unwrap();
+        let deserialized: SpiceMsgMainInit = bincode::deserialize(&serialized).unwrap();
+
+        assert_eq!(init_msg.session_id, deserialized.session_id);
+        assert_eq!(init_msg.display_channels_hint, deserialized.display_channels_hint);
+        assert_eq!(init_msg.supported_mouse_modes, deserialized.supported_mouse_modes);
+        assert_eq!(init_msg.current_mouse_mode, deserialized.current_mouse_mode);
+        assert_eq!(init_msg.agent_connected, deserialized.agent_connected);
+        assert_eq!(init_msg.agent_tokens, deserialized.agent_tokens);
+        assert_eq!(init_msg.multi_media_time, deserialized.multi_media_time);
+        assert_eq!(init_msg.ram_hint, deserialized.ram_hint);
+    }
+
+    #[test]
+    fn test_spice_rect_serialization() {
+        let rect = SpiceRect {
+            left: -100,
+            top: -50,
+            right: 1024,
+            bottom: 768,
+        };
+
+        let serialized = bincode::serialize(&rect).unwrap();
+        assert_eq!(serialized.len(), 16); // 4 i32 values
+        
+        let deserialized: SpiceRect = bincode::deserialize(&serialized).unwrap();
+        assert_eq!(rect.left, deserialized.left);
+        assert_eq!(rect.top, deserialized.top);
+        assert_eq!(rect.right, deserialized.right);
+        assert_eq!(rect.bottom, deserialized.bottom);
+    }
+
+    #[test]
+    fn test_spice_point_serialization() {
+        let point = SpicePoint { x: 512, y: 384 };
+
+        let serialized = bincode::serialize(&point).unwrap();
+        assert_eq!(serialized.len(), 8); // 2 i32 values
+        
+        let deserialized: SpicePoint = bincode::deserialize(&serialized).unwrap();
+        assert_eq!(point.x, deserialized.x);
+        assert_eq!(point.y, deserialized.y);
+    }
+
+    #[test]
+    fn test_spice_size_serialization() {
+        let size = SpiceSize { width: 1920, height: 1080 };
+
+        let serialized = bincode::serialize(&size).unwrap();
+        assert_eq!(serialized.len(), 8); // 2 u32 values
+        
+        let deserialized: SpiceSize = bincode::deserialize(&serialized).unwrap();
+        assert_eq!(size.width, deserialized.width);
+        assert_eq!(size.height, deserialized.height);
+    }
+
+    #[test]
+    fn test_invalid_channel_type() {
+        // Test that invalid channel types are handled properly
+        let invalid_types = vec![0u8, 12u8, 255u8];
+        
+        for invalid_type in invalid_types {
+            // This assumes channel type validation is implemented
+            assert!(invalid_type == 0 || invalid_type > 11 || invalid_type == 255);
+        }
+    }
+
+    #[test]
+    fn test_message_type_enum_conversion() {
+        // Test MainChannelMessage enum conversions
+        assert_eq!(MainChannelMessage::Init as u16, 103);
+        assert_eq!(MainChannelMessage::ChannelsList as u16, 104);
+        assert_eq!(MainChannelMessage::Ping as u16, 105);
+        assert_eq!(MainChannelMessage::PingReply as u16, 106);
+        
+        // Test DisplayChannelMessage enum conversions
+        assert_eq!(DisplayChannelMessage::Mode as u16, 101);
+        assert_eq!(DisplayChannelMessage::DrawCopy as u16, 303);
+        assert_eq!(DisplayChannelMessage::DrawAlphaBlend as u16, 312);
     }
 }

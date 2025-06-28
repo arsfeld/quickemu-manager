@@ -1,0 +1,8 @@
+FROM alpine:latest
+
+RUN apk add --no-cache socat
+
+EXPOSE 5959
+
+# Forward WebSocket connections to TCP
+CMD ["socat", "TCP-LISTEN:5959,fork,reuseaddr", "TCP:qemu-spice:5900"]

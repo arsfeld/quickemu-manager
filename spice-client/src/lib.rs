@@ -35,11 +35,29 @@
 
 pub mod protocol;
 pub mod client;
+pub mod client_shared;
 pub mod channels;
 pub mod error;
 pub mod video;
 
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
+
+#[cfg(target_arch = "wasm32")]
+pub mod wasm_bindings;
+
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_utils;
+
+// For non-WASM builds, export the native client
+#[cfg(not(target_arch = "wasm32"))]
 pub use client::SpiceClient;
+
+// For WASM builds, export the WASM-specific client
+#[cfg(target_arch = "wasm32")]
+pub use wasm_bindings::SpiceClient;
+
+pub use client_shared::SpiceClientShared;
 pub use error::{SpiceError, Result};
 pub use protocol::*;
 pub use video::{VideoFrame, VideoOutput};

@@ -167,6 +167,71 @@ where
    - Memory leaks
    - Resource cleanup
 
+### Real QEMU/SPICE Server Integration Tests
+1. **Basic QEMU Integration**
+   - Connect to QEMU with SPICE enabled
+   - Verify protocol version compatibility
+   - Test with different QEMU versions
+   - Test with different SPICE server configurations
+
+2. **Display Features**
+   - Primary surface creation and updates
+   - Dynamic resolution changes (QXL driver)
+   - Multi-monitor support
+   - Display compression (JPEG, ZLIB)
+   - Streaming video detection
+   - Hardware cursor rendering
+
+3. **Channel-Specific Tests**
+   - Main channel: server mouse modes, agent presence
+   - Display channel: all drawing commands
+   - Cursor channel: cursor shape updates
+   - Inputs channel: keyboard and mouse events
+   - Playback channel: audio streaming (if implemented)
+   - Record channel: audio capture (if implemented)
+
+4. **Advanced Protocol Features**
+   - SASL authentication
+   - TLS encryption
+   - Ticket-based authentication
+   - Channel migration
+   - Seamless migration support
+   - LZ4 compression support
+
+5. **Guest Agent Integration**
+   - Clipboard sharing (when spice-vdagent is present)
+   - Screen resolution adjustment
+   - File transfer capabilities
+   - Guest/host time synchronization
+
+6. **Performance and Optimization Tests**
+   - Bandwidth usage measurement
+   - Latency measurements
+   - Compression effectiveness
+   - Frame rate under various loads
+   - Memory usage patterns
+   - CPU usage optimization
+
+7. **Compatibility Matrix Testing**
+   - Different guest OS (Linux, Windows, macOS)
+   - Various SPICE protocol versions
+   - Different QXL driver versions
+   - Legacy vs modern SPICE features
+
+8. **Error Recovery and Resilience**
+   - Network interruption recovery
+   - Partial message handling
+   - Channel disconnection/reconnection
+   - Server restart scenarios
+   - Resource exhaustion handling
+
+9. **Real-world Scenario Tests**
+   - Office application usage patterns
+   - Video playback quality
+   - Gaming input latency
+   - IDE/development tool usage
+   - Web browsing experience
+
 ## Mock Infrastructure
 
 ### Mock SPICE Server (`tests/mocks/server.rs`)
@@ -268,6 +333,83 @@ qemu-system-x86_64 \
     -chardev spicevmc,id=vdagent,debug=0,name=vdagent \
     -device virtserialport,chardev=vdagent,name=com.redhat.spice.0 \
     -daemonize
+```
+
+### Advanced QEMU Test Configurations
+
+1. **Multi-Monitor Setup**
+```bash
+qemu-system-x86_64 \
+    -m 4096 \
+    -enable-kvm \
+    -spice port=5900,disable-ticketing \
+    -device qxl-vga,max_outputs=4 \
+    -device qxl,max_outputs=4 \
+    -daemonize
+```
+
+2. **With Compression and Streaming**
+```bash
+qemu-system-x86_64 \
+    -m 2048 \
+    -enable-kvm \
+    -spice port=5900,disable-ticketing,image-compression=auto_glz,jpeg-wan-compression=always,streaming-video=all \
+    -vga qxl \
+    -daemonize
+```
+
+3. **TLS Encrypted Connection**
+```bash
+qemu-system-x86_64 \
+    -m 2048 \
+    -enable-kvm \
+    -spice tls-port=5901,x509-dir=/etc/pki/qemu,disable-ticketing \
+    -vga qxl \
+    -daemonize
+```
+
+4. **With Audio Support**
+```bash
+qemu-system-x86_64 \
+    -m 2048 \
+    -enable-kvm \
+    -spice port=5900,disable-ticketing \
+    -vga qxl \
+    -audiodev spice,id=audio0 \
+    -device ich9-intel-hda \
+    -device hda-duplex,audiodev=audio0 \
+    -daemonize
+```
+
+### Integration Test Harness for Real QEMU
+
+```rust
+// tests/integration/real_qemu_tests.rs
+use std::process::Command;
+use spice_client::SpiceClient;
+
+#[tokio::test]
+async fn test_real_qemu_connection() {
+    // Start QEMU if not already running
+    let qemu = Command::new("qemu-system-x86_64")
+        .args(&[
+            "-m", "1024",
+            "-enable-kvm",
+            "-spice", "port=5900,disable-ticketing",
+            "-vga", "qxl",
+            "-display", "none",
+            "-daemonize"
+        ])
+        .spawn()
+        .expect("Failed to start QEMU");
+
+    // Wait for QEMU to start
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    // Connect to SPICE server
+    let mut client = SpiceClient::new("127.0.0.1".to_string(), 5900);
+    assert!(client.connect().await.is_ok());
+}
 ```
 
 ### Manual Test Checklist

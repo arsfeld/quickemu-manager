@@ -1,0 +1,49 @@
+# Dockerfile for QEMU with SPICE server support
+FROM ubuntu:22.04
+
+# Install QEMU and SPICE server dependencies
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    qemu-system-x86 \
+    qemu-kvm \
+    libspice-server1 \
+    spice-client-gtk \
+    netcat-openbsd \
+    curl \
+    wget \
+    xvfb \
+    x11vnc \
+    supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create directories
+RUN mkdir -p /var/run/supervisor /var/log/supervisor /data
+
+# Copy supervisor configuration
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Copy test VM image (or download a minimal one)
+COPY scripts/download-test-vm.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/download-test-vm.sh
+
+# Copy QEMU startup script
+COPY scripts/start-qemu.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/start-qemu.sh
+
+# Expose SPICE port
+EXPOSE 5900
+
+# Expose VNC port for debugging
+EXPOSE 5901
+
+# Expose monitor port
+EXPOSE 5555
+
+# Volume for VM images
+VOLUME ["/data"]
+
+# Set working directory
+WORKDIR /data
+
+# Start supervisor
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

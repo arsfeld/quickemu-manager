@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>SPICE Client WASM Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        #container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #status {
+            padding: 10px;
+            background: #e8f4f8;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        #canvas-container {
+            border: 2px solid #ddd;
+            display: inline-block;
+            background: #000;
+        }
+        canvas {
+            display: block;
+        }
+        .controls {
+            margin-top: 20px;
+        }
+        button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        input[type="text"], input[type="password"] {
+            padding: 8px 12px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+        }
+        #console {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>SPICE Client WebAssembly Demo</h1>
+        <div id="status">Status: Loading WASM module...</div>
+        
+        <div class="controls">
+            <button id="connect-btn" disabled>Connect to SPICE Server</button>
+            <button id="disconnect-btn" disabled>Disconnect</button>
+            <input type="text" id="server-input" placeholder="ws://localhost:5959" value="ws://localhost:5959">
+            <input type="password" id="password-input" placeholder="Password (optional)">
+        </div>
+        
+        <div id="canvas-container">
+            <canvas id="display" width="800" height="600"></canvas>
+        </div>
+        
+        <div id="console"></div>
+    </div>
+
+    <script type="module">
+        import init, { SpiceClient } from './pkg/spice_client.js';
+        
+        let client = null;
+        const status = document.getElementById('status');
+        const consoleDiv = document.getElementById('console');
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        const serverInput = document.getElementById('server-input');
+        const passwordInput = document.getElementById('password-input');
+        const canvas = document.getElementById('display');
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            consoleDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+        
+        async function initializeWasm() {
+            try {
+                await init();
+                status.textContent = 'Status: WASM module loaded successfully';
+                connectBtn.disabled = false;
+                log('WASM module initialized');
+            } catch (error) {
+                status.textContent = 'Status: Failed to load WASM module';
+                log(`Error: ${error.message}`);
+                console.error('WASM init error:', error);
+            }
+        }
+        
+        connectBtn.addEventListener('click', async () => {
+            const server = serverInput.value;
+            const password = passwordInput.value;
+            try {
+                status.textContent = 'Status: Connecting...';
+                connectBtn.disabled = true;
+                
+                // Create new client instance
+                if (password) {
+                    client = SpiceClient.newWithPassword(server, canvas, password);
+                    log(`Connecting with password authentication...`);
+                } else {
+                    client = new SpiceClient(server, canvas);
+                    log(`Connecting without password...`);
+                }
+                await client.connect();
+                
+                status.textContent = 'Status: Connected';
+                disconnectBtn.disabled = false;
+                log(`Connected to ${server}`);
+            } catch (error) {
+                status.textContent = 'Status: Connection failed';
+                connectBtn.disabled = false;
+                log(`Connection error: ${error.message}`);
+                console.error('Connection error:', error);
+            }
+        });
+        
+        disconnectBtn.addEventListener('click', async () => {
+            if (client) {
+                await client.disconnect();
+                client = null;
+                status.textContent = 'Status: Disconnected';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                log('Disconnected from server');
+            }
+        });
+        
+        // Add keyboard and mouse event handlers
+        canvas.addEventListener('mousemove', (e) => {
+            if (client) {
+                const rect = canvas.getBoundingClientRect();
+                const x = Math.floor(e.clientX - rect.left);
+                const y = Math.floor(e.clientY - rect.top);
+                try {
+                    client.send_mouse_move(x, y);
+                } catch (error) {
+                    console.error('Mouse move error:', error);
+                }
+            }
+        });
+        
+        canvas.addEventListener('mousedown', (e) => {
+            if (client) {
+                try {
+                    client.send_mouse_button(e.button, true);
+                } catch (error) {
+                    console.error('Mouse down error:', error);
+                }
+            }
+        });
+        
+        canvas.addEventListener('mouseup', (e) => {
+            if (client) {
+                try {
+                    client.send_mouse_button(e.button, false);
+                } catch (error) {
+                    console.error('Mouse up error:', error);
+                }
+            }
+        });
+        
+        // Prevent context menu on right click
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+        });
+        
+        // Initialize on page load
+        initializeWasm();
+    </script>
+</body>
+</html>

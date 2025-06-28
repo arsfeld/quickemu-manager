@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  qemu-spice:
+    build:
+      context: .
+      dockerfile: Dockerfile.qemu
+    image: spice-client-qemu-test
+    container_name: spice-qemu-test
+    ports:
+      - "5900:5900"  # SPICE port
+      - "5901:5901"  # VNC port (for debugging)
+      - "5555:5555"  # QEMU monitor port
+    volumes:
+      - qemu-data:/data
+    environment:
+      - SPICE_PORT=5900
+      - MONITOR_PORT=5555
+      - VNC_PORT=5901
+    networks:
+      - spice-test
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5900"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  spice-client-test:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: spice-client-test
+    container_name: spice-client-runner
+    depends_on:
+      qemu-spice:
+        condition: service_healthy
+    environment:
+      - SPICE_TEST_HOST=qemu-spice
+      - SPICE_TEST_PORT=5900
+      - RUST_LOG=debug
+      - RUST_BACKTRACE=1
+    networks:
+      - spice-test
+    command: cargo test --features integration-tests -- --nocapture
+
+volumes:
+  qemu-data:
+
+networks:
+  spice-test:
+    driver: bridge

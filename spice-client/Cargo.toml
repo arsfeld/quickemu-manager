@@ -13,6 +13,17 @@ keywords = ["spice", "remote-desktop", "virtualization", "wasm", "client"]
 categories = ["network-programming", "wasm", "virtualization"]
 exclude = [".github/*", "examples/*"]
 
+[package.metadata]
+[package.metadata.wasm-pack]
+wasm-opt = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+test-utils = []
+
 [dependencies]
 bytes = "1.0"
 thiserror = "1.0"
@@ -20,10 +31,15 @@ tracing = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 bincode = "1.3"
 base64 = "0.22"
+png = "0.17"
+rsa = { version = "0.9", features = ["sha1"] }
+rand = "0.8"
+sha1 = "0.10"
 
 # WASM-compatible dependencies
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { version = "1.0", features = ["sync", "macros", "time", "io-util"], default-features = false }
+getrandom = { version = "0.2", features = ["js"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [
@@ -34,9 +50,22 @@ web-sys = { version = "0.3", features = [
     "CloseEvent",
     "BinaryType",
     "Window",
+    "Document",
+    "Element",
+    "HtmlCanvasElement",
+    "CanvasRenderingContext2d",
+    "ImageData",
+    "HtmlVideoElement",
+    "MediaSource",
+    "SourceBuffer",
+    "Url",
+    "Performance",
+    "CssStyleDeclaration",
 ] }
 js-sys = "0.3"
 gloo-timers = { version = "0.3", features = ["futures"] }
+console_error_panic_hook = "0.1"
+tracing-wasm = "0.2"
 
 # Native dependencies  
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -49,9 +78,12 @@ base64 = "0.22"
 criterion = "0.5"
 proptest = "1.0"
 async-trait = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+wasm-bindgen-test = "0.3"
 
 [[example]]
 name = "dioxus_integration"
+path = "examples/dioxus_integration.rs"
 required-features = []
 
 [[example]]
@@ -70,4 +102,5 @@ required-features = []
 
 [[bench]]
 name = "protocol"
+path = "benches/protocol.rs"
 harness = false

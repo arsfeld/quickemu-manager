@@ -1,0 +1,55 @@
+# Dockerfile for building and serving WASM spice-client
+FROM rust:latest AS builder
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install wasm-pack
+RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+# Install wasm32 target
+RUN rustup target add wasm32-unknown-unknown
+
+# Create app directory
+WORKDIR /app
+
+# Copy only Cargo files first for dependency caching
+COPY spice-client/Cargo.toml spice-client/Cargo.lock* spice-client/
+
+# Create a dummy main.rs to build dependencies
+RUN mkdir -p spice-client/src && echo "fn main() {}" > spice-client/src/main.rs
+
+# Build dependencies only (this layer will be cached)
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/spice-client/target \
+    cd spice-client && \
+    wasm-pack build --target web --out-dir pkg --no-opt || true
+
+# Remove dummy files
+RUN rm -rf spice-client/src spice-client/pkg
+
+# Copy actual source code
+COPY spice-client/src spice-client/src
+
+# Build WASM version with pre-compiled dependencies
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/spice-client/target \
+    cd spice-client && \
+    wasm-pack build --target web --out-dir pkg --no-opt
+
+# Serve stage
+FROM nginx:alpine
+
+# Copy wasm build artifacts
+COPY --from=builder /app/spice-client/pkg /usr/share/nginx/html/pkg
+
+# Copy HTML and nginx config files
+COPY spice-client/docker/wasm-demo.html /usr/share/nginx/html/index.html
+COPY spice-client/docker/nginx-wasm.conf /etc/nginx/conf.d/mime.conf
+
+EXPOSE 80
