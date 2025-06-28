@@ -12,7 +12,7 @@ use {
         
         models::{VM as CoreVM, VMId, VMTemplate as CoreVMTemplate},
         DiscoveryEvent,
-        services::spice_proxy::{SpiceProxyConfig, SpiceProxyService},
+        services::vnc_proxy::VncProxy,
     },
     tokio::process::Command,
     tokio::io::{AsyncBufReadExt, BufReader},
@@ -135,32 +135,26 @@ pub async fn init_services() -> Result<()> {
         *vm_discovery = Some(discovery);
     }
 
-    // Initialize SPICE proxy service
-    let mut spice_proxy = SPICE_PROXY.write().await;
-    if spice_proxy.is_none() {
-        let config = SpiceProxyConfig::default();
-        let mut proxy_service = SpiceProxyService::new(config);
+    // Initialize VNC proxy service
+    let mut vnc_proxy = VNC_PROXY.write().await;
+    if vnc_proxy.is_none() {
+        let proxy_service = VncProxy::new();
         
-        // Start the proxy service
-        if let Err(e) = proxy_service.start().await {
-            tracing::error!("Failed to start SPICE proxy service: {}", e);
-        } else {
-            tracing::info!("SPICE proxy service started successfully");
-            
-            // Create an Arc for the proxy service
-            let proxy_arc = Arc::new(proxy_service);
-            
-            // Set the proxy service on the VM manager
-            let mut vm_manager = VM_MANAGER.write().await;
-            if let Some(ref mut manager) = vm_manager.as_mut() {
-                manager.set_spice_proxy(proxy_arc.clone());
-            }
-            drop(vm_manager);
-            
-            *spice_proxy = Some(proxy_arc);
+        tracing::info!("VNC proxy service initialized");
+        
+        // Create an Arc for the proxy service
+        let proxy_arc = Arc::new(proxy_service);
+        
+        // Set the proxy service on the VM manager
+        let mut vm_manager = VM_MANAGER.write().await;
+        if let Some(ref mut manager) = vm_manager.as_mut() {
+            manager.set_vnc_proxy(proxy_arc.clone());
         }
+        drop(vm_manager);
+        
+        *vnc_proxy = Some(proxy_arc);
     }
-    drop(spice_proxy);
+    drop(vnc_proxy);
     
     Ok(())
 }
@@ -939,7 +933,7 @@ pub async fn get_os_icon(os_name: String) -> Result<Option<String>, ServerFnErro
 }
 
 #[server(StartVMConsole)]
-pub async fn start_vm_console(vm_id: String) -> Result<ConsoleInfo, ServerFnError> {
+pub async fn start_vm_console(vm_id: String, hostname: Option<String>) -> Result<ConsoleInfo, ServerFnError> {
     init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     
     let vm_manager = VM_MANAGER.read().await;
@@ -962,8 +956,8 @@ pub async fn start_vm_console(vm_id: String) -> Result<ConsoleInfo, ServerFnErro
             return Err(ServerFnError::new("VM not found".to_string()));
         }
         
-        // Create console session
-        match manager.create_console_session(&vm_id_obj).await {
+        // Create console session with host override
+        match manager.create_console_session_with_host(&vm_id_obj, hostname).await {
             Ok(console_info) => {
                 tracing::info!("Started console session for VM '{}': {}", vm_id, console_info.websocket_url);
                 Ok(console_info.into()) // Convert from core ConsoleInfo to our model ConsoleInfo
@@ -1010,10 +1004,10 @@ pub async fn get_console_status(connection_id: String) -> Result<Option<String>,
         match manager.get_console_status(&connection_id).await {
             Ok(Some(status)) => {
                 let status_str = match status {
-                    quickemu_core::services::spice_proxy::ConnectionStatus::Authenticating => "authenticating".to_string(),
-                    quickemu_core::services::spice_proxy::ConnectionStatus::Connected => "connected".to_string(),
-                    quickemu_core::services::spice_proxy::ConnectionStatus::Disconnected => "disconnected".to_string(),
-                    quickemu_core::services::spice_proxy::ConnectionStatus::Error(e) => format!("error: {}", e),
+                    quickemu_core::services::vnc_proxy::ConnectionStatus::Authenticating => "authenticating".to_string(),
+                    quickemu_core::services::vnc_proxy::ConnectionStatus::Connected => "connected".to_string(),
+                    quickemu_core::services::vnc_proxy::ConnectionStatus::Disconnected => "disconnected".to_string(),
+                    quickemu_core::services::vnc_proxy::ConnectionStatus::Error(e) => format!("error: {}", e),
                 };
                 Ok(Some(status_str))
             }

@@ -1,7 +1,7 @@
 use crate::models::{VM, VMId, VMStatus, VMTemplate, DisplayProtocol};
 use crate::services::process_monitor::ProcessMonitor;
 use crate::services::binary_discovery::BinaryDiscovery;
-use crate::services::spice_proxy::{SpiceProxyService, ConsoleInfo};
+use crate::services::vnc_proxy::{VncProxy, ConsoleInfo, ConsoleProtocol};
 use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -21,7 +21,7 @@ pub struct VMManager {
     quickget_path: Option<PathBuf>,
     processes: Arc<RwLock<HashMap<VMId, Child>>>,
     process_monitor: Option<Arc<ProcessMonitor>>,
-    spice_proxy: Option<Arc<SpiceProxyService>>,
+    vnc_proxy: Option<Arc<VncProxy>>,
 }
 
 impl VMManager {
@@ -37,7 +37,7 @@ impl VMManager {
             quickget_path,
             processes: Arc::new(RwLock::new(HashMap::new())),
             process_monitor: None,
-            spice_proxy: None,
+            vnc_proxy: None,
         })
     }
     
@@ -47,7 +47,7 @@ impl VMManager {
             quickget_path,
             processes: Arc::new(RwLock::new(HashMap::new())),
             process_monitor: None,
-            spice_proxy: None,
+            vnc_proxy: None,
         }
     }
     
@@ -62,7 +62,7 @@ impl VMManager {
             quickget_path,
             processes: Arc::new(RwLock::new(HashMap::new())),
             process_monitor: None,
-            spice_proxy: None,
+            vnc_proxy: None,
         })
     }
     
@@ -81,8 +81,39 @@ impl VMManager {
         
         let mut cmd = Command::new(&self.quickemu_path);
         cmd.arg("--vm")
-            .arg(&vm.config_path)
-            .current_dir(config_dir);
+            .arg(&vm.config_path);
+        
+        // Configure display and access based on the VM's display protocol
+        match &vm.config.display {
+            DisplayProtocol::Spice { .. } => {
+                cmd.arg("--display").arg("spice");
+                cmd.arg("--access").arg("remote");
+            }
+            DisplayProtocol::Vnc { port } => {
+                // Enable VNC using extra QEMU arguments
+                // Use none display to avoid conflicts, VNC will be the display
+                cmd.arg("--display").arg("none");
+                // Add VNC server on the specified port (or auto-assign if port is 0)
+                let vnc_arg = if *port > 0 {
+                    format!("-vnc :{}",  port - 5900) // VNC uses display number, not port
+                } else {
+                    "-vnc :0".to_string() // Default to display :0 (port 5900)
+                };
+                println!("Enabling VNC with args: {}", vnc_arg);
+                cmd.arg("--extra_args").arg(vnc_arg);
+            }
+            DisplayProtocol::Sdl => {
+                cmd.arg("--display").arg("sdl");
+            }
+            DisplayProtocol::None => {
+                cmd.arg("--display").arg("none");
+            }
+        }
+        
+        cmd.current_dir(config_dir);
+        
+        // Log the full command for debugging
+        println!("Starting VM {} with command: {:?}", vm.id.0, cmd);
         
         let child = cmd.spawn()?;
         let wrapper_pid = child.id();
@@ -438,26 +469,113 @@ impl VMManager {
         Ok(())
     }
 
-    /// Set the SPICE proxy service for this VM manager
-    pub fn set_spice_proxy(&mut self, spice_proxy: Arc<SpiceProxyService>) {
-        self.spice_proxy = Some(spice_proxy);
+    /// Set the VNC proxy service for this VM manager
+    pub fn set_vnc_proxy(&mut self, vnc_proxy: Arc<VncProxy>) {
+        self.vnc_proxy = Some(vnc_proxy);
     }
 
-    /// Detect the actual SPICE port being used by a running VM
-    pub async fn detect_spice_port(&self, vm_id: &VMId) -> Result<Option<u16>> {
+    /// Detect the console port and protocol being used by a running VM
+    pub async fn detect_console_port(&self, vm_id: &VMId) -> Result<Option<(u16, ConsoleProtocol)>> {
+        println!("Detecting console port for VM '{}'", vm_id.0);
+        
         // First check if VM is running
         let status = self.get_vm_status(vm_id).await;
         if !matches!(status, VMStatus::Running { .. }) {
+            println!("VM '{}' is not running, cannot detect console port", vm_id.0);
             return Ok(None);
         }
+        
+        println!("VM '{}' is running, scanning for console ports", vm_id.0);
 
-        // Try common SPICE ports (5930 is default, but quickemu might use others)
-        for port in 5930..5940 {
+        // Try common VNC ports first - QEMU uses ports starting from 5900
+        // VNC typically uses ports 5900-5929 range (before SPICE range)
+        for port in 5900..5930 {
             if self.is_port_open("127.0.0.1", port).await {
-                return Ok(Some(port));
+                println!("Found open port {} for VM '{}' in VNC range", port, vm_id.0);
+                
+                // Try to verify if this is actually a VNC port by checking if it's used by QEMU
+                let ps_output = std::process::Command::new("lsof")
+                    .args(&["-i", &format!(":{}", port), "-n", "-P"])
+                    .output();
+                    
+                if let Ok(output) = ps_output {
+                    let output_str = String::from_utf8_lossy(&output.stdout);
+                    if output_str.contains("qemu") {
+                        println!("Confirmed port {} is used by QEMU for VM '{}', assuming VNC", port, vm_id.0);
+                        return Ok(Some((port, ConsoleProtocol::Vnc)));
+                    }
+                }
+                
+                // Even if lsof fails, still return the port as it might be VNC
+                println!("Port {} is open in VNC range, assuming it's VNC for VM '{}'", port, vm_id.0);
+                return Ok(Some((port, ConsoleProtocol::Vnc)));
+            }
+        }
+        
+        println!("No VNC ports found in range 5900-5929 for VM '{}'", vm_id.0);
+        
+        // Check SPICE ports (5930-5999 range)
+        for port in 5930..6000 {
+            if self.is_port_open("127.0.0.1", port).await {
+                println!("Found SPICE port {} for VM '{}'", port, vm_id.0);
+                return Ok(Some((port, ConsoleProtocol::Spice)));
             }
         }
 
+        println!("No console ports found for VM '{}'", vm_id.0);
+        Ok(None)
+    }
+    
+    /// Detect the actual VNC port being used by a running VM (backward compatibility)
+    pub async fn detect_vnc_port(&self, vm_id: &VMId) -> Result<Option<u16>> {
+        println!("Detecting VNC port for VM '{}'", vm_id.0);
+        
+        // First check if VM is running
+        let status = self.get_vm_status(vm_id).await;
+        if !matches!(status, VMStatus::Running { .. }) {
+            println!("VM '{}' is not running, cannot detect VNC port", vm_id.0);
+            return Ok(None);
+        }
+        
+        println!("VM '{}' is running, scanning for VNC ports", vm_id.0);
+
+        // Try common VNC ports first - QEMU uses ports starting from 5900
+        // VNC typically uses ports 5900-5929 range (before SPICE range)
+        for port in 5900..5930 {
+            if self.is_port_open("127.0.0.1", port).await {
+                println!("Found open port {} for VM '{}' in VNC range", port, vm_id.0);
+                
+                // Try to verify if this is actually a VNC port by checking if it's used by QEMU
+                let ps_output = std::process::Command::new("lsof")
+                    .args(&["-i", &format!(":{}", port), "-n", "-P"])
+                    .output();
+                    
+                if let Ok(output) = ps_output {
+                    let output_str = String::from_utf8_lossy(&output.stdout);
+                    if output_str.contains("qemu") {
+                        println!("Confirmed port {} is used by QEMU for VM '{}', assuming VNC", port, vm_id.0);
+                        return Ok(Some(port));
+                    }
+                }
+                
+                // Even if lsof fails, still return the port as it might be VNC
+                println!("Port {} is open in VNC range, assuming it's VNC for VM '{}'", port, vm_id.0);
+                return Ok(Some(port));
+            }
+        }
+        
+        println!("No VNC ports found in range 5900-5929 for VM '{}'", vm_id.0);
+        
+        // Check if VM is using SPICE instead (5930-5999 range)
+        for port in 5930..6000 {
+            if self.is_port_open("127.0.0.1", port).await {
+                println!("Found SPICE port {} for VM '{}' - VM is using SPICE, not VNC", port, vm_id.0);
+                // This VM is using SPICE, not VNC
+                return Err(anyhow!("VM '{}' is using SPICE display (port {}), not VNC. Please change the VM display protocol to VNC.", vm_id.0, port));
+            }
+        }
+
+        println!("No VNC or SPICE ports found for VM '{}'", vm_id.0);
         Ok(None)
     }
 
@@ -471,43 +589,92 @@ impl VMManager {
 
     /// Create a console session for a VM
     pub async fn create_console_session(&self, vm_id: &VMId) -> Result<ConsoleInfo> {
-        let spice_proxy = self.spice_proxy
+        self.create_console_session_with_host(vm_id, None).await
+    }
+
+    /// Create a console session for a VM with optional host override
+    pub async fn create_console_session_with_host(&self, vm_id: &VMId, host_override: Option<String>) -> Result<ConsoleInfo> {
+        println!("Creating console session for VM '{}'", vm_id.0);
+        
+        let vnc_proxy = self.vnc_proxy
             .as_ref()
-            .ok_or_else(|| anyhow!("SPICE proxy not initialized"))?;
+            .ok_or_else(|| anyhow!("Console proxy not initialized"))?;
 
-        // Detect the SPICE port
-        let spice_port = self.detect_spice_port(vm_id).await?
-            .ok_or_else(|| anyhow!("VM '{}' does not have an active SPICE server", vm_id.0))?;
+        // Detect the console port and protocol
+        println!("Detecting console port for VM '{}'", vm_id.0);
+        let (console_port, protocol) = self.detect_console_port(vm_id).await?
+            .ok_or_else(|| {
+                println!("No console server found for VM '{}'", vm_id.0);
+                anyhow!("VM '{}' does not have an active console server", vm_id.0)
+            })?;
+        
+        println!("Detected {:?} console on port {} for VM '{}'", protocol, console_port, vm_id.0);
 
-        // Create console session
-        spice_proxy.create_console_session(vm_id.0.clone(), spice_port).await
+        // Create console connection
+        let hostname = host_override.unwrap_or_else(|| "localhost".to_string());
+        println!("Creating {:?} proxy connection to {}:{} for VM '{}'", protocol, hostname, console_port, vm_id.0);
+        
+        let connection = vnc_proxy.create_connection(vm_id.0.clone(), hostname.clone(), console_port).await?;
+        
+        let console_info = ConsoleInfo {
+            websocket_url: format!("ws://{}:{}", hostname, connection.websocket_port),
+            auth_token: connection.auth_token,
+            connection_id: connection.id,
+            protocol,
+        };
+        
+        println!("Console session created successfully for VM '{}' using {:?}: WebSocket URL: {}", 
+                 vm_id.0, protocol, console_info.websocket_url);
+        
+        Ok(console_info)
     }
 
     /// Remove a console session
     pub async fn remove_console_session(&self, connection_id: &str) -> Result<()> {
-        let spice_proxy = self.spice_proxy
+        let vnc_proxy = self.vnc_proxy
             .as_ref()
-            .ok_or_else(|| anyhow!("SPICE proxy not initialized"))?;
+            .ok_or_else(|| anyhow!("VNC proxy not initialized"))?;
 
-        spice_proxy.remove_console_session(connection_id).await
+        vnc_proxy.stop_connection(connection_id).await
     }
 
     /// Get console session status
-    pub async fn get_console_status(&self, connection_id: &str) -> Result<Option<crate::services::spice_proxy::ConnectionStatus>> {
-        let spice_proxy = self.spice_proxy
+    pub async fn get_console_status(&self, connection_id: &str) -> Result<Option<crate::services::vnc_proxy::ConnectionStatus>> {
+        let vnc_proxy = self.vnc_proxy
             .as_ref()
-            .ok_or_else(|| anyhow!("SPICE proxy not initialized"))?;
+            .ok_or_else(|| anyhow!("VNC proxy not initialized"))?;
 
-        Ok(spice_proxy.get_console_status(connection_id).await)
+        let status = vnc_proxy.get_connection_status(connection_id).await;
+        Ok(status.map(|s| match s.as_str() {
+            "authenticating" => crate::services::vnc_proxy::ConnectionStatus::Authenticating,
+            "connected" => crate::services::vnc_proxy::ConnectionStatus::Connected,
+            "disconnected" => crate::services::vnc_proxy::ConnectionStatus::Disconnected,
+            error => crate::services::vnc_proxy::ConnectionStatus::Error(error.to_string()),
+        }))
     }
 
-    /// Check if a VM supports SPICE console access
+    /// Check if a VM supports console access (VNC or SPICE)
     pub async fn supports_console_access(&self, vm: &VM) -> bool {
-        match &vm.config.display {
-            DisplayProtocol::Spice { .. } => {
-                vm.is_running() && self.detect_spice_port(&vm.id).await.unwrap_or(None).is_some()
-            }
-            _ => false,
+        // If VM is not running, it doesn't support console access
+        if !vm.is_running() {
+            println!("VM '{}' is not running, console access not supported", vm.id.0);
+            return false;
+        }
+        
+        // Check if we can detect a console port (VNC or SPICE)
+        match self.detect_console_port(&vm.id).await {
+            Ok(Some((port, protocol))) => {
+                println!("VM '{}' has {:?} console on port {}, console access supported", vm.id.0, protocol, port);
+                true
+            },
+            Ok(None) => {
+                println!("VM '{}' has no console port detected, console access not supported", vm.id.0);
+                false
+            },
+            Err(e) => {
+                println!("VM '{}' console detection error: {}, console access not supported", vm.id.0, e);
+                false
+            },
         }
     }
 }
