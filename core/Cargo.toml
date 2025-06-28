@@ -40,9 +40,12 @@ log = "0.4"
 # Process management
 nix = { version = "0.30", features = ["process"] }
 
-# WebSocket support for SPICE proxy
+# WebSocket support for VNC proxy
 tokio-tungstenite = "0.26"
 futures-util = "0.3"
+
+# VNC protocol support
+vnc-rs = "0.5"
 
 # Random token generation
 rand = "0.8"

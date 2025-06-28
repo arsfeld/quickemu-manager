@@ -4,7 +4,7 @@ use crate::models::{VM};
 use crate::server_functions::{get_vms, get_vm_cache_version};
 use crate::components::vm_card::VMCard;
 use crate::components::vm_create_modal::CreateVMModal;
-use crate::components::basic_console::BasicConsole;
+use crate::components::vm_console::VmConsole;
 use crate::components::settings_modal::SettingsModal;
 
 /// Home page - VM Management Dashboard
@@ -127,9 +127,9 @@ pub fn Home() -> Element {
                 }
             }
 
-            // Enhanced Console with eyeos SPICE client
+            // VM Console
             if let Some(vm) = show_console() {
-                BasicConsole {
+                VmConsole {
                     vm: vm,
                     on_close: move |_| show_console.set(None)
                 }

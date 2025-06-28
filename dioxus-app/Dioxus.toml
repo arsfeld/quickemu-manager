@@ -1,13 +1,19 @@
 [application]
+# App name
+name = "quickemu-manager"
 
 [web.app]
-
 # HTML title tag content
-title = "dioxus-app"
+title = "Quickemu Manager"
+
+[web.watcher]
+# When watcher is triggered, regenerate the `index.html`
+reload_html = true
+# Which files or dirs will be monitored
+watch_path = ["src"]
 
 # include `assets` in web platform
 [web.resource]
-
 # Additional CSS style files
 style = []
 
@@ -15,7 +21,6 @@ style = []
 script = []
 
 [web.resource.dev]
-
 # Javascript code file
 # serve: [dev-server] only
 script = []

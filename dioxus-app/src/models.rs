@@ -171,21 +171,35 @@ mod helpers {
     }
 }
 
-// Console information for SPICE connections - cross-platform compatible
+// Console protocol types
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ConsoleProtocol {
+    Vnc,
+    Spice,
+}
+
+// Console information for VNC/SPICE connections - cross-platform compatible
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsoleInfo {
     pub websocket_url: String,
     pub auth_token: String,
     pub connection_id: String,
+    pub protocol: ConsoleProtocol,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl From<quickemu_core::services::spice_proxy::ConsoleInfo> for ConsoleInfo {
-    fn from(core_info: quickemu_core::services::spice_proxy::ConsoleInfo) -> Self {
+impl From<quickemu_core::services::vnc_proxy::ConsoleInfo> for ConsoleInfo {
+    fn from(core_info: quickemu_core::services::vnc_proxy::ConsoleInfo) -> Self {
+        use quickemu_core::services::vnc_proxy::ConsoleProtocol as CoreProtocol;
+        
         Self {
             websocket_url: core_info.websocket_url,
             auth_token: core_info.auth_token,
             connection_id: core_info.connection_id,
+            protocol: match core_info.protocol {
+                CoreProtocol::Vnc => ConsoleProtocol::Vnc,
+                CoreProtocol::Spice => ConsoleProtocol::Spice,
+            },
         }
     }
 }

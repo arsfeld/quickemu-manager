@@ -1,9 +1,10 @@
 use dioxus::prelude::*;
 
 use crate::models::{VM, VMStatus, VMStatusExt};
-use crate::server_functions::{start_vm, stop_vm, delete_vm};
+use crate::server_functions::{start_vm, stop_vm, delete_vm, supports_console_access};
 use crate::components::vm_edit_modal::VMEditModal;
 use crate::components::vm_metrics::VMMetricsCard;
+use crate::components::vm_console::VmConsole;
 
 /// VM Card Component
 #[component]
@@ -16,10 +17,14 @@ pub fn VMCard(
     let vm_id_start = vm.id.clone();
     let vm_id_stop = vm.id.clone();
     let vm_id_delete = vm.id.clone();
+    let vm_id_console = vm.id.clone();
+    let vm_id_for_components = vm.id.clone();
     let is_running = vm.status.is_running();
     let mut show_delete_confirm = use_signal(|| false);
     let mut show_edit_modal = use_signal(|| false);
+    let mut show_console = use_signal(|| false);
     let mut is_changing_state = use_signal(|| false);
+    let mut console_supported = use_signal(|| false);
     
     let card_class = if is_running {
         "bg-slate-900/40 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-4 hover:shadow-xl hover:border-slate-600/60 transition-all duration-300 cursor-pointer shadow-lg flex flex-col w-full max-w-2xl"
@@ -28,6 +33,21 @@ pub fn VMCard(
     };
 
     let vm_clone_for_click = vm.clone();
+    
+    // Check console support when VM is running
+    use_effect(move || {
+        if is_running {
+            let console_id = vm_id_console.clone();
+            spawn(async move {
+                match supports_console_access(console_id).await {
+                    Ok(supported) => console_supported.set(supported),
+                    Err(_) => console_supported.set(false),
+                }
+            });
+        } else {
+            console_supported.set(false);
+        }
+    });
     
     rsx! {
         div { 
@@ -63,7 +83,7 @@ pub fn VMCard(
                 div { class: "flex-1 flex flex-col items-center justify-center h-16 px-3 bg-slate-800/30 rounded-xl border border-slate-600/40 backdrop-blur-sm hover:bg-slate-700/40 transition-all duration-200",
                     if is_running {
                         VMMetricsCard {
-                            vm_id: vm.id.clone(),
+                            vm_id: vm_id_for_components.clone(),
                             vm_name: vm.name.clone(),
                             metric_type: "cpu"
                         }
@@ -79,7 +99,7 @@ pub fn VMCard(
                 div { class: "flex-1 flex flex-col items-center justify-center h-16 px-3 bg-slate-800/30 rounded-xl border border-slate-600/40 backdrop-blur-sm hover:bg-slate-700/40 transition-all duration-200",
                     if is_running {
                         VMMetricsCard {
-                            vm_id: vm.id.clone(),
+                            vm_id: vm_id_for_components.clone(),
                             vm_name: vm.name.clone(),
                             metric_type: "memory"
                         }
@@ -95,7 +115,7 @@ pub fn VMCard(
                 div { class: "flex-1 flex flex-col items-center justify-center h-16 px-3 bg-slate-800/30 rounded-xl border border-slate-600/40 backdrop-blur-sm hover:bg-slate-700/40 transition-all duration-200",
                     if is_running {
                         VMMetricsCard {
-                            vm_id: vm.id.clone(),
+                            vm_id: vm_id_for_components.clone(),
                             vm_name: vm.name.clone(),
                             metric_type: "network_rx"
                         }
@@ -111,7 +131,7 @@ pub fn VMCard(
                 div { class: "flex-1 flex flex-col items-center justify-center h-16 px-3 bg-slate-800/30 rounded-xl border border-slate-600/40 backdrop-blur-sm hover:bg-slate-700/40 transition-all duration-200",
                     if is_running {
                         VMMetricsCard {
-                            vm_id: vm.id.clone(),
+                            vm_id: vm_id_for_components.clone(),
                             vm_name: vm.name.clone(),
                             metric_type: "network_tx"
                         }
@@ -171,6 +191,14 @@ pub fn VMCard(
                             });
                         },
                         if is_changing_state() { "Starting..." } else { "Start" }
+                    }
+                }
+                
+                if is_running && console_supported() {
+                    button {
+                        class: "btn-macos",
+                        onclick: move |_| show_console.set(true),
+                        "Console"
                     }
                 }
                 
@@ -235,6 +263,14 @@ pub fn VMCard(
                 on_update: move |_| {
                     show_edit_modal.set(false);
                     on_status_change.call(());
+                }
+            }
+            
+            // Console modal
+            if show_console() {
+                VmConsole {
+                    vm: vm.clone(),
+                    on_close: move |_| show_console.set(false)
                 }
             }
         }
