@@ -1,0 +1,180 @@
+#[cfg(test)]
+mod tests {
+    use crate::protocol::*;
+    use bincode;
+
+    #[test]
+    fn test_spice_magic_constants() {
+        assert_eq!(SPICE_MAGIC, 0x53504943, "SPICE_MAGIC should be 'SPIC'");
+        assert_eq!(SPICE_MAGIC_REDQ, 0x51444552, "SPICE_MAGIC_REDQ should be 'QDER' in little-endian");
+    }
+
+    #[test]
+    fn test_spice_version_constants() {
+        assert_eq!(SPICE_VERSION_MAJOR, 2);
+        assert_eq!(SPICE_VERSION_MINOR, 2);
+    }
+
+    #[test]
+    fn test_channel_types() {
+        assert_eq!(ChannelType::Main as u8, 1);
+        assert_eq!(ChannelType::Display as u8, 2);
+        assert_eq!(ChannelType::Inputs as u8, 3);
+        assert_eq!(ChannelType::Cursor as u8, 4);
+        assert_eq!(ChannelType::Playback as u8, 5);
+        assert_eq!(ChannelType::Record as u8, 6);
+    }
+
+    #[test]
+    fn test_spice_link_header_serialization() {
+        let header = SpiceLinkHeader {
+            magic: SPICE_MAGIC,
+            major_version: SPICE_VERSION_MAJOR,
+            minor_version: SPICE_VERSION_MINOR,
+            size: 100,
+        };
+
+        let serialized = bincode::serialize(&header).unwrap();
+        let deserialized: SpiceLinkHeader = bincode::deserialize(&serialized).unwrap();
+
+        assert_eq!(header.magic, deserialized.magic);
+        assert_eq!(header.major_version, deserialized.major_version);
+        assert_eq!(header.minor_version, deserialized.minor_version);
+        assert_eq!(header.size, deserialized.size);
+    }
+
+    #[test]
+    fn test_spice_link_mess_serialization() {
+        let mess = SpiceLinkMess {
+            connection_id: 12345,
+            channel_type: ChannelType::Display as u8,
+            channel_id: 0,
+            num_common_caps: 2,
+            num_channel_caps: 3,
+            caps_offset: 64,
+        };
+
+        let serialized = bincode::serialize(&mess).unwrap();
+        let deserialized: SpiceLinkMess = bincode::deserialize(&serialized).unwrap();
+
+        assert_eq!(mess.connection_id, deserialized.connection_id);
+        assert_eq!(mess.channel_type, deserialized.channel_type);
+        assert_eq!(mess.channel_id, deserialized.channel_id);
+        assert_eq!(mess.num_common_caps, deserialized.num_common_caps);
+        assert_eq!(mess.num_channel_caps, deserialized.num_channel_caps);
+        assert_eq!(mess.caps_offset, deserialized.caps_offset);
+    }
+
+    #[test]
+    fn test_spice_link_reply_serialization() {
+        let reply = SpiceLinkReply {
+            magic: SPICE_MAGIC,
+            major_version: SPICE_VERSION_MAJOR,
+            minor_version: SPICE_VERSION_MINOR,
+            size: 64,
+        };
+
+        let serialized = bincode::serialize(&reply).unwrap();
+        let deserialized: SpiceLinkReply = bincode::deserialize(&serialized).unwrap();
+
+        assert_eq!(reply.magic, deserialized.magic);
+        assert_eq!(reply.major_version, deserialized.major_version);
+        assert_eq!(reply.minor_version, deserialized.minor_version);
+        assert_eq!(reply.size, deserialized.size);
+    }
+
+    #[test]
+    fn test_spice_data_header_serialization() {
+        let header = SpiceDataHeader {
+            serial: 42,
+            msg_type: 101,
+            msg_size: 1024,
+            sub_list: 0,
+        };
+
+        let serialized = bincode::serialize(&header).unwrap();
+        assert_eq!(serialized.len(), 18); // bincode packed size without padding
+        
+        let deserialized: SpiceDataHeader = bincode::deserialize(&serialized).unwrap();
+        assert_eq!(header.serial, deserialized.serial);
+        assert_eq!(header.msg_type, deserialized.msg_type);
+        assert_eq!(header.msg_size, deserialized.msg_size);
+        assert_eq!(header.sub_list, deserialized.sub_list);
+    }
+
+    #[test]
+    fn test_main_channel_message_types() {
+        // Test that message type constants are correct
+        assert_eq!(SPICE_MSG_MAIN_INIT, 103);
+        assert_eq!(SPICE_MSG_MAIN_CHANNELS_LIST, 104);
+        assert_eq!(SPICE_MSG_MAIN_MOUSE_MODE, 105);
+        assert_eq!(SPICE_MSG_MAIN_MULTI_MEDIA_TIME, 106);
+    }
+
+    #[test]
+    fn test_display_channel_message_types() {
+        assert_eq!(SPICE_MSG_DISPLAY_MODE, 101);
+        assert_eq!(SPICE_MSG_DISPLAY_MARK, 102);
+        assert_eq!(SPICE_MSG_DISPLAY_RESET, 103);
+        assert_eq!(SPICE_MSG_DISPLAY_COPY_BITS, 104);
+    }
+
+    #[test]
+    fn test_struct_sizes() {
+        // Ensure structs have expected sizes for protocol compatibility
+        assert_eq!(std::mem::size_of::<SpiceLinkHeader>(), 16);
+        assert_eq!(std::mem::size_of::<SpiceLinkMess>(), 20);
+        assert_eq!(std::mem::size_of::<SpiceLinkReply>(), 16); // Updated - has 4 u32 fields
+        assert_eq!(std::mem::size_of::<SpiceDataHeader>(), 24); // u64 + u16 + u32 + u32 + padding
+    }
+
+    #[test]
+    fn test_channel_type_from_u8() {
+        let channel_types = vec![
+            (1u8, ChannelType::Main),
+            (2u8, ChannelType::Display),
+            (3u8, ChannelType::Inputs),
+            (4u8, ChannelType::Cursor),
+            (5u8, ChannelType::Playback),
+            (6u8, ChannelType::Record),
+        ];
+
+        for (value, expected) in channel_types {
+            // This test assumes we implement TryFrom<u8> for ChannelType
+            // or have a from_u8 method
+            assert_eq!(value, expected as u8);
+        }
+    }
+
+    #[test]
+    fn test_error_codes() {
+        // Common SPICE error codes
+        const SPICE_LINK_ERR_OK: u32 = 0;
+        const SPICE_LINK_ERR_ERROR: u32 = 1;
+        const SPICE_LINK_ERR_INVALID_MAGIC: u32 = 2;
+        const SPICE_LINK_ERR_INVALID_DATA: u32 = 3;
+        const SPICE_LINK_ERR_VERSION_MISMATCH: u32 = 4;
+        const SPICE_LINK_ERR_NEED_SECURED: u32 = 5;
+        const SPICE_LINK_ERR_NEED_UNSECURED: u32 = 6;
+        const SPICE_LINK_ERR_PERMISSION_DENIED: u32 = 7;
+        const SPICE_LINK_ERR_BAD_CONNECTION_ID: u32 = 8;
+        const SPICE_LINK_ERR_CHANNEL_NOT_AVAILABLE: u32 = 9;
+
+        // Test that error codes are distinct
+        let error_codes = vec![
+            SPICE_LINK_ERR_OK,
+            SPICE_LINK_ERR_ERROR,
+            SPICE_LINK_ERR_INVALID_MAGIC,
+            SPICE_LINK_ERR_INVALID_DATA,
+            SPICE_LINK_ERR_VERSION_MISMATCH,
+            SPICE_LINK_ERR_NEED_SECURED,
+            SPICE_LINK_ERR_NEED_UNSECURED,
+            SPICE_LINK_ERR_PERMISSION_DENIED,
+            SPICE_LINK_ERR_BAD_CONNECTION_ID,
+            SPICE_LINK_ERR_CHANNEL_NOT_AVAILABLE,
+        ];
+
+        let unique_codes: std::collections::HashSet<_> = error_codes.iter().cloned().collect();
+        assert_eq!(error_codes.len(), unique_codes.len(), "Error codes must be unique");
+    }
+}

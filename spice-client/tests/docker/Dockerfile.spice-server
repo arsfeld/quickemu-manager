@@ -1,0 +1,35 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install QEMU and SPICE dependencies
+RUN apt-get update && apt-get install -y \
+    qemu-system-x86 \
+    qemu-utils \
+    qemu-system-gui \
+    netcat-openbsd \
+    supervisor \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a minimal test VM disk
+RUN qemu-img create -f qcow2 /tmp/test.qcow2 1G
+
+# Create supervisor configuration
+RUN mkdir -p /var/log/supervisor
+
+# Copy supervisor config
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Create startup script
+COPY start-qemu.sh /usr/local/bin/start-qemu.sh
+RUN chmod +x /usr/local/bin/start-qemu.sh
+
+# Expose SPICE ports
+EXPOSE 5900-5999
+
+# Health check
+HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=3 \
+    CMD nc -z localhost 5900 || exit 1
+
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
