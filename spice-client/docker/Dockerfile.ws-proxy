@@ -5,10 +5,13 @@ WORKDIR /app
 # Install Python WebSocket library
 RUN pip install --no-cache-dir websockets
 
-# Copy proxy script
+# Copy proxy scripts (both single and multi-channel versions)
 COPY websocket-proxy.py .
-RUN chmod +x websocket-proxy.py
+COPY websocket-proxy-multi.py .
+RUN chmod +x websocket-proxy.py websocket-proxy-multi.py
 
-EXPOSE 5959
+# Expose ports for single proxy and multi-channel proxy
+EXPOSE 5959 8080-8085 9079
 
+# Default to single proxy for backwards compatibility
 CMD ["python", "websocket-proxy.py"]

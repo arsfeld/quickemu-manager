@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  # SPICE test server (same as native E2E tests)
+  qemu-spice:
+    build:
+      context: .
+      dockerfile: Dockerfile.qemu-debug
+      args:
+        ENABLE_SPICE_DEBUG: "1"
+    environment:
+      - SPICE_DEBUG_LEVEL=spice:trace
+      - G_MESSAGES_DEBUG=all
+      - SPICE_PORT=5900
+      - SPICE_DISABLE_TICKETING=1
+      - SPICE_DISABLE_COPY_PASTE=1
+      - SPICE_IMAGE_COMPRESSION=off
+      - SPICE_STREAMING_VIDEO=off
+    ports:
+      - "5900-5910:5900-5910"  # Range for multiple channels
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5900"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Multi-channel WebSocket proxy
+  websocket-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.ws-proxy
+    environment:
+      - SPICE_HOST=qemu-spice
+      - WS_BASE_PORT=8080
+      - MAIN_CHANNEL_PORT=5900
+      - DISPLAY_CHANNEL_PORT=5901
+      - INPUTS_CHANNEL_PORT=5902
+      - CURSOR_CHANNEL_PORT=5903
+      - PLAYBACK_CHANNEL_PORT=5904
+      - RECORD_CHANNEL_PORT=5905
+    ports:
+      - "8080-8085:8080-8085"  # WebSocket ports for channels
+      - "9079:9079"            # Stats WebSocket
+    depends_on:
+      qemu-spice:
+        condition: service_healthy
+    volumes:
+      - ./websocket-proxy-multi.py:/app/proxy.py:ro
+    command: python /app/proxy.py
+
+  # WASM build and test runner
+  wasm-test-runner:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.wasm-test
+      args:
+        RUST_VERSION: "1.75"
+    environment:
+      - RUST_LOG=debug
+      - WASM_BINDGEN_TEST_TIMEOUT=120
+      - WS_MAIN_URL=ws://websocket-proxy:8080/main
+      - WS_DISPLAY_URL=ws://websocket-proxy:8081/display
+      - WS_INPUTS_URL=ws://websocket-proxy:8082/inputs
+      - WS_CURSOR_URL=ws://websocket-proxy:8083/cursor
+      - WS_STATS_URL=ws://websocket-proxy:9079/stats
+      - CARGO_TARGET_DIR=/target
+    volumes:
+      - ../src:/app/src:ro
+      - ../tests:/app/tests:ro
+      - ../Cargo.toml:/app/Cargo.toml:ro
+      - ../Cargo.lock:/app/Cargo.lock:ro
+      - wasm-target:/target
+      - wasm-cargo-registry:/usr/local/cargo/registry
+    depends_on:
+      - websocket-proxy
+    command: |
+      bash -c "
+        echo 'Building WASM target...'
+        wasm-pack build --target web --out-dir pkg
+        
+        echo 'Running WASM tests...'
+        wasm-pack test --headless --chrome
+        
+        echo 'Running E2E WASM tests...'
+        cd tests/wasm && npm test
+      "
+
+  # Optional: WASM development server with hot reload
+  wasm-dev-server:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile.wasm-dev
+    ports:
+      - "3000:3000"  # Development server
+    volumes:
+      - ../src:/app/src:ro
+      - ../pkg:/app/pkg
+      - ./wasm-demo.html:/app/public/index.html:ro
+    environment:
+      - WS_MAIN_URL=ws://localhost:8080/main
+      - WS_DISPLAY_URL=ws://localhost:8081/display
+    command: npm run dev
+
+volumes:
+  wasm-target:
+  wasm-cargo-registry:

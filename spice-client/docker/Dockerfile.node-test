@@ -1,0 +1,15 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Create node_modules directory
+RUN mkdir -p /app/node_modules
+
+# Install dependencies locally so they can be required
+RUN npm install ws@8.16.0
+
+# Don't copy files during build - they'll be mounted at runtime
+
+WORKDIR /app
+
+CMD ["node"]

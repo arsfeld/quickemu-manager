@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  # Simple QEMU VM with SPICE
+  spice-vm:
+    image: tianon/qemu:latest
+    command: |
+      qemu-system-x86_64
+        -name "SPICE Test VM"
+        -machine q35
+        -cpu max
+        -m 512
+        -boot d
+        -cdrom /iso/alpine.iso
+        -spice port=5900,addr=0.0.0.0,disable-ticketing=on
+        -device virtio-vga,max_outputs=1
+        -display none
+        -monitor none
+    ports:
+      - "5900:5900"
+    volumes:
+      - ./alpine-virt-3.19.0-x86_64.iso:/iso/alpine.iso:ro
+    privileged: true
+
+  # Alternative: Simple test pattern generator
+  spice-test-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.spice-test
+    ports:
+      - "5901:5900"

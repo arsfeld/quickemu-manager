@@ -57,6 +57,24 @@
             max-height: 200px;
             overflow-y: auto;
         }
+        #error-display {
+            margin-top: 10px;
+            padding: 15px;
+            background: #fee;
+            border: 1px solid #fcc;
+            border-radius: 4px;
+            color: #c00;
+            font-weight: bold;
+            display: none;
+        }
+        #error-display.active {
+            display: block;
+        }
+        .error-code {
+            font-family: monospace;
+            font-size: 14px;
+            color: #800;
+        }
     </style>
 </head>
 <body>
@@ -64,12 +82,18 @@
         <h1>SPICE Client WebAssembly Demo</h1>
         <div id="status">Status: Loading WASM module...</div>
         
+        <div style="background: #fffbdd; padding: 10px; margin: 10px 0; border: 1px solid #e6db55; border-radius: 4px; font-size: 14px;">
+            <strong>Security Note:</strong> For production use, serve this page over HTTPS to avoid browser warnings about password fields on insecure pages.
+        </div>
+        
         <div class="controls">
             <button id="connect-btn" disabled>Connect to SPICE Server</button>
             <button id="disconnect-btn" disabled>Disconnect</button>
             <input type="text" id="server-input" placeholder="ws://localhost:5959" value="ws://localhost:5959">
             <input type="password" id="password-input" placeholder="Password (optional)">
         </div>
+        
+        <div id="error-display"></div>
         
         <div id="canvas-container">
             <canvas id="display" width="800" height="600"></canvas>
@@ -84,6 +108,7 @@
         let client = null;
         const status = document.getElementById('status');
         const consoleDiv = document.getElementById('console');
+        const errorDisplay = document.getElementById('error-display');
         const connectBtn = document.getElementById('connect-btn');
         const disconnectBtn = document.getElementById('disconnect-btn');
         const serverInput = document.getElementById('server-input');
@@ -94,6 +119,30 @@
             const timestamp = new Date().toLocaleTimeString();
             consoleDiv.innerHTML += `[${timestamp}] ${message}<br>`;
             consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+        
+        function showError(message, errorCode = null) {
+            errorDisplay.classList.add('active');
+            if (errorCode !== null) {
+                errorDisplay.innerHTML = `
+                    <div>Error: ${message}</div>
+                    <div class="error-code">Error Code: ${errorCode}</div>
+                `;
+            } else {
+                errorDisplay.innerHTML = message;
+            }
+            log(`ERROR: ${message}${errorCode ? ' (Code: ' + errorCode + ')' : ''}`);
+        }
+        
+        function clearError() {
+            errorDisplay.classList.remove('active');
+            errorDisplay.innerHTML = '';
+        }
+        
+        function extractErrorCode(errorMessage) {
+            // Extract error code from messages like "error code: 8 (BAD_CONNECTION_ID)"
+            const match = errorMessage.match(/error code:\s*(\d+)/i);
+            return match ? parseInt(match[1]) : null;
         }
         
         async function initializeWasm() {
@@ -112,6 +161,8 @@
         connectBtn.addEventListener('click', async () => {
             const server = serverInput.value;
             const password = passwordInput.value;
+            clearError();
+            
             try {
                 status.textContent = 'Status: Connecting...';
                 connectBtn.disabled = true;
@@ -129,11 +180,38 @@
                 status.textContent = 'Status: Connected';
                 disconnectBtn.disabled = false;
                 log(`Connected to ${server}`);
+                window.dispatchEvent(new Event('spice-connected'));
             } catch (error) {
                 status.textContent = 'Status: Connection failed';
                 connectBtn.disabled = false;
-                log(`Connection error: ${error.message}`);
+                
+                const errorMessage = error.message || error.toString();
+                const errorCode = extractErrorCode(errorMessage);
+                
+                // Provide user-friendly error messages based on error codes
+                let userMessage = errorMessage;
+                if (errorCode === 8) {
+                    userMessage = "Bad connection ID - The server rejected the connection. This might be a protocol issue.";
+                } else if (errorCode === 7) {
+                    userMessage = "Permission denied - Invalid credentials or authentication failed.";
+                } else if (errorCode === 5) {
+                    userMessage = "Secure connection required - The server requires TLS/SSL.";
+                } else if (errorCode === 6) {
+                    userMessage = "Unsecured connection required - The server doesn't support TLS/SSL.";
+                }
+                
+                showError(userMessage, errorCode);
                 console.error('Connection error:', error);
+                
+                // Clean up the failed client
+                if (client) {
+                    try {
+                        await client.disconnect();
+                    } catch (e) {
+                        console.error('Error during cleanup:', e);
+                    }
+                    client = null;
+                }
             }
         });
         
@@ -145,10 +223,13 @@
                 connectBtn.disabled = false;
                 disconnectBtn.disabled = true;
                 log('Disconnected from server');
+                window.dispatchEvent(new Event('spice-disconnected'));
             }
         });
         
         // Add keyboard and mouse event handlers
+        let lastMouseError = null;
+        
         canvas.addEventListener('mousemove', (e) => {
             if (client) {
                 const rect = canvas.getBoundingClientRect();
@@ -156,8 +237,18 @@
                 const y = Math.floor(e.clientY - rect.top);
                 try {
                     client.send_mouse_move(x, y);
+                    // Clear error if successful after previous error
+                    if (lastMouseError) {
+                        lastMouseError = null;
+                        clearError();
+                    }
                 } catch (error) {
-                    console.error('Mouse move error:', error);
+                    // Only show error once to avoid spamming
+                    if (!lastMouseError || lastMouseError !== error.message) {
+                        lastMouseError = error.message;
+                        showError('Mouse input error: ' + error.message);
+                        console.error('Mouse move error:', error);
+                    }
                 }
             }
         });
@@ -167,6 +258,7 @@
                 try {
                     client.send_mouse_button(e.button, true);
                 } catch (error) {
+                    showError('Mouse button error: ' + error.message);
                     console.error('Mouse down error:', error);
                 }
             }
@@ -177,6 +269,7 @@
                 try {
                     client.send_mouse_button(e.button, false);
                 } catch (error) {
+                    showError('Mouse button error: ' + error.message);
                     console.error('Mouse up error:', error);
                 }
             }
@@ -189,6 +282,68 @@
         
         // Initialize on page load
         initializeWasm();
+        
+        // Store interval ID for cleanup
+        let errorCheckInterval = null;
+        
+        // Function to check error state
+        async function checkErrorState() {
+            if (!client || !disconnectBtn || disconnectBtn.disabled) {
+                return;
+            }
+            
+            try {
+                const error = await client.get_error();
+                if (error) {
+                    showError(`Channel error detected: ${error}`);
+                    // Disconnect on critical error
+                    status.textContent = 'Status: Disconnected due to error';
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    
+                    // Clear the interval
+                    if (errorCheckInterval) {
+                        clearInterval(errorCheckInterval);
+                        errorCheckInterval = null;
+                    }
+                    
+                    // Clean up
+                    try {
+                        await client.disconnect();
+                    } catch (e) {
+                        console.error('Error during cleanup:', e);
+                    }
+                    client = null;
+                }
+            } catch (e) {
+                // Don't log recursive use errors, they're expected during cleanup
+                if (!e.message.includes('recursive use')) {
+                    console.error('Error checking client state:', e);
+                }
+            }
+        }
+        
+        // Start error checking when connected
+        window.addEventListener('spice-connected', () => {
+            if (errorCheckInterval) {
+                clearInterval(errorCheckInterval);
+            }
+            errorCheckInterval = setInterval(() => {
+                checkErrorState().catch(e => {
+                    if (!e.message.includes('recursive use')) {
+                        console.error('Error in checkErrorState:', e);
+                    }
+                });
+            }, 1000);
+        });
+        
+        // Stop error checking when disconnected
+        window.addEventListener('spice-disconnected', () => {
+            if (errorCheckInterval) {
+                clearInterval(errorCheckInterval);
+                errorCheckInterval = null;
+            }
+        });
     </script>
 </body>
 </html>

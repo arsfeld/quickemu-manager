@@ -1,0 +1,29 @@
+FROM ubuntu:22.04
+
+# Install virt-viewer and network capture tools
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    virt-viewer \
+    tcpdump \
+    wireshark-common \
+    tshark \
+    netcat-openbsd \
+    curl \
+    xvfb \
+    x11vnc \
+    supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create directories
+RUN mkdir -p /captures /scripts
+
+# Copy capture script
+COPY scripts/capture-virt-viewer.sh /scripts/
+RUN chmod +x /scripts/capture-virt-viewer.sh
+
+# Set up display for headless operation
+ENV DISPLAY=:99
+
+WORKDIR /captures
+
+ENTRYPOINT ["/scripts/capture-virt-viewer.sh"]
