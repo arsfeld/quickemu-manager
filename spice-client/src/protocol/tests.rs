@@ -1,12 +1,13 @@
 #[cfg(test)]
 mod tests {
     use crate::protocol::*;
+    use binrw::{BinRead, BinWrite};
+    use std::io::Cursor;
     use bincode;
 
     #[test]
     fn test_spice_magic_constants() {
-        assert_eq!(SPICE_MAGIC, 0x53504943, "SPICE_MAGIC should be 'SPIC'");
-        assert_eq!(SPICE_MAGIC_REDQ, 0x51444552, "SPICE_MAGIC_REDQ should be 'QDER' in little-endian");
+        assert_eq!(SPICE_MAGIC, 0x51444552, "SPICE_MAGIC should be 'REDQ'");
     }
 
     #[test]
@@ -24,6 +25,29 @@ mod tests {
         assert_eq!(ChannelType::Playback as u8, 5);
         assert_eq!(ChannelType::Record as u8, 6);
     }
+    
+    #[test]
+    fn test_spice_data_header_size() {
+        // SPICE protocol expects exactly 18 bytes for data header
+        let header = SpiceDataHeader {
+            serial: 0x0123456789ABCDEF,
+            msg_type: 0x1234,
+            msg_size: 0x56789ABC,
+            sub_list: 0xDEF01234,
+        };
+        
+        let mut buffer = Vec::new();
+        let mut cursor = Cursor::new(&mut buffer);
+        header.write(&mut cursor).unwrap();
+        
+        assert_eq!(buffer.len(), 18, "SpiceDataHeader should be exactly 18 bytes on wire");
+        
+        // Verify the exact byte layout
+        assert_eq!(&buffer[0..8], &0x0123456789ABCDEF_u64.to_le_bytes(), "serial field");
+        assert_eq!(&buffer[8..10], &0x1234_u16.to_le_bytes(), "msg_type field");
+        assert_eq!(&buffer[10..14], &0x56789ABC_u32.to_le_bytes(), "msg_size field");
+        assert_eq!(&buffer[14..18], &0xDEF01234_u32.to_le_bytes(), "sub_list field");
+    }
 
     #[test]
     fn test_spice_link_header_serialization() {
@@ -34,8 +58,15 @@ mod tests {
             size: 100,
         };
 
-        let serialized = bincode::serialize(&header).unwrap();
-        let deserialized: SpiceLinkHeader = bincode::deserialize(&serialized).unwrap();
+        // Write to bytes
+        let mut cursor = Cursor::new(Vec::new());
+        header.write(&mut cursor).unwrap();
+        let bytes = cursor.into_inner();
+        assert_eq!(bytes.len(), 16); // 4 u32 fields = 16 bytes
+        
+        // Read back
+        let mut cursor = Cursor::new(&bytes);
+        let deserialized = SpiceLinkHeader::read(&mut cursor).unwrap();
 
         assert_eq!(header.magic, deserialized.magic);
         assert_eq!(header.major_version, deserialized.major_version);
@@ -51,15 +82,18 @@ mod tests {
             channel_id: 0,
             num_common_caps: 2,
             num_channel_caps: 3,
-            caps_offset: 64,
+            caps_offset: 20, // caps_offset is size of SpiceLinkMess
         };
 
-        let serialized = bincode::serialize(&mess).unwrap();
-        // Check bincode serialization size
-        println!("SpiceLinkMess bincode size: {} bytes", serialized.len());
-        assert_eq!(serialized.len(), 18, "SpiceLinkMess bincode serialization is 18 bytes");
+        // Write to bytes
+        let mut cursor = Cursor::new(Vec::new());
+        mess.write(&mut cursor).unwrap();
+        let bytes = cursor.into_inner();
+        assert_eq!(bytes.len(), 20, "SpiceLinkMess should be 20 bytes");
         
-        let deserialized: SpiceLinkMess = bincode::deserialize(&serialized).unwrap();
+        // Read back
+        let mut cursor = Cursor::new(&bytes);
+        let deserialized = SpiceLinkMess::read(&mut cursor).unwrap();
 
         assert_eq!(mess.connection_id, deserialized.connection_id);
         assert_eq!(mess.channel_type, deserialized.channel_type);
@@ -78,8 +112,14 @@ mod tests {
             size: 64,
         };
 
-        let serialized = bincode::serialize(&reply).unwrap();
-        let deserialized: SpiceLinkReply = bincode::deserialize(&serialized).unwrap();
+        // Write to bytes
+        let mut cursor = Cursor::new(Vec::new());
+        reply.write(&mut cursor).unwrap();
+        let bytes = cursor.into_inner();
+        
+        // Read back
+        let mut cursor = Cursor::new(&bytes);
+        let deserialized = SpiceLinkReply::read(&mut cursor).unwrap();
 
         assert_eq!(reply.magic, deserialized.magic);
         assert_eq!(reply.major_version, deserialized.major_version);
@@ -96,10 +136,16 @@ mod tests {
             sub_list: 0,
         };
 
-        let serialized = bincode::serialize(&header).unwrap();
-        assert_eq!(serialized.len(), 18); // bincode packed size without padding
+        // Write to bytes
+        let mut cursor = Cursor::new(Vec::new());
+        header.write(&mut cursor).unwrap();
+        let bytes = cursor.into_inner();
+        assert_eq!(bytes.len(), 18); // packed size: 8 + 2 + 4 + 4 = 18
         
-        let deserialized: SpiceDataHeader = bincode::deserialize(&serialized).unwrap();
+        // Read back
+        let mut cursor = Cursor::new(&bytes);
+        let deserialized = SpiceDataHeader::read(&mut cursor).unwrap();
+            
         assert_eq!(header.serial, deserialized.serial);
         assert_eq!(header.msg_type, deserialized.msg_type);
         assert_eq!(header.msg_size, deserialized.msg_size);
@@ -109,18 +155,18 @@ mod tests {
     #[test]
     fn test_main_channel_message_types() {
         // Test that message type constants are correct
-        assert_eq!(SPICE_MSG_MAIN_INIT, 103);
-        assert_eq!(SPICE_MSG_MAIN_CHANNELS_LIST, 104);
-        assert_eq!(SPICE_MSG_MAIN_MOUSE_MODE, 105);
-        assert_eq!(SPICE_MSG_MAIN_MULTI_MEDIA_TIME, 106);
+        assert_eq!(MainChannelMessage::Init as u16, 103);
+        assert_eq!(MainChannelMessage::ChannelsList as u16, 104);
+        assert_eq!(MainChannelMessage::MouseMode as u16, 105);
+        assert_eq!(MainChannelMessage::MultiMediaTime as u16, 106);
     }
 
     #[test]
     fn test_display_channel_message_types() {
-        assert_eq!(SPICE_MSG_DISPLAY_MODE, 101);
-        assert_eq!(SPICE_MSG_DISPLAY_MARK, 102);
-        assert_eq!(SPICE_MSG_DISPLAY_RESET, 103);
-        assert_eq!(SPICE_MSG_DISPLAY_COPY_BITS, 104);
+        assert_eq!(DisplayChannelMessage::Mode as u16, 101);
+        assert_eq!(DisplayChannelMessage::Mark as u16, 102);
+        assert_eq!(DisplayChannelMessage::Reset as u16, 103);
+        assert_eq!(DisplayChannelMessage::CopyBits as u16, 104);
     }
 
     #[test]
@@ -129,7 +175,17 @@ mod tests {
         assert_eq!(std::mem::size_of::<SpiceLinkHeader>(), 16);
         assert_eq!(std::mem::size_of::<SpiceLinkMess>(), 20);
         assert_eq!(std::mem::size_of::<SpiceLinkReply>(), 16); // Updated - has 4 u32 fields
-        assert_eq!(std::mem::size_of::<SpiceDataHeader>(), 24); // u64 + u16 + u32 + u32 + padding
+        // With binrw, sizes depend on the serialization, not memory layout
+        // We test the serialized sizes instead
+        let header = SpiceLinkHeader { magic: 0, major_version: 0, minor_version: 0, size: 0 };
+        let mut cursor = Cursor::new(Vec::new());
+        header.write(&mut cursor).unwrap();
+        assert_eq!(cursor.into_inner().len(), 16);
+        
+        let mess = SpiceLinkMess { connection_id: 0, channel_type: 0, channel_id: 0, num_common_caps: 0, num_channel_caps: 0, caps_offset: 0 };
+        let mut cursor = Cursor::new(Vec::new());
+        mess.write(&mut cursor).unwrap();
+        assert_eq!(cursor.into_inner().len(), 20);
     }
 
     #[test]
@@ -195,8 +251,15 @@ mod tests {
             ram_hint: 0,
         };
 
-        let serialized = bincode::serialize(&init_msg).unwrap();
-        let deserialized: SpiceMsgMainInit = bincode::deserialize(&serialized).unwrap();
+        // Write to bytes
+        let mut cursor = Cursor::new(Vec::new());
+        init_msg.write(&mut cursor).unwrap();
+        let bytes = cursor.into_inner();
+        assert_eq!(bytes.len(), 32); // 8 u32 fields
+        
+        // Read back
+        let mut cursor = Cursor::new(&bytes);
+        let deserialized = SpiceMsgMainInit::read(&mut cursor).unwrap();
 
         assert_eq!(init_msg.session_id, deserialized.session_id);
         assert_eq!(init_msg.display_channels_hint, deserialized.display_channels_hint);
@@ -267,12 +330,12 @@ mod tests {
         // Test MainChannelMessage enum conversions
         assert_eq!(MainChannelMessage::Init as u16, 103);
         assert_eq!(MainChannelMessage::ChannelsList as u16, 104);
-        assert_eq!(MainChannelMessage::Ping as u16, 105);
-        assert_eq!(MainChannelMessage::PingReply as u16, 106);
+        assert_eq!(MainChannelMessage::MouseMode as u16, 105);
+        assert_eq!(MainChannelMessage::MultiMediaTime as u16, 106);
         
         // Test DisplayChannelMessage enum conversions
         assert_eq!(DisplayChannelMessage::Mode as u16, 101);
-        assert_eq!(DisplayChannelMessage::DrawCopy as u16, 303);
-        assert_eq!(DisplayChannelMessage::DrawAlphaBlend as u16, 312);
+        assert_eq!(DisplayChannelMessage::DrawCopy as u16, 304);
+        assert_eq!(DisplayChannelMessage::DrawAlphaBlend as u16, 317);
     }
 }

@@ -2,6 +2,7 @@ pub mod main;
 pub mod display;
 pub mod cursor;
 pub mod inputs;
+pub mod connection;
 
 #[cfg(target_arch = "wasm32")]
 pub mod display_wasm;
@@ -15,55 +16,125 @@ use rsa::{Oaep, RsaPublicKey};
 use rsa::pkcs8::DecodePublicKey;
 use rand::rngs::OsRng;
 use sha1::Sha1;
+use std::io::Write;
+
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::net::TcpStream;
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+#[cfg(target_arch = "wasm32")]
+use web_sys::WebSocket;
+#[cfg(target_arch = "wasm32")]
+use std::sync::{Arc, Mutex};
+
+use tracing::{debug, info, warn};
 
 pub use main::MainChannel;
 pub use display::{DisplayChannel, DisplaySurface};
 pub use cursor::{CursorChannel, CursorShape};
 pub use inputs::{InputsChannel, MouseMode, KeyModifiers};
 
-/// Input event types
+/// Input event types for keyboard and mouse interactions.
+///
+/// This enum represents all possible input events that can be sent to
+/// the SPICE server through the inputs channel.
 #[derive(Debug, Clone, Copy)]
 pub enum InputEvent {
-    /// Key press event
+    /// A key was pressed down.
     KeyDown(KeyCode),
-    /// Key release event
+    /// A key was released.
     KeyUp(KeyCode),
-    /// Mouse move event
-    MouseMove { x: i32, y: i32 },
-    /// Mouse button event
-    MouseButton { button: MouseButton, pressed: bool },
+    /// The mouse pointer moved to a new position.
+    /// 
+    /// Coordinates are absolute positions within the display surface.
+    MouseMove { 
+        /// X coordinate in pixels from the left edge
+        x: i32, 
+        /// Y coordinate in pixels from the top edge
+        y: i32 
+    },
+    /// A mouse button state changed.
+    MouseButton { 
+        /// Which mouse button was affected
+        button: MouseButton, 
+        /// Whether the button is now pressed (true) or released (false)
+        pressed: bool 
+    },
 }
 
-/// Mouse button types
-#[derive(Debug, Clone, Copy)]
+/// Mouse button identifiers.
+///
+/// Represents the standard mouse buttons that can be used with SPICE.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MouseButton {
-    /// Left mouse button
+    /// Left mouse button (primary button).
     Left,
-    /// Middle mouse button
+    /// Middle mouse button (often the scroll wheel button).
     Middle,
-    /// Right mouse button
+    /// Right mouse button (secondary button).
     Right,
+    /// Mouse wheel up (scroll up).
+    WheelUp,
+    /// Mouse wheel down (scroll down).
+    WheelDown,
 }
 
-/// Key codes (simplified for example)
-#[derive(Debug, Clone, Copy)]
+/// Keyboard key codes.
+///
+/// This is a simplified set of key codes for common keys. The SPICE protocol
+/// uses PC/AT keyboard scan codes internally, but this enum provides a more
+/// convenient abstraction for applications.
+///
+/// # Example
+///
+/// ```
+/// use spice_client::KeyCode;
+///
+/// // Common keys have their own variants
+/// let enter = KeyCode::Enter;
+/// let escape = KeyCode::Escape;
+///
+/// // Letters and digits use the Char variant
+/// let letter_a = KeyCode::Char('A');
+/// let digit_5 = KeyCode::Char('5');
+///
+/// // Special keys use scan codes with the Other variant
+/// let f1_key = KeyCode::Other(0x3B); // F1 scan code
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyCode {
-    /// Escape key
+    /// Escape key.
     Escape,
-    /// Enter key
+    /// Enter/Return key.
     Enter,
-    /// Space key
+    /// Space bar.
     Space,
-    /// Character key
+    /// Tab key.
+    Tab,
+    /// Backspace key.
+    Backspace,
+    /// A character key (letters, digits, symbols).
+    /// 
+    /// The character should be uppercase for letters.
     Char(char),
-    /// Other key code
+    /// Function keys (F1-F12).
+    /// 
+    /// Use values 1-12 for F1-F12.
+    Function(u8),
+    /// Arrow keys.
+    ArrowUp,
+    /// Arrow down key.
+    ArrowDown,
+    /// Arrow left key.
+    ArrowLeft,
+    /// Arrow right key.
+    ArrowRight,
+    /// Other key specified by PC/AT scan code.
+    /// 
+    /// This allows sending any key by its raw scan code value.
     Other(u32),
 }
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tracing::{info, warn};
-
-#[cfg(not(target_arch = "wasm32"))]
-use tokio::net::TcpStream;
 
 #[cfg(target_arch = "wasm32")]
 use {
@@ -89,6 +160,9 @@ pub struct ChannelConnection {
     channel_type: ChannelType,
     pub channel_id: u8,
     password: Option<String>,
+    connection_id: Option<u32>,
+    next_serial: u64,
+    handshake_complete: bool,
 }
 
 /// Encrypt a password using RSA-OAEP with SHA-1
@@ -128,6 +202,9 @@ impl ChannelConnection {
             channel_type,
             channel_id,
             password: None,
+            connection_id: None,
+            next_serial: 1,
+            handshake_complete: false,
         })
     }
 
@@ -259,41 +336,141 @@ impl ChannelConnection {
             channel_type,
             channel_id,
             password: None,
+            connection_id: None,
+            next_serial: 1,
+            handshake_complete: false,
         })
     }
     
     pub fn set_password(&mut self, password: String) {
         self.password = Some(password);
     }
+    
+    pub fn set_connection_id(&mut self, connection_id: u32) {
+        self.connection_id = Some(connection_id);
+    }
+    
+    /// Convert a list of capability bits into a capability bitmap array
+    fn encode_capabilities(caps: &[u32]) -> Vec<u32> {
+        if caps.is_empty() {
+            return vec![];
+        }
+        
+        // Find the highest capability bit to determine array size
+        let max_cap = caps.iter().max().unwrap_or(&0);
+        let num_words = (max_cap / 32) + 1;
+        let mut bitmap = vec![0u32; num_words as usize];
+        
+        // Set each capability bit
+        for &cap in caps {
+            let word_index = (cap / 32) as usize;
+            let bit_index = cap % 32;
+            bitmap[word_index] |= 1u32 << bit_index;
+        }
+        
+        bitmap
+    }
+    
+    /// Get common capabilities supported by this client
+    fn get_common_capabilities(&self) -> Vec<u32> {
+        use crate::protocol::*;
+        // Start with just AUTH_SPICE capability
+        vec![
+            SPICE_COMMON_CAP_AUTH_SPICE,
+        ]
+    }
+    
+    /// Get channel-specific capabilities
+    fn get_channel_capabilities(&self) -> Vec<u32> {
+        // No channel-specific capabilities for now - focus on basic connectivity
+        vec![]
+    }
 
     pub async fn handshake(&mut self) -> Result<()> {
-        // First serialize the link message to get its actual size
+        info!("=== SPICE Link Protocol Start ===");
+        info!("Channel type: {:?}, Channel ID: {}", self.channel_type, self.channel_id);
+        
+        // Validate connection_id according to protocol rules
+        let connection_id = if self.channel_type == ChannelType::Main {
+            // Main channel MUST use connection_id = 0
+            if self.connection_id.is_some() && self.connection_id != Some(0) {
+                return Err(SpiceError::Protocol(
+                    "Main channel must use connection_id 0".to_string()
+                ));
+            }
+            info!("✓ Main channel using connection_id = 0 (new session)");
+            0
+        } else {
+            // Non-main channels use the same connection_id as main channel (0 for new sessions)
+            match self.connection_id {
+                Some(id) => {
+                    info!("✓ Non-main channel using connection_id = {} (0x{:08x})", id, id);
+                    id
+                },
+                None => return Err(SpiceError::Protocol(
+                    "Non-main channels must have connection_id set".to_string()
+                )),
+            }
+        };
+        
+        // Get capabilities
+        let common_caps = self.get_common_capabilities();
+        let channel_caps = self.get_channel_capabilities();
+        
+        info!("Common capabilities: {:?}", common_caps);
+        info!("Channel capabilities: {:?}", channel_caps);
+        
+        // Encode capabilities as bitmaps
+        let common_caps_bitmap = Self::encode_capabilities(&common_caps);
+        let channel_caps_bitmap = Self::encode_capabilities(&channel_caps);
+        
+        info!("Common caps bitmap: {:?}", common_caps_bitmap);
+        info!("Channel caps bitmap: {:?}", channel_caps_bitmap);
+        
+        // Create link message
         let link_mess = SpiceLinkMess {
-            connection_id: 0,
+            connection_id,
             channel_type: self.channel_type as u8,
             channel_id: self.channel_id,
-            num_common_caps: 0,
-            num_channel_caps: 0,
+            num_common_caps: common_caps_bitmap.len() as u32,
+            num_channel_caps: channel_caps_bitmap.len() as u32,
             caps_offset: std::mem::size_of::<SpiceLinkMess>() as u32,
         };
 
-        let mess_bytes = bincode::serialize(&link_mess)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to serialize link message: {}", e)))?;
+        // Use binrw for proper SPICE protocol serialization
+        use binrw::BinWrite;
+        let mut mess_cursor = std::io::Cursor::new(Vec::new());
+        link_mess.write(&mut mess_cursor)
+            .map_err(|e| SpiceError::Protocol(format!("Failed to write link message: {}", e)))?;
         
-        // Send link header with the actual serialized size
+        // Get the message bytes and append capabilities
+        let mut mess_bytes = mess_cursor.into_inner();
+        
+        // Append capability bitmaps
+        for cap_word in &common_caps_bitmap {
+            mess_bytes.extend_from_slice(&cap_word.to_le_bytes());
+        }
+        for cap_word in &channel_caps_bitmap {
+            mess_bytes.extend_from_slice(&cap_word.to_le_bytes());
+        }
+        
+        // Send link header with the total size including capabilities
         let link_header = SpiceLinkHeader {
             magic: SPICE_MAGIC,
             major_version: SPICE_VERSION_MAJOR,
             minor_version: SPICE_VERSION_MINOR,
-            size: mess_bytes.len() as u32,  // Use actual serialized size, not struct size
+            size: mess_bytes.len() as u32,  // Total size including capabilities
         };
 
-        let header_bytes = bincode::serialize(&link_header)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to serialize link header: {}", e)))?;
+        let mut header_cursor = std::io::Cursor::new(Vec::new());
+        link_header.write(&mut header_cursor)
+            .map_err(|e| SpiceError::Protocol(format!("Failed to write link header: {}", e)))?;
+        let header_bytes = header_cursor.into_inner();
         
         info!("Sending SPICE link header: {:?}", header_bytes);
         self.send_raw(&header_bytes).await?;
         
+        info!("Sending SPICE link message ({} bytes): {:?}", mess_bytes.len(), mess_bytes);
         self.send_raw(&mess_bytes).await?;
 
         // Read reply
@@ -304,16 +481,19 @@ impl ChannelConnection {
         if reply_bytes.len() >= 4 {
             let magic_bytes = &reply_bytes[0..4];
             let magic = u32::from_le_bytes([magic_bytes[0], magic_bytes[1], magic_bytes[2], magic_bytes[3]]);
-            info!("Magic in reply: 0x{:08x}, expected: 0x{:08x} or 0x{:08x}", magic, SPICE_MAGIC, crate::protocol::SPICE_MAGIC_LEGACY);
+            info!("Magic in reply: 0x{:08x}, expected: 0x{:08x}", magic, SPICE_MAGIC);
         }
 
-        let reply: SpiceLinkReply = bincode::deserialize(&reply_bytes)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to deserialize link reply: {}", e)))?;
+        // Use binrw for proper SPICE protocol deserialization
+        use binrw::BinRead;
+        let mut cursor = std::io::Cursor::new(&reply_bytes);
+        let reply = SpiceLinkReply::read(&mut cursor)
+            .map_err(|e| SpiceError::Protocol(format!("Failed to parse link reply: {}", e)))?;
 
-        if reply.magic != SPICE_MAGIC && reply.magic != crate::protocol::SPICE_MAGIC_LEGACY {
+        if reply.magic != SPICE_MAGIC {
             return Err(SpiceError::Protocol(format!(
-                "Invalid magic in reply: got 0x{:08x}, expected 0x{:08x} or 0x{:08x}", 
-                reply.magic, SPICE_MAGIC, crate::protocol::SPICE_MAGIC_LEGACY
+                "Invalid magic in reply: got 0x{:08x}, expected 0x{:08x}", 
+                reply.magic, SPICE_MAGIC
             )));
         }
 
@@ -360,18 +540,24 @@ impl ChannelConnection {
                     let auth_error = u32::from_le_bytes([link_result[0], link_result[1], link_result[2], link_result[3]]);
                     
                     if auth_error != 0 {
+                        let error_name = match auth_error {
+                            1 => "SPICE_LINK_ERR_ERROR",
+                            2 => "SPICE_LINK_ERR_INVALID_MAGIC",
+                            3 => "SPICE_LINK_ERR_INVALID_DATA",
+                            4 => "SPICE_LINK_ERR_VERSION_MISMATCH",
+                            5 => "SPICE_LINK_ERR_NEED_SECURED",
+                            6 => "SPICE_LINK_ERR_NEED_UNSECURED",
+                            7 => "SPICE_LINK_ERR_PERMISSION_DENIED",
+                            8 => "SPICE_LINK_ERR_BAD_CONNECTION_ID",
+                            9 => "SPICE_LINK_ERR_CHANNEL_NOT_AVAILABLE",
+                            _ => "UNKNOWN_ERROR"
+                        };
                         return Err(SpiceError::Protocol(format!(
                             "Authentication failed with error code: {} ({})", 
-                            auth_error,
-                            match auth_error {
-                                7 => "PERMISSION_DENIED",
-                                5 => "NEED_SECURED",
-                                6 => "NEED_UNSECURED",
-                                _ => "UNKNOWN_ERROR"
-                            }
+                            auth_error, error_name
                         )));
                     }
-                    info!("Authentication successful");
+                    info!("✓ Authentication successful - Link result is 0 (SPICE_LINK_ERR_OK)");
                 } else if error_code != 0 {
                     return Err(SpiceError::Protocol(format!(
                         "Link stage failed with error code: {}", error_code
@@ -380,6 +566,11 @@ impl ChannelConnection {
             }
         }
 
+        // Mark handshake as complete
+        self.handshake_complete = true;
+        info!("=== SPICE Link Protocol Complete ===");
+        info!("✓ Valid connection established for {:?} channel", self.channel_type);
+        
         Ok(())
     }
 
@@ -442,10 +633,21 @@ impl ChannelConnection {
     }
 
     pub async fn read_message(&mut self) -> Result<(SpiceDataHeader, Vec<u8>)> {
-        let header_bytes = self.read_raw(std::mem::size_of::<SpiceDataHeader>()).await?;
+        // SPICE protocol specifies exact sizes on the wire:
+        // serial: 8 bytes, msg_type: 2 bytes, msg_size: 4 bytes, sub_list: 4 bytes = 18 bytes total
+        const SPICE_DATA_HEADER_SIZE: usize = 18;
+        
+        let header_bytes = self.read_raw(SPICE_DATA_HEADER_SIZE).await?;
+        
+        debug!("Raw header bytes ({}): {:?}", header_bytes.len(), header_bytes);
 
-        let header: SpiceDataHeader = bincode::deserialize(&header_bytes)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to deserialize data header: {}", e)))?;
+        use binrw::BinRead;
+        let mut cursor = std::io::Cursor::new(&header_bytes);
+        let header = SpiceDataHeader::read(&mut cursor)
+            .map_err(|e| SpiceError::Protocol(format!("Failed to parse data header: {}", e)))?;
+            
+        debug!("Parsed header: serial={}, type={}, size={}, sub_list={}", 
+               header.serial, header.msg_type, header.msg_size, header.sub_list);
 
         let data = self.read_raw(header.msg_size as usize).await?;
 
@@ -453,22 +655,28 @@ impl ChannelConnection {
     }
 
     pub async fn send_message(&mut self, msg_type: u16, data: &[u8]) -> Result<()> {
+        // Use instance serial number tracking
+        let serial = self.next_serial;
+        self.next_serial += 1;
+        
+        debug!("Sending message: type={}, size={}, serial={}", msg_type, data.len(), serial);
+        
         let header = SpiceDataHeader {
-            serial: 0, // Should be managed properly in a real implementation
+            serial,
             msg_type,
             msg_size: data.len() as u32,
             sub_list: 0,
         };
 
-        let header_bytes = bincode::serialize(&header)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to serialize data header: {}", e)))?;
+        use binrw::BinWrite;
+        let mut header_cursor = std::io::Cursor::new(Vec::new());
+        header.write(&mut header_cursor)
+            .map_err(|e| SpiceError::Protocol(format!("Failed to write data header: {}", e)))?;
+        let header_bytes = header_cursor.into_inner();
 
-        // Pad header to 24 bytes to match what the server expects
-        let mut padded_header = vec![0u8; 24];
-        padded_header[..header_bytes.len()].copy_from_slice(&header_bytes);
-
-        info!("Sending message: type={}, size={}, header_bytes={:?}", msg_type, data.len(), padded_header);
-        self.send_raw(&padded_header).await?;
+        info!("Sending message: serial={}, type={}, size={}, header_size={}", 
+             serial, msg_type, data.len(), header_bytes.len());
+        self.send_raw(&header_bytes).await?;
         if !data.is_empty() {
             info!("Sending message data: {:?}", data);
             self.send_raw(data).await?;

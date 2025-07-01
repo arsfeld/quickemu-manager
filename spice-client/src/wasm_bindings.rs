@@ -116,6 +116,16 @@ impl SpiceClient {
         }
     }
     
+    /// Get any error state from the client
+    #[wasm_bindgen]
+    pub async fn get_error(&self) -> Result<Option<String>, JsValue> {
+        if let Some(client) = self.inner.lock().await.as_ref() {
+            Ok(client.get_error_state().await)
+        } else {
+            Ok(None)
+        }
+    }
+    
     /// Send a key event to the server
     /// 
     /// This method spawns the actual work to avoid blocking and prevent recursive use errors
@@ -125,6 +135,12 @@ impl SpiceClient {
         
         wasm_bindgen_futures::spawn_local(async move {
             if let Some(client) = inner.lock().await.as_ref() {
+                // Check for error state first
+                if let Some(error) = client.get_error_state().await {
+                    console::error_1(&format!("Cannot send key event - client in error state: {}", error).into());
+                    return;
+                }
+                
                 // TODO: Implement key event sending through the input channel
                 console::log_2(
                     &format!("Key event: code={}, pressed={}", key_code, is_pressed).into(),
@@ -145,6 +161,12 @@ impl SpiceClient {
         
         wasm_bindgen_futures::spawn_local(async move {
             if let Some(client) = inner.lock().await.as_ref() {
+                // Check for error state first
+                if let Some(_error) = client.get_error_state().await {
+                    // Silently ignore mouse moves in error state to avoid log spam
+                    return;
+                }
+                
                 // TODO: Implement mouse move event sending through the input channel
                 console::log_2(
                     &format!("Mouse move: x={}, y={}", x, y).into(),
@@ -165,6 +187,12 @@ impl SpiceClient {
         
         wasm_bindgen_futures::spawn_local(async move {
             if let Some(client) = inner.lock().await.as_ref() {
+                // Check for error state first
+                if let Some(error) = client.get_error_state().await {
+                    console::error_1(&format!("Cannot send mouse button event - client in error state: {}", error).into());
+                    return;
+                }
+                
                 // TODO: Implement mouse button event sending through the input channel
                 console::log_2(
                     &format!("Mouse button: button={}, pressed={}", button, is_pressed).into(),

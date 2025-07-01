@@ -18,6 +18,11 @@ mod tests {
             let mut header_buf = [0u8; 16];
             socket.read_exact(&mut header_buf).await.unwrap();
             
+            // Read link message (size is in header bytes 12-15)
+            let size = u32::from_le_bytes([header_buf[12], header_buf[13], header_buf[14], header_buf[15]]);
+            let mut link_msg_buf = vec![0u8; size as usize];
+            socket.read_exact(&mut link_msg_buf).await.unwrap();
+            
             // Send invalid magic in reply
             let invalid_reply = SpiceLinkReply {
                 magic: 0xDEADBEEF, // Invalid magic
@@ -26,7 +31,10 @@ mod tests {
                 size: 0,
             };
             
-            let reply_bytes = bincode::serialize(&invalid_reply).unwrap();
+            use binrw::BinWrite;
+            let mut reply_cursor = std::io::Cursor::new(Vec::new());
+            invalid_reply.write(&mut reply_cursor).unwrap();
+            let reply_bytes = reply_cursor.into_inner();
             socket.write_all(&reply_bytes).await.unwrap();
         });
 
@@ -63,6 +71,11 @@ mod tests {
             let mut header_buf = [0u8; 16];
             socket.read_exact(&mut header_buf).await.unwrap();
             
+            // Read link message (size is in header bytes 12-15)
+            let size = u32::from_le_bytes([header_buf[12], header_buf[13], header_buf[14], header_buf[15]]);
+            let mut link_msg_buf = vec![0u8; size as usize];
+            socket.read_exact(&mut link_msg_buf).await.unwrap();
+            
             // Send version mismatch reply
             let reply = SpiceLinkReply {
                 magic: SPICE_MAGIC,
@@ -71,7 +84,10 @@ mod tests {
                 size: 0,
             };
             
-            let reply_bytes = bincode::serialize(&reply).unwrap();
+            use binrw::BinWrite;
+            let mut reply_cursor = std::io::Cursor::new(Vec::new());
+            reply.write(&mut reply_cursor).unwrap();
+            let reply_bytes = reply_cursor.into_inner();
             socket.write_all(&reply_bytes).await.unwrap();
         });
 
@@ -130,6 +146,11 @@ mod tests {
             let mut header_buf = [0u8; 16];
             socket.read_exact(&mut header_buf).await.unwrap();
             
+            // Read link message (size is in header bytes 12-15)
+            let size = u32::from_le_bytes([header_buf[12], header_buf[13], header_buf[14], header_buf[15]]);
+            let mut link_msg_buf = vec![0u8; size as usize];
+            socket.read_exact(&mut link_msg_buf).await.unwrap();
+            
             // Send only partial reply (8 bytes instead of 16)
             let partial_data = [0x43, 0x49, 0x50, 0x53, 0x02, 0x00, 0x00, 0x00];
             socket.write_all(&partial_data).await.unwrap();
@@ -163,7 +184,7 @@ mod tests {
             let mut header_buf = [0u8; 16];
             socket.read_exact(&mut header_buf).await.unwrap();
             
-            let mut link_msg_buf = [0u8; 18];
+            let mut link_msg_buf = [0u8; 20];  // SpiceLinkMess is 20 bytes
             socket.read_exact(&mut link_msg_buf).await.unwrap();
             
             let reply = SpiceLinkReply {
@@ -173,7 +194,10 @@ mod tests {
                 size: 0,
             };
             
-            let reply_bytes = bincode::serialize(&reply).unwrap();
+            use binrw::BinWrite;
+            let mut reply_cursor = std::io::Cursor::new(Vec::new());
+            reply.write(&mut reply_cursor).unwrap();
+            let reply_bytes = reply_cursor.into_inner();
             socket.write_all(&reply_bytes).await.unwrap();
             
             // Immediately close connection
@@ -209,7 +233,7 @@ mod tests {
             let mut header_buf = [0u8; 16];
             socket.read_exact(&mut header_buf).await.unwrap();
             
-            let mut link_msg_buf = [0u8; 18];
+            let mut link_msg_buf = [0u8; 20];  // SpiceLinkMess is 20 bytes
             socket.read_exact(&mut link_msg_buf).await.unwrap();
             
             let reply = SpiceLinkReply {
@@ -219,7 +243,10 @@ mod tests {
                 size: 0,
             };
             
-            let reply_bytes = bincode::serialize(&reply).unwrap();
+            use binrw::BinWrite;
+            let mut reply_cursor = std::io::Cursor::new(Vec::new());
+            reply.write(&mut reply_cursor).unwrap();
+            let reply_bytes = reply_cursor.into_inner();
             socket.write_all(&reply_bytes).await.unwrap();
             
             // Send invalid message header (too short)

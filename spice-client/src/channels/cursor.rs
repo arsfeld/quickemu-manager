@@ -28,7 +28,14 @@ pub struct CursorChannel {
 
 impl CursorChannel {
     pub async fn new(host: &str, port: u16, channel_id: u8) -> Result<Self> {
+        Self::new_with_connection_id(host, port, channel_id, None).await
+    }
+    
+    pub async fn new_with_connection_id(host: &str, port: u16, channel_id: u8, connection_id: Option<u32>) -> Result<Self> {
         let mut connection = ChannelConnection::new(host, port, ChannelType::Cursor, channel_id).await?;
+        if let Some(conn_id) = connection_id {
+            connection.set_connection_id(conn_id);
+        }
         connection.handshake().await?;
         
         Ok(Self {
@@ -47,7 +54,18 @@ impl CursorChannel {
 
     #[cfg(target_arch = "wasm32")]
     pub async fn new_websocket_with_auth(websocket_url: &str, channel_id: u8, auth_token: Option<String>) -> Result<Self> {
+        Self::new_websocket_with_auth_and_session(websocket_url, channel_id, auth_token, None, None).await
+    }
+    
+    #[cfg(target_arch = "wasm32")]
+    pub async fn new_websocket_with_auth_and_session(websocket_url: &str, channel_id: u8, auth_token: Option<String>, password: Option<String>, connection_id: Option<u32>) -> Result<Self> {
         let mut connection = ChannelConnection::new_websocket_with_auth(websocket_url, ChannelType::Cursor, channel_id, auth_token).await?;
+        if let Some(pwd) = password {
+            connection.set_password(pwd);
+        }
+        if let Some(conn_id) = connection_id {
+            connection.set_connection_id(conn_id);
+        }
         connection.handshake().await?;
         
         Ok(Self {

@@ -1,5 +1,6 @@
 use super::*;
 use crate::error::SpiceError;
+use instant::Instant;
 
 #[derive(Debug, Clone)]
 pub struct VideoFrame {
@@ -385,7 +386,7 @@ impl VideoStreamer {
     }
 
     pub async fn process_frame(&mut self, surface: &DisplaySurface, timestamp: u64) -> Result<Option<String>> {
-        let start_time = std::time::Instant::now();
+        let start_time = instant::Instant::now();
 
         // Create video frame
         let frame = VideoFrame::from_display_surface(surface, timestamp)?;
@@ -650,7 +651,7 @@ mod streaming_tests {
 
     #[tokio::test]
     async fn test_encoding_performance_benchmark() {
-        use std::time::Instant;
+        use instant::Instant;
 
         let mut streamer = VideoStreamer::new(30, 30);
 

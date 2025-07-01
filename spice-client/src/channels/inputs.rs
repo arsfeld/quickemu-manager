@@ -29,7 +29,14 @@ pub struct KeyModifiers {
 
 impl InputsChannel {
     pub async fn new(host: &str, port: u16, channel_id: u8) -> Result<Self> {
+        Self::new_with_connection_id(host, port, channel_id, None).await
+    }
+    
+    pub async fn new_with_connection_id(host: &str, port: u16, channel_id: u8, connection_id: Option<u32>) -> Result<Self> {
         let mut connection = ChannelConnection::new(host, port, ChannelType::Inputs, channel_id).await?;
+        if let Some(conn_id) = connection_id {
+            connection.set_connection_id(conn_id);
+        }
         connection.handshake().await?;
         
         Ok(Self {
@@ -55,6 +62,24 @@ impl InputsChannel {
             modifiers: KeyModifiers::default(),
         })
     }
+    
+    #[cfg(target_arch = "wasm32")]
+    pub async fn new_websocket_with_auth_and_session(websocket_url: &str, channel_id: u8, auth_token: Option<String>, password: Option<String>, connection_id: Option<u32>) -> Result<Self> {
+        let mut connection = ChannelConnection::new_websocket_with_auth(websocket_url, ChannelType::Inputs, channel_id, auth_token).await?;
+        if let Some(pwd) = password {
+            connection.set_password(pwd);
+        }
+        if let Some(conn_id) = connection_id {
+            connection.set_connection_id(conn_id);
+        }
+        connection.handshake().await?;
+        
+        Ok(Self {
+            connection,
+            mouse_mode: MouseMode::Server,
+            modifiers: KeyModifiers::default(),
+        })
+    }
 
     pub async fn initialize(&mut self) -> Result<()> {
         info!("Inputs channel {} initialized", self.connection.channel_id);
@@ -72,42 +97,44 @@ impl InputsChannel {
     /// Sends an input event to the server
     pub async fn send_event(&mut self, event: InputEvent) -> Result<()> {
         match event {
-            InputEvent::KeyDown(key) => self.send_key_down(key).await?,
-            InputEvent::KeyUp(key) => self.send_key_up(key).await?,
+            InputEvent::KeyDown(key) => {
+                let scancode = key_to_scancode(key);
+                self.update_modifiers(&key, true);
+                self.send_key_down(scancode).await?
+            },
+            InputEvent::KeyUp(key) => {
+                let scancode = key_to_scancode(key);
+                self.update_modifiers(&key, false);
+                self.send_key_up(scancode).await?
+            },
             InputEvent::MouseMove { x, y } => self.send_mouse_motion(x, y).await?,
             InputEvent::MouseButton { button, pressed } => self.send_mouse_button(button, pressed).await?,
         }
         Ok(())
     }
 
-    /// Sends a key down event
-    async fn send_key_down(&mut self, key: KeyCode) -> Result<()> {
-        let scancode = key_to_scancode(key);
-        self.update_modifiers(&key, true);
-        
+    /// Sends a key down event with scancode
+    pub async fn send_key_down(&mut self, scancode: u32) -> Result<()> {
         let mut data = Vec::new();
         data.extend_from_slice(&scancode.to_le_bytes());
         
         self.connection.send_message(SPICE_MSG_INPUTS_KEY_DOWN, &data).await?;
-        debug!("Sent key down: {:?} (scancode: {})", key, scancode);
+        debug!("Sent key down: scancode {}", scancode);
         Ok(())
     }
 
-    /// Sends a key up event
-    async fn send_key_up(&mut self, key: KeyCode) -> Result<()> {
-        let scancode = key_to_scancode(key);
-        self.update_modifiers(&key, false);
-        
+    /// Sends a key up event with scancode
+    pub async fn send_key_up(&mut self, scancode: u32) -> Result<()> {
         let mut data = Vec::new();
         data.extend_from_slice(&scancode.to_le_bytes());
         
         self.connection.send_message(SPICE_MSG_INPUTS_KEY_UP, &data).await?;
-        debug!("Sent key up: {:?} (scancode: {})", key, scancode);
+        debug!("Sent key up: scancode {}", scancode);
         Ok(())
     }
 
     /// Sends a mouse motion event
-    async fn send_mouse_motion(&mut self, x: i32, y: i32) -> Result<()> {
+    pub async fn send_mouse_motion(&mut self, x: i32, y: i32) -> Result<()> {
         let mut data = Vec::new();
         data.extend_from_slice(&x.to_le_bytes());
         data.extend_from_slice(&y.to_le_bytes());
@@ -119,11 +146,13 @@ impl InputsChannel {
     }
 
     /// Sends a mouse button event
-    async fn send_mouse_button(&mut self, button: MouseButton, pressed: bool) -> Result<()> {
+    pub async fn send_mouse_button(&mut self, button: MouseButton, pressed: bool) -> Result<()> {
         let button_mask = match button {
             MouseButton::Left => SPICE_MOUSE_BUTTON_LEFT,
             MouseButton::Middle => SPICE_MOUSE_BUTTON_MIDDLE,
             MouseButton::Right => SPICE_MOUSE_BUTTON_RIGHT,
+            MouseButton::WheelUp => SPICE_MOUSE_BUTTON_WHEEL_UP,
+            MouseButton::WheelDown => SPICE_MOUSE_BUTTON_WHEEL_DOWN,
         };
         
         let msg_type = if pressed {
@@ -229,6 +258,8 @@ pub const SPICE_MSG_INPUTS_MOUSE_RELEASE: u16 = 108;
 pub const SPICE_MOUSE_BUTTON_LEFT: u32 = 1 << 0;
 pub const SPICE_MOUSE_BUTTON_MIDDLE: u32 = 1 << 1;
 pub const SPICE_MOUSE_BUTTON_RIGHT: u32 = 1 << 2;
+pub const SPICE_MOUSE_BUTTON_WHEEL_UP: u32 = 1 << 3;   // Button 4
+pub const SPICE_MOUSE_BUTTON_WHEEL_DOWN: u32 = 1 << 4; // Button 5
 
 // Keyboard modifier masks
 pub const SPICE_KEYBOARD_MODIFIER_SHIFT: u16 = 1 << 0;
@@ -241,6 +272,27 @@ fn key_to_scancode(key: KeyCode) -> u32 {
         KeyCode::Escape => 0x01,
         KeyCode::Enter => 0x1C,
         KeyCode::Space => 0x39,
+        KeyCode::Tab => 0x0F,
+        KeyCode::Backspace => 0x0E,
+        KeyCode::Function(n) => match n {
+            1 => 0x3B,
+            2 => 0x3C,
+            3 => 0x3D,
+            4 => 0x3E,
+            5 => 0x3F,
+            6 => 0x40,
+            7 => 0x41,
+            8 => 0x42,
+            9 => 0x43,
+            10 => 0x44,
+            11 => 0x57,
+            12 => 0x58,
+            _ => 0x00,
+        },
+        KeyCode::ArrowUp => 0x48,
+        KeyCode::ArrowDown => 0x50,
+        KeyCode::ArrowLeft => 0x4B,
+        KeyCode::ArrowRight => 0x4D,
         KeyCode::Char(c) => char_to_scancode(c),
         KeyCode::Other(scancode) => scancode,
     }

@@ -5,30 +5,132 @@
 //!
 //! ## Features
 //!
-//! - Pure Rust implementation with no C dependencies
-//! - Async/await support using Tokio
-//! - WebAssembly support for browser-based clients
-//! - Multiple channel support (Main, Display, Inputs, Cursor)
-//! - Authentication support
-//! - Extensible architecture for adding new channels
+//! - **Pure Rust** - No C dependencies, easy to build and integrate
+//! - **Async/await** - Modern async API using Tokio for native and wasm-bindgen for WASM
+//! - **Cross-platform** - Works on Linux, macOS, Windows, and WebAssembly
+//! - **WebAssembly Support** - Run SPICE clients directly in web browsers
+//! - **Multiple Channels** - Main, Display, Inputs, and Cursor channels implemented
+//! - **Authentication** - RSA-OAEP (Spice ticket) authentication support
+//! - **Multi-display** - Support for multiple display surfaces
+//! - **Extensible** - Easy to add new channel types
 //!
-//! ## Example
+//! ## Quick Start
+//!
+//! Add this to your `Cargo.toml`:
+//!
+//! ```toml
+//! [dependencies]
+//! spice-client = "0.1.0"
+//! 
+//! # For native builds
+//! tokio = { version = "1", features = ["full"] }
+//! ```
+//!
+//! ## Basic Example
 //!
 //! ```no_run
 //! use spice_client::{SpiceClient, SpiceError};
 //!
-//! # async fn example() -> Result<(), SpiceError> {
-//! let mut client = SpiceClient::new("localhost".to_string(), 5900);
-//! client.connect().await?;
-//! client.start_event_loop().await?;
-//! 
-//! // Get display surface when available
-//! if let Some(surface) = client.get_display_surface(0).await {
-//!     println!("Display size: {}x{}", surface.width, surface.height);
+//! #[tokio::main]
+//! async fn main() -> Result<(), SpiceError> {
+//!     // Create a new SPICE client
+//!     let mut client = SpiceClient::new("localhost".to_string(), 5900);
+//!     
+//!     // Connect to the SPICE server
+//!     client.connect().await?;
+//!     
+//!     // Start the event loop to handle incoming messages
+//!     client.start_event_loop().await?;
+//!     
+//!     // Get display surface information
+//!     if let Some(surface) = client.get_display_surface(0).await {
+//!         println!("Display size: {}x{}", surface.width, surface.height);
+//!         println!("Format: {:?}", surface.format);
+//!     }
+//!     
+//!     // Send mouse movement
+//!     client.send_mouse_motion(100, 100).await?;
+//!     
+//!     // Send key press
+//!     use spice_client::KeyCode;
+//!     client.send_key(KeyCode::A, true).await?;  // Press 'A'
+//!     client.send_key(KeyCode::A, false).await?; // Release 'A'
+//!     
+//!     Ok(())
 //! }
-//! # Ok(())
-//! # }
 //! ```
+//!
+//! ## WebAssembly Example
+//!
+//! ```ignore
+//! use spice_client::{SpiceClient, SpiceError};
+//! use wasm_bindgen_futures::spawn_local;
+//!
+//! fn connect_to_spice() {
+//!     spawn_local(async {
+//!         // WebSocket proxy URL (ws:// or wss://)
+//!         let mut client = SpiceClient::new(
+//!             "ws://localhost:8080/spice".to_string(), 
+//!             0  // Port is included in WebSocket URL
+//!         );
+//!         
+//!         if let Err(e) = client.connect().await {
+//!             web_sys::console::error_1(&format!("Connection failed: {:?}", e).into());
+//!         }
+//!     });
+//! }
+//! ```
+//!
+//! ## Architecture
+//!
+//! The library is organized into several modules:
+//!
+//! - **`protocol`** - SPICE protocol message definitions and serialization
+//! - **`client`** - Native client implementation using Tokio
+//! - **`wasm_bindings`** - WebAssembly client using browser APIs
+//! - **`channels`** - Individual channel implementations (Main, Display, Inputs, Cursor)
+//! - **`error`** - Error types and result definitions
+//!
+//! ## Supported Channels
+//!
+//! - **Main Channel** - Connection setup, mouse modes, agent communication
+//! - **Display Channel** - Screen updates, drawing commands, video streaming
+//! - **Inputs Channel** - Keyboard and mouse input
+//! - **Cursor Channel** - Hardware cursor updates
+//!
+//! ## Current Limitations
+//!
+//! This library is functional but still under active development. Current limitations include:
+//!
+//! - **No audio support** - Playback and Record channels not implemented
+//! - **No USB redirection** - USB channel not implemented  
+//! - **No clipboard sharing** - Agent clipboard integration not implemented
+//! - **Limited compression** - Only ZLIB compression supported (no LZ4)
+//! - **No TLS encryption** - Only unencrypted connections supported
+//! - **WebSocket proxy required for WASM** - Cannot connect directly to SPICE TCP ports from browsers
+//! - **Partial drawing commands** - Some complex QXL drawing operations not fully implemented
+//!
+//! ## Platform-Specific Considerations
+//!
+//! ### Native Builds
+//! - Full Tokio runtime required
+//! - Direct TCP connection to SPICE servers
+//! - Multi-threaded event processing
+//!
+//! ### WebAssembly Builds  
+//! - Requires WebSocket proxy (see examples/websocket-proxy.py)
+//! - Single-threaded event loop
+//! - Cannot create multiple TCP connections per WebSocket
+//! - Some browser security restrictions apply
+//!
+//! ## Contributing
+//!
+//! Contributions are welcome! Please check the [GitHub repository](https://github.com/yourusername/spice-client)
+//! for contribution guidelines.
+//!
+//! ## License
+//!
+//! This project is licensed under the MIT License - see the LICENSE file for details.
 
 #![warn(missing_docs)]
 #![warn(rustdoc::missing_crate_level_docs)]
@@ -39,6 +141,12 @@ pub mod client_shared;
 pub mod channels;
 pub mod error;
 pub mod video;
+pub mod wire_format;
+pub mod utils;
+pub mod transport;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod multimedia;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
@@ -56,6 +164,50 @@ pub use client::SpiceClient;
 // For WASM builds, export the WASM-specific client
 #[cfg(target_arch = "wasm32")]
 pub use wasm_bindings::SpiceClient;
+
+// Export types for convenience
+pub type Client = SpiceClient;
+
+/// Builder for creating SPICE clients
+pub struct ClientBuilder {
+    host: String,
+    port: u16,
+    password: Option<String>,
+}
+
+impl ClientBuilder {
+    /// Create a new client builder from a URI
+    pub fn new(uri: &str) -> Self {
+        // Parse URI to extract host and port
+        let uri = uri.trim_start_matches("spice://");
+        let parts: Vec<&str> = uri.split(':').collect();
+        let host = parts.get(0).unwrap_or(&"localhost").to_string();
+        let port = parts.get(1)
+            .and_then(|p| p.parse::<u16>().ok())
+            .unwrap_or(5900);
+        
+        Self {
+            host,
+            port,
+            password: None,
+        }
+    }
+    
+    /// Set the password for authentication
+    pub fn with_password(mut self, password: String) -> Self {
+        self.password = Some(password);
+        self
+    }
+    
+    /// Build the client
+    pub fn build(self) -> Result<SpiceClient> {
+        let mut client = SpiceClient::new(self.host, self.port);
+        if let Some(password) = self.password {
+            client.set_password(password);
+        }
+        Ok(client)
+    }
+}
 
 pub use client_shared::SpiceClientShared;
 pub use error::{SpiceError, Result};

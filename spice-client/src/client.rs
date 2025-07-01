@@ -2,7 +2,7 @@ use crate::channels::main::MainChannel;
 use crate::channels::display::DisplayChannel;
 use crate::error::{Result, SpiceError};
 use crate::protocol::ChannelType;
-use crate::video::VideoOutput;
+use crate::video::{VideoOutput, create_video_output};
 
 #[cfg(test)]
 #[path = "client_tests.rs"]
@@ -32,7 +32,7 @@ pub struct SpiceClient {
     channel_tasks: Vec<JoinHandle<Result<()>>>,
     #[cfg(target_arch = "wasm32")]
     channel_tasks: Vec<TaskHandle>,
-    video_output: Arc<VideoOutput>,
+    video_output: Arc<dyn VideoOutput>,
 }
 
 impl SpiceClient {
@@ -48,7 +48,7 @@ impl SpiceClient {
             main_channel: None,
             display_channels: HashMap::new(),
             channel_tasks: Vec::new(),
-            video_output: Arc::new(VideoOutput::new()),
+            video_output: create_video_output(),
         }
     }
 
@@ -81,7 +81,7 @@ impl SpiceClient {
             main_channel: None,
             display_channels: HashMap::new(),
             channel_tasks: Vec::new(),
-            video_output: Arc::new(VideoOutput::new()),
+            video_output: create_video_output(),
         }
     }
     
@@ -122,6 +122,10 @@ impl SpiceClient {
             main_channel.initialize().await?;
             info!("Main channel initialized, getting channels list...");
             
+            // Get the session_id from main channel
+            let session_id = main_channel.get_session_id();
+            info!("Got session_id from main channel: {:?}", session_id);
+            
             // Get available channels
             let channels = main_channel.get_channels_list().await?;
             info!("Available channels: {:?}", channels);
@@ -130,9 +134,9 @@ impl SpiceClient {
             for (channel_type, channel_id) in channels {
                 match channel_type {
                     ChannelType::Display => {
-                        let display_channel = DisplayChannel::new(&self.host, self.port, channel_id).await?;
+                        let display_channel = DisplayChannel::new_with_connection_id(&self.host, self.port, channel_id, session_id).await?;
                         self.display_channels.insert(channel_id, display_channel);
-                        info!("Connected to display channel {}", channel_id);
+                        info!("Connected to display channel {} with connection_id = {}", channel_id, session_id.unwrap_or(0));
                     }
                     _ => {
                         info!("Ignoring channel type {:?} id {}", channel_type, channel_id);
@@ -163,7 +167,7 @@ impl SpiceClient {
             }
 
             // Start display channel tasks
-            let mut display_channels = std::mem::take(&mut self.display_channels);
+            let display_channels = std::mem::take(&mut self.display_channels);
             for (channel_id, mut display_channel) in display_channels {
                 let display_task = tokio::spawn(async move {
                     display_channel.run().await
@@ -186,7 +190,7 @@ impl SpiceClient {
             }
 
             // Start display channel tasks
-            let mut display_channels = std::mem::take(&mut self.display_channels);
+            let display_channels = std::mem::take(&mut self.display_channels);
             for (channel_id, mut display_channel) in display_channels {
                 wasm_bindgen_futures::spawn_local(async move {
                     if let Err(e) = display_channel.run().await {
@@ -205,7 +209,7 @@ impl SpiceClient {
         self.display_channels.get(&channel_id)?.get_primary_surface()
     }
 
-    pub fn get_video_output(&self) -> Arc<VideoOutput> {
+    pub fn get_video_output(&self) -> Arc<dyn VideoOutput> {
         self.video_output.clone()
     }
 
@@ -264,20 +268,7 @@ impl SpiceClient {
         self.main_channel = None;
         self.display_channels.clear();
         
-        // Clear video output asynchronously
-        let video_output = self.video_output.clone();
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            tokio::spawn(async move {
-                video_output.clear().await;
-            });
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            wasm_bindgen_futures::spawn_local(async move {
-                video_output.clear().await;
-            });
-        }
+        // Video output will be cleared when new frames arrive
     }
 }
 
