@@ -18,3 +18,5 @@ config.toml
 *.log
 
 node_modules/
+
+ref/
