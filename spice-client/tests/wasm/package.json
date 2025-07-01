@@ -1,0 +1,18 @@
+{
+  "name": "spice-client-wasm-tests",
+  "version": "1.0.0",
+  "description": "WebAssembly E2E tests for SPICE client",
+  "main": "test-runner.js",
+  "scripts": {
+    "test": "node test-runner.js",
+    "test:watch": "nodemon --watch ../../pkg --exec 'npm test'"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0",
+    "express": "^4.18.2",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}

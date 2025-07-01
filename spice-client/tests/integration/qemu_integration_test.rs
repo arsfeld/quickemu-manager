@@ -6,6 +6,7 @@ use spice_client::channels::{InputEvent, KeyCode, MouseButton};
 use std::time::Duration;
 use tokio::time::{timeout, sleep};
 use tracing::{info, debug, warn};
+use instant::Instant;
 
 /// Tests require QEMU container to be running
 /// Run: docker-compose -f docker/docker-compose.qemu.yml up -d
@@ -68,7 +69,7 @@ async fn test_qemu_display_channel() -> Result<(), SpiceError> {
     // Start receiving display messages
     let display_task = tokio::spawn(async move {
         let mut message_count = 0;
-        let start = std::time::Instant::now();
+        let start = instant::Instant::now();
         
         while start.elapsed() < Duration::from_secs(5) {
             match timeout(Duration::from_millis(100), display.run()).await {
@@ -137,7 +138,7 @@ async fn test_qemu_display_surface() -> Result<(), SpiceError> {
     
     // Wait for display to be ready
     let mut surface_found = false;
-    let start = std::time::Instant::now();
+    let start = instant::Instant::now();
     
     while !surface_found && start.elapsed() < Duration::from_secs(10) {
         if let Some(surface) = client.get_display_surface(0).await {
@@ -206,7 +207,7 @@ async fn test_qemu_cursor_channel() -> Result<(), SpiceError> {
     
     // Start receiving cursor messages
     let cursor_task = tokio::spawn(async move {
-        let start = std::time::Instant::now();
+        let start = instant::Instant::now();
         let mut cursor_updates = 0;
         
         while start.elapsed() < Duration::from_secs(3) {
@@ -283,7 +284,7 @@ async fn test_qemu_performance_streaming() -> Result<(), SpiceError> {
     });
     
     // Measure frame rate over time
-    let start = std::time::Instant::now();
+    let start = instant::Instant::now();
     let mut frame_count = 0;
     let mut last_frame_data = Vec::new();
     

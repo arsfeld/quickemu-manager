@@ -244,7 +244,7 @@ mod protocol_tests {
 #[cfg(test)]
 mod performance_tests {
     use super::*;
-    use std::time::Instant;
+    use instant::Instant;
     
     #[tokio::test]
     async fn test_connection_latency() -> Result<(), SpiceError> {

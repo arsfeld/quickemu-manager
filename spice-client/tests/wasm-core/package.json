@@ -1,0 +1,16 @@
+{
+  "name": "spice-client-wasm-core-tests",
+  "version": "1.0.0",
+  "description": "Lightweight WebAssembly core tests for SPICE client protocol",
+  "main": "core-e2e-test.js",
+  "scripts": {
+    "test": "node core-e2e-test.js",
+    "test:watch": "nodemon --watch . --exec 'npm test'"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
