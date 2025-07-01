@@ -27,9 +27,13 @@ docker-down:
 clean: docker-down
     cargo clean
 
-# Start WASM development environment with browser interface
+# Start WASM development environment with hot-reload
 wasm-dev:
-    cd docker && DOCKER_BUILDKIT=1 docker compose -f docker-compose.wasm.yml up --build
+    cd docker && DOCKER_BUILDKIT=1 docker compose -f docker-compose.wasm.yml --profile dev up --build
+
+# Start WASM production build (no hot-reload)
+wasm-prod:
+    cd docker && DOCKER_BUILDKIT=1 docker compose -f docker-compose.wasm.yml --profile production up --build
 
 # Build WASM only (no server) with cache optimization
 wasm-build:
@@ -43,3 +47,45 @@ wasm-down:
 wasm-clean:
     cd docker && docker compose -f docker-compose.wasm.yml down -v --rmi all
     docker system prune -f --filter label=stage=builder
+
+# Test SPICE connection with native client
+test-spice host="localhost" port="5900":
+    RUST_LOG=trace cargo run --bin spice-test-client -- \
+        --host {{host}} \
+        --port {{port}} \
+        --duration 10 \
+        -vv
+
+# End-to-end SPICE test with Docker (Debug Test Server + test client)
+test-e2e:
+    @echo "Starting end-to-end SPICE test with debug server..."
+    @echo "Server logs will show detailed protocol interactions"
+    cd docker && docker compose -f docker-compose.e2e-debug.yml up --build --abort-on-container-exit --exit-code-from spice-test-client
+
+# Clean up test containers
+test-e2e-clean:
+    cd docker && docker compose -f docker-compose.e2e-debug.yml down -v
+
+# Run lightweight WASM core E2E tests (no browser, just protocol/networking)
+test-wasm-core:
+    @echo "Starting WASM core E2E tests (protocol only)..."
+    cd docker && docker compose -f docker-compose.wasm-core-e2e.yml up --build --abort-on-container-exit --exit-code-from wasm-core-test
+
+# Clean up WASM core test containers
+test-wasm-core-clean:
+    cd docker && docker compose -f docker-compose.wasm-core-e2e.yml down -v
+
+# Run full WASM E2E tests with browser (Playwright)
+test-wasm-full:
+    @echo "Starting full WASM E2E tests with browser..."
+    cd docker && docker compose -f docker-compose.wasm-e2e.yml up --build --abort-on-container-exit --exit-code-from wasm-test-runner
+
+# Clean up WASM test containers
+test-wasm-full-clean:
+    cd docker && docker compose -f docker-compose.wasm-e2e.yml down -v
+
+# Run all E2E tests (native + WASM core + WASM full)
+test-e2e-all: test-e2e test-wasm-core test-wasm-full
+
+# Run just essential E2E tests (native + WASM core)
+test-e2e-essential: test-e2e test-wasm-core
