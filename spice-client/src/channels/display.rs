@@ -51,7 +51,22 @@ impl DisplayChannel {
         
         // Send display init message after handshake
         info!("Sending SPICE_MSGC_DISPLAY_INIT");
-        connection.send_message(SPICE_MSGC_DISPLAY_INIT, &[]).await?;
+        
+        // Create the display init message
+        let display_init = SpiceMsgcDisplayInit {
+            cache_id: 0,
+            cache_size: 0,  // No cache for now
+            glz_dict_id: 0,
+        };
+        
+        // Serialize the message
+        use binrw::BinWrite;
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        display_init.write(&mut cursor)
+            .map_err(|e| SpiceError::Protocol(format!("Failed to write display init: {}", e)))?;
+        let init_data = cursor.into_inner();
+        
+        connection.send_message(SPICE_MSGC_DISPLAY_INIT, &init_data).await?;
         
         Ok(Self {
             connection,
@@ -74,7 +89,22 @@ impl DisplayChannel {
         
         // Send display init message after handshake
         info!("Sending SPICE_MSGC_DISPLAY_INIT");
-        connection.send_message(SPICE_MSGC_DISPLAY_INIT, &[]).await?;
+        
+        // Create the display init message
+        let display_init = SpiceMsgcDisplayInit {
+            cache_id: 0,
+            cache_size: 0,  // No cache for now
+            glz_dict_id: 0,
+        };
+        
+        // Serialize the message
+        use binrw::BinWrite;
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        display_init.write(&mut cursor)
+            .map_err(|e| SpiceError::Protocol(format!("Failed to write display init: {}", e)))?;
+        let init_data = cursor.into_inner();
+        
+        connection.send_message(SPICE_MSGC_DISPLAY_INIT, &init_data).await?;
         
         Ok(Self {
             connection,
@@ -98,7 +128,22 @@ impl DisplayChannel {
         
         // Send display init message after handshake
         info!("Sending SPICE_MSGC_DISPLAY_INIT");
-        connection.send_message(SPICE_MSGC_DISPLAY_INIT, &[]).await?;
+        
+        // Create the display init message
+        let display_init = SpiceMsgcDisplayInit {
+            cache_id: 0,
+            cache_size: 0,  // No cache for now
+            glz_dict_id: 0,
+        };
+        
+        // Serialize the message
+        use binrw::BinWrite;
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        display_init.write(&mut cursor)
+            .map_err(|e| SpiceError::Protocol(format!("Failed to write display init: {}", e)))?;
+        let init_data = cursor.into_inner();
+        
+        connection.send_message(SPICE_MSGC_DISPLAY_INIT, &init_data).await?;
         
         Ok(Self {
             connection,

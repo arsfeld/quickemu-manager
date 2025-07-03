@@ -2,14 +2,14 @@ use crate::error::{Result, SpiceError};
 use crate::protocol::*;
 use crate::transport::{Transport, TransportConfig, create_transport};
 use crate::wire_format::{read_message, write_message};
-use bincode::Options;
-use bytes::BytesMut;
+use binrw::io::Cursor;
+use binrw::{BinRead, BinWrite};
 use rsa::pkcs8::DecodePublicKey;
 use rsa::{Oaep, RsaPublicKey};
 use rsa::rand_core::OsRng;
 use sha1::Sha1;
 use std::time::Duration;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 /// A connection to a SPICE channel
 pub struct ChannelConnection {
@@ -20,6 +20,8 @@ pub struct ChannelConnection {
     connection_id: Option<u32>,
     next_serial: u64,
     handshake_complete: bool,
+    server_common_caps: Vec<u32>,
+    server_channel_caps: Vec<u32>,
 }
 
 /// Encrypt a password using RSA-OAEP with SHA-1
@@ -66,6 +68,8 @@ impl ChannelConnection {
             connection_id: None,
             next_serial: 1,
             handshake_complete: false,
+            server_common_caps: Vec::new(),
+            server_channel_caps: Vec::new(),
         })
     }
     
@@ -104,6 +108,8 @@ impl ChannelConnection {
             connection_id: None,
             next_serial: 1,
             handshake_complete: false,
+            server_common_caps: Vec::new(),
+            server_channel_caps: Vec::new(),
         })
     }
 
@@ -130,11 +136,14 @@ impl ChannelConnection {
         self.send_link_message().await?;
 
         // Wait for RedLinkReply
-        let reply_data = self.wait_for_link_reply().await?;
+        let reply = self.wait_for_link_reply().await?;
 
         // Send authentication if needed
         if self.password.is_some() {
-            self.send_auth(&reply_data).await?;
+            self.send_auth(&reply).await?;
+            
+            // Read final link result after authentication
+            self.read_link_result().await?;
         }
 
         self.handshake_complete = true;
@@ -150,7 +159,7 @@ impl ChannelConnection {
         
         // Common capabilities for all channels
         // TODO: Add SPICE_COMMON_CAP_MINI_HEADER support once we implement 6-byte header handling
-        // TODO: test-display-no-ssl may not support AUTH_SELECTION, try without capabilities
+        // NOTE: test-display-no-ssl may not support AUTH_SELECTION
         // let common_cap_bits = 1 << SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION;
         // debug!("Common capability bits: PROTOCOL_AUTH_SELECTION={}, combined={}",
         //        SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION, common_cap_bits);
@@ -192,19 +201,15 @@ impl ChannelConnection {
         };
 
         // Serialize and send header
-        let header_bytes = bincode::DefaultOptions::new()
-            .with_little_endian()
-            .with_fixint_encoding()
-            .serialize(&header)?;
+        let mut header_bytes = Vec::new();
+        header.write_le(&mut Cursor::new(&mut header_bytes))?;
         
         self.transport.write_all(&header_bytes).await
             .map_err(|e| SpiceError::Io(e))?;
 
         // Serialize and send link message
-        let link_bytes = bincode::DefaultOptions::new()
-            .with_little_endian()
-            .with_fixint_encoding()
-            .serialize(&link_mess)?;
+        let mut link_bytes = Vec::new();
+        link_mess.write_le(&mut Cursor::new(&mut link_bytes))?;
         
         self.transport.write_all(&link_bytes).await
             .map_err(|e| SpiceError::Io(e))?;
@@ -227,7 +232,7 @@ impl ChannelConnection {
         Ok(())
     }
 
-    async fn wait_for_link_reply(&mut self) -> Result<Vec<u8>> {
+    async fn wait_for_link_reply(&mut self) -> Result<SpiceLinkReplyData> {
         let mut header_buf = vec![0u8; 16];
         
         // Read the header
@@ -241,10 +246,8 @@ impl ChannelConnection {
             total_read += n;
         }
 
-        let header: SpiceLinkHeader = bincode::DefaultOptions::new()
-            .with_little_endian()
-            .with_fixint_encoding()
-            .deserialize(&header_buf)?;
+        let mut cursor = Cursor::new(&header_buf);
+        let header = SpiceLinkHeader::read_le(&mut cursor)?;
 
         if header.magic != SPICE_MAGIC {
             return Err(SpiceError::Protocol(format!("Invalid magic in link reply: {:#x}", header.magic)));
@@ -263,22 +266,98 @@ impl ChannelConnection {
         }
 
         debug!("Received SpiceLinkReply, size: {}", header.size);
-        Ok(reply_data)
+        
+        // Parse the SpiceLinkReplyData structure manually
+        if reply_data.len() < 178 { // 4 + 162 + 4 + 4 + 4
+            return Err(SpiceError::Protocol("Link reply data too short".to_string()));
+        }
+        
+        let error = u32::from_le_bytes([reply_data[0], reply_data[1], reply_data[2], reply_data[3]]);
+        let mut pub_key = [0u8; 162];
+        pub_key.copy_from_slice(&reply_data[4..166]);
+        let num_common_caps = u32::from_le_bytes([reply_data[166], reply_data[167], reply_data[168], reply_data[169]]);
+        let num_channel_caps = u32::from_le_bytes([reply_data[170], reply_data[171], reply_data[172], reply_data[173]]);
+        let caps_offset = u32::from_le_bytes([reply_data[174], reply_data[175], reply_data[176], reply_data[177]]);
+        
+        let reply = SpiceLinkReplyData {
+            error,
+            pub_key,
+            num_common_caps,
+            num_channel_caps,
+            caps_offset,
+        };
+        
+        // Parse capabilities if present
+        let caps_start = reply.caps_offset as usize;
+        if caps_start < reply_data.len() {
+            let mut offset = caps_start;
+            
+            // Read common capabilities
+            for _ in 0..reply.num_common_caps {
+                if offset + 4 <= reply_data.len() {
+                    let cap = u32::from_le_bytes([
+                        reply_data[offset],
+                        reply_data[offset + 1],
+                        reply_data[offset + 2],
+                        reply_data[offset + 3],
+                    ]);
+                    self.server_common_caps.push(cap);
+                    offset += 4;
+                }
+            }
+            
+            // Read channel capabilities
+            for _ in 0..reply.num_channel_caps {
+                if offset + 4 <= reply_data.len() {
+                    let cap = u32::from_le_bytes([
+                        reply_data[offset],
+                        reply_data[offset + 1],
+                        reply_data[offset + 2],
+                        reply_data[offset + 3],
+                    ]);
+                    self.server_channel_caps.push(cap);
+                    offset += 4;
+                }
+            }
+        }
+        
+        debug!("Server capabilities - common: {:?}, channel: {:?}", 
+               self.server_common_caps, self.server_channel_caps);
+        
+        Ok(reply)
     }
 
-    async fn send_auth(&mut self, reply_data: &[u8]) -> Result<()> {
-        if reply_data.len() < 174 {
-            return Err(SpiceError::Protocol("Link reply too short for auth".to_string()));
+    async fn send_auth(&mut self, reply: &SpiceLinkReplyData) -> Result<()> {
+        if reply.error != 0 {
+            return Err(SpiceError::Protocol(format!("Server returned error: {}", reply.error)));
         }
 
-        let error_code = u32::from_le_bytes([reply_data[0], reply_data[1], reply_data[2], reply_data[3]]);
-        if error_code != 0 {
-            return Err(SpiceError::Protocol(format!("Server returned error: {}", error_code)));
-        }
-
-        let pub_key = &reply_data[4..166];
+        let pub_key = &reply.pub_key;
         let password = self.password.as_ref().unwrap();
         
+        // Check if server supports AUTH_SELECTION
+        let supports_auth_selection = self.server_common_caps.iter()
+            .any(|&cap| cap & (1 << SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION) != 0);
+        
+        if supports_auth_selection {
+            // Step 1: Send authentication mechanism selection
+            info!("Sending authentication mechanism selection (SPICE auth)");
+            let auth_mechanism = SpiceLinkAuthMechanism {
+                auth_mechanism: SPICE_COMMON_CAP_AUTH_SPICE,
+            };
+            
+            let mut auth_mech_bytes = Vec::new();
+            auth_mechanism.write_le(&mut Cursor::new(&mut auth_mech_bytes))?;
+            
+            self.transport.write_all(&auth_mech_bytes).await
+                .map_err(|e| SpiceError::Io(e))?;
+            
+            debug!("Sent authentication mechanism: SPICE_COMMON_CAP_AUTH_SPICE");
+        } else {
+            debug!("Server does not support AUTH_SELECTION, skipping mechanism selection");
+        }
+        
+        // Step 2: Send encrypted password
         info!("Encrypting password for authentication");
         let encrypted = encrypt_password(password, pub_key)?;
 
@@ -286,6 +365,35 @@ impl ChannelConnection {
             .map_err(|e| SpiceError::Io(e))?;
 
         debug!("Sent encrypted password");
+        Ok(())
+    }
+    
+    async fn read_link_result(&mut self) -> Result<()> {
+        // The server sends a 4-byte result after authentication
+        let mut result_buf = vec![0u8; 4];
+        let mut total_read = 0;
+        
+        while total_read < 4 {
+            match self.transport.read(&mut result_buf[total_read..]).await {
+                Ok(0) => {
+                    return Err(SpiceError::Protocol("Connection closed while reading link result".to_string()));
+                }
+                Ok(n) => {
+                    total_read += n;
+                }
+                Err(e) => {
+                    return Err(SpiceError::Io(e));
+                }
+            }
+        }
+        
+        let result = u32::from_le_bytes([result_buf[0], result_buf[1], result_buf[2], result_buf[3]]);
+        
+        if result != 0 {
+            return Err(SpiceError::Protocol(format!("Authentication failed with error code: {}", result)));
+        }
+        
+        debug!("Link authentication successful");
         Ok(())
     }
 

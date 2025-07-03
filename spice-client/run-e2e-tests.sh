@@ -18,6 +18,12 @@ TEST_DURATION="30"
 CLEAN_AFTER="true"
 VERBOSE=""
 DRY_RUN=""
+HEADLESS=""
+
+# Ensure display variables are defined (may be empty)
+WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}"
+DISPLAY="${DISPLAY:-}"
+XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}"
 
 # Help function
 show_help() {
@@ -28,6 +34,8 @@ Usage: $(basename "$0") [implementation] [server] [options]
 
 IMPLEMENTATIONS:
   native        Native Rust binary (default)
+  sdl2          SDL2 backend implementation
+  gtk4          GTK4 backend implementation
   wasm-core     WebAssembly core (no browser)
   all           Run all implementations
 
@@ -41,6 +49,7 @@ OPTIONS:
   -k, --keep            Don't clean up after tests
   -v, --verbose         Enable verbose output
   -n, --dry-run         Show what would be run without executing
+  --headless            Run GUI tests in headless mode (default: show UI)
   -h, --help            Show this help message
 
 EXAMPLES:
@@ -67,7 +76,7 @@ parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
             # Implementations
-            native|wasm-core|all)
+            native|sdl2|gtk4|wasm-core|all)
                 IMPLEMENTATION="$1"
                 shift
                 ;;
@@ -93,6 +102,10 @@ parse_args() {
                 DRY_RUN="true"
                 shift
                 ;;
+            --headless)
+                HEADLESS="true"
+                shift
+                ;;
             -h|--help)
                 show_help
                 exit 0
@@ -114,6 +127,7 @@ print_config() {
     echo "Duration: ${TEST_DURATION}s"
     echo "Clean after: $CLEAN_AFTER"
     echo "Verbose: ${VERBOSE:-false}"
+    echo "Headless: ${HEADLESS:-false}"
     echo ""
 }
 
@@ -149,6 +163,12 @@ run_test() {
         native)
             test_profile="test-native"
             ;;
+        sdl2)
+            test_profile="test-sdl2"
+            ;;
+        gtk4)
+            test_profile="test-gtk4"
+            ;;
         wasm-core)
             test_profile="test-wasm-core"
             ;;
@@ -158,6 +178,34 @@ run_test() {
     
     # Export test configuration
     export TEST_DURATION
+    
+    # Configure display based on headless mode
+    if [[ -n "$HEADLESS" ]]; then
+        # Force headless mode
+        export DISPLAY=":99"
+        unset WAYLAND_DISPLAY
+        unset USE_GTK_BINARY
+    else
+        # For GTK4, use the visual binary unless explicitly testing
+        if [[ "$impl" == "gtk4" ]]; then
+            export USE_GTK_BINARY="true"
+            echo -e "${BLUE}GTK4: Using visual binary (rusty-spice-gtk)${NC}"
+        fi
+        
+        # Pass through host display environment
+        if [[ -n "$WAYLAND_DISPLAY" ]]; then
+            export WAYLAND_DISPLAY
+            export XDG_RUNTIME_DIR
+            echo -e "${BLUE}Using Wayland display: $WAYLAND_DISPLAY${NC}"
+        elif [[ -n "$DISPLAY" ]]; then
+            export DISPLAY
+            echo -e "${BLUE}Using X11 display: $DISPLAY${NC}"
+        else
+            # Fallback to headless if no display available
+            export DISPLAY=":99"
+            echo -e "${YELLOW}No display found, falling back to headless mode${NC}"
+        fi
+    fi
     
     # Build command
     local cmd="docker compose -f docker/docker-compose.yml $profiles"
@@ -216,7 +264,7 @@ main() {
     
     case $IMPLEMENTATION in
         all)
-            implementations=("native" "wasm-core")
+            implementations=("native" "sdl2" "gtk4" "wasm-core")
             ;;
         *)
             implementations=("$IMPLEMENTATION")

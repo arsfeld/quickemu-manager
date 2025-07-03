@@ -57,15 +57,13 @@ pub enum SpiceError {
     #[error("Connection closed")]
     ConnectionClosed,
     
-    /// Serialization/deserialization error from bincode.
+    /// Serialization/deserialization error from binrw.
     #[error("Serialization error: {0}")]
     Serialization(String),
-}
-
-impl From<Box<bincode::ErrorKind>> for SpiceError {
-    fn from(err: Box<bincode::ErrorKind>) -> Self {
-        SpiceError::Serialization(err.to_string())
-    }
+    
+    /// Binary read/write error from binrw.
+    #[error("Binary I/O error: {0}")]
+    BinRw(#[from] binrw::Error),
 }
 
 /// A type alias for `Result<T, SpiceError>`.

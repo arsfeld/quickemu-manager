@@ -152,6 +152,23 @@ pub struct SpiceLinkReplyData {
     pub caps_offset: u32,
 }
 
+// Authentication mechanism selection structure
+#[binrw]
+#[brw(little)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SpiceLinkAuthMechanism {
+    pub auth_mechanism: u32,  // SPICE_COMMON_CAP_AUTH_* value
+}
+
+// Mini header structure (for future implementation)
+#[binrw]
+#[brw(little)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SpiceMiniDataHeader {
+    pub msg_type: u16,
+    pub msg_size: u32,
+}
+
 // Main channel messages
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
@@ -317,6 +334,19 @@ pub const SPICE_MAIN_CAP_SEAMLESS_MIGRATE: u32 = 3;
 
 // Client to server display channel messages
 pub const SPICE_MSGC_DISPLAY_INIT: u16 = 101;
+
+// Display init message structure
+// Based on spice-protocol/spice/protocol.h
+#[binrw]
+#[brw(little)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SpiceMsgcDisplayInit {
+    pub cache_id: u8,
+    #[br(pad_before = 7)]  // Padding for 8-byte alignment before i64
+    #[bw(pad_before = 7)]
+    pub cache_size: i64,
+    pub glz_dict_id: u8,
+}
 
 // Main channel message type constants
 pub const SPICE_MSG_MAIN_MIGRATE_BEGIN: u16 = 101;

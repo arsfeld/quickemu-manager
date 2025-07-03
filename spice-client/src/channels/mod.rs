@@ -373,12 +373,8 @@ impl ChannelConnection {
     
     /// Get common capabilities supported by this client
     fn get_common_capabilities(&self) -> Vec<u32> {
-        use crate::protocol::*;
-        // TODO: test-display-no-ssl may not support capabilities
-        // Temporarily return empty capabilities for testing
-        vec![
-            // SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION,
-        ]
+        // Don't advertise any capabilities for test-display-no-ssl
+        vec![]
     }
     
     /// Get channel-specific capabilities
@@ -506,14 +502,40 @@ impl ChannelConnection {
             let link_data = self.read_raw(reply.size as usize).await?;
             info!("Link message data: {:?}", link_data);
             
-            // Parse the link reply data to determine authentication requirements
-            if link_data.len() >= 4 {
-                let error_code = u32::from_le_bytes([link_data[0], link_data[1], link_data[2], link_data[3]]);
-                
-                if error_code == 0 && link_data.len() >= 166 {
-                    // Server sent public key at offset 4, length 162
-                    let pub_key_der = &link_data[4..166];
+            // Parse the link reply data using binrw
+            use binrw::BinRead;
+            let mut data_cursor = std::io::Cursor::new(&link_data);
+            let reply_data = SpiceLinkReplyData::read(&mut data_cursor)
+                .map_err(|e| SpiceError::Protocol(format!("Failed to parse link reply data: {}", e)))?;
+            
+            info!("Link reply: error={}, num_common_caps={}, num_channel_caps={}", 
+                 reply_data.error, reply_data.num_common_caps, reply_data.num_channel_caps);
+            
+            if reply_data.error == 0 {
+                    // Server sent public key
+                    let pub_key_der = &reply_data.pub_key;
                     info!("Server provided RSA public key (162 bytes)");
+                    
+                    // Check if we advertised AUTH_SELECTION capability
+                    let common_caps = self.get_common_capabilities();
+                    let advertised_auth_selection = common_caps.contains(&SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION);
+                    
+                    if advertised_auth_selection {
+                        // Send authentication mechanism selection
+                        info!("Sending authentication mechanism selection (SPICE_COMMON_CAP_AUTH_SPICE)");
+                        let auth_mechanism = SpiceLinkAuthMechanism {
+                            auth_mechanism: SPICE_COMMON_CAP_AUTH_SPICE,
+                        };
+                        
+                        use binrw::BinWrite;
+                        let mut auth_cursor = std::io::Cursor::new(Vec::new());
+                        auth_mechanism.write(&mut auth_cursor)
+                            .map_err(|e| SpiceError::Protocol(format!("Failed to write auth mechanism: {}", e)))?;
+                        let auth_bytes = auth_cursor.into_inner();
+                        self.send_raw(&auth_bytes).await?;
+                    } else {
+                        info!("Not sending auth mechanism (AUTH_SELECTION not advertised)");
+                    }
                     
                     // Determine what to encrypt based on whether we have a password
                     let password_to_encrypt = if let Some(ref password) = self.password {
@@ -561,11 +583,23 @@ impl ChannelConnection {
                         )));
                     }
                     info!("✓ Authentication successful - Link result is 0 (SPICE_LINK_ERR_OK)");
-                } else if error_code != 0 {
-                    return Err(SpiceError::Protocol(format!(
-                        "Link stage failed with error code: {}", error_code
-                    )));
-                }
+            } else {
+                // Handle link error
+                let error_name = match reply_data.error {
+                    1 => "SPICE_LINK_ERR_ERROR",
+                    2 => "SPICE_LINK_ERR_INVALID_MAGIC",
+                    3 => "SPICE_LINK_ERR_INVALID_DATA",
+                    4 => "SPICE_LINK_ERR_VERSION_MISMATCH",
+                    5 => "SPICE_LINK_ERR_NEED_SECURED",
+                    6 => "SPICE_LINK_ERR_NEED_UNSECURED",
+                    7 => "SPICE_LINK_ERR_PERMISSION_DENIED",
+                    8 => "SPICE_LINK_ERR_BAD_CONNECTION_ID",
+                    9 => "SPICE_LINK_ERR_CHANNEL_NOT_AVAILABLE",
+                    _ => "Unknown error",
+                };
+                return Err(SpiceError::Protocol(format!(
+                    "Link stage failed with error code: {} ({})", reply_data.error, error_name
+                )));
             }
         }
 

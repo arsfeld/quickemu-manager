@@ -2,8 +2,7 @@
 mod tests {
     use crate::protocol::*;
     use binrw::{BinRead, BinWrite};
-    use std::io::Cursor;
-    use bincode;
+    use binrw::io::Cursor;
 
     #[test]
     fn test_spice_magic_constants() {
@@ -280,10 +279,15 @@ mod tests {
             bottom: 768,
         };
 
-        let serialized = bincode::serialize(&rect).unwrap();
-        assert_eq!(serialized.len(), 16); // 4 i32 values
+        // Write to bytes
+        let mut cursor = Cursor::new(Vec::new());
+        rect.write_le(&mut cursor).unwrap();
+        let bytes = cursor.into_inner();
+        assert_eq!(bytes.len(), 16); // 4 i32 values
         
-        let deserialized: SpiceRect = bincode::deserialize(&serialized).unwrap();
+        // Read back
+        let mut cursor = Cursor::new(&bytes);
+        let deserialized = SpiceRect::read_le(&mut cursor).unwrap();
         assert_eq!(rect.left, deserialized.left);
         assert_eq!(rect.top, deserialized.top);
         assert_eq!(rect.right, deserialized.right);
@@ -294,10 +298,15 @@ mod tests {
     fn test_spice_point_serialization() {
         let point = SpicePoint { x: 512, y: 384 };
 
-        let serialized = bincode::serialize(&point).unwrap();
-        assert_eq!(serialized.len(), 8); // 2 i32 values
+        // Write to bytes
+        let mut cursor = Cursor::new(Vec::new());
+        point.write_le(&mut cursor).unwrap();
+        let bytes = cursor.into_inner();
+        assert_eq!(bytes.len(), 8); // 2 i32 values
         
-        let deserialized: SpicePoint = bincode::deserialize(&serialized).unwrap();
+        // Read back
+        let mut cursor = Cursor::new(&bytes);
+        let deserialized = SpicePoint::read_le(&mut cursor).unwrap();
         assert_eq!(point.x, deserialized.x);
         assert_eq!(point.y, deserialized.y);
     }
@@ -306,10 +315,15 @@ mod tests {
     fn test_spice_size_serialization() {
         let size = SpiceSize { width: 1920, height: 1080 };
 
-        let serialized = bincode::serialize(&size).unwrap();
-        assert_eq!(serialized.len(), 8); // 2 u32 values
+        // Write to bytes
+        let mut cursor = Cursor::new(Vec::new());
+        size.write_le(&mut cursor).unwrap();
+        let bytes = cursor.into_inner();
+        assert_eq!(bytes.len(), 8); // 2 u32 values
         
-        let deserialized: SpiceSize = bincode::deserialize(&serialized).unwrap();
+        // Read back
+        let mut cursor = Cursor::new(&bytes);
+        let deserialized = SpiceSize::read_le(&mut cursor).unwrap();
         assert_eq!(size.width, deserialized.width);
         assert_eq!(size.height, deserialized.height);
     }

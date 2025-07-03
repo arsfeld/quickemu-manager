@@ -4,18 +4,23 @@
 
 1. [Protocol Overview](#protocol-overview)
 2. [Architecture](#architecture)
-3. [Protocol Basics](#protocol-basics)
-4. [Channel Types](#channel-types)
-5. [Message Format](#message-format)
-6. [Authentication](#authentication)
-7. [Data Types](#data-types)
-8. [Compression Methods](#compression-methods)
-9. [Image Formats](#image-formats)
-10. [Audio Formats](#audio-formats)
-11. [Video Codecs](#video-codecs)
-12. [Capabilities](#capabilities)
-13. [Migration](#migration)
-14. [Protocol Constants](#protocol-constants)
+3. [Link Protocol](#link-protocol)
+4. [Protocol Basics](#protocol-basics)
+5. [Channel Types](#channel-types)
+6. [Message Format](#message-format)
+7. [Authentication](#authentication)
+8. [Data Types](#data-types)
+9. [Compression Methods](#compression-methods)
+10. [Image Formats](#image-formats)
+11. [Audio Formats](#audio-formats)
+12. [Video Codecs](#video-codecs)
+13. [Capabilities](#capabilities)
+14. [Migration](#migration)
+15. [Error Handling](#error-handling)
+16. [Performance Considerations](#performance-considerations)
+17. [Extension Guidelines](#extension-guidelines)
+18. [Protocol Constants](#protocol-constants)
+19. [References](#references)
 
 ## Protocol Overview
 
@@ -53,6 +58,125 @@ The SPICE protocol follows a client-server architecture where:
 4. **Channel Setup**: Additional channels are established as needed
 5. **Data Exchange**: Bidirectional communication over established channels
 
+### Detailed Startup Sequence
+
+1. **Client → Server**: Send SpiceLinkHeader
+   ```c
+   SpiceLinkHeader header = {
+       .magic = SPICE_MAGIC,
+       .major_version = SPICE_VERSION_MAJOR,
+       .minor_version = SPICE_VERSION_MINOR,
+       .size = sizeof(SpiceLinkMess) + capabilities_size
+   };
+   ```
+
+2. **Client → Server**: Send SpiceLinkMess
+   - Contains channel type, channel ID, and client capabilities
+
+3. **Server → Client**: Send SpiceLinkHeader + SpiceLinkReply
+   - Contains error code, RSA public key, and server capabilities
+
+4. **Client → Server**: Send SpiceLinkAuthMechanism
+   - Selects authentication method (SPICE or SASL)
+
+5. **Client → Server**: Send authentication data
+   - For SPICE auth: RSA-encrypted password/ticket
+   - For SASL: SASL authentication exchange
+
+6. **Server → Client**: Send link result
+   - On success: Channel is established
+   - On failure: Connection is closed with error
+
+## Link Protocol
+
+### Protocol Magic and Version
+
+The SPICE protocol uses a magic number for identification:
+
+```c
+#define SPICE_MAGIC         (*(uint32_t*)"REDQ")
+#define SPICE_VERSION_MAJOR 2
+#define SPICE_VERSION_MINOR 2
+```
+
+### Link Header
+
+The initial connection uses this header structure:
+
+```c
+typedef struct SpiceLinkHeader {
+    uint32_t magic;         // SPICE_MAGIC
+    uint32_t major_version; // SPICE_VERSION_MAJOR
+    uint32_t minor_version; // SPICE_VERSION_MINOR
+    uint32_t size;          // Size of link message
+} SpiceLinkHeader;
+```
+
+### Link Message
+
+After the header, the client sends a link message:
+
+```c
+typedef struct SpiceLinkMess {
+    uint32_t connection_id;
+    uint8_t  channel_type;
+    uint8_t  channel_id;
+    uint32_t num_common_caps;
+    uint32_t num_channel_caps;
+    uint32_t caps_offset;
+    // Followed by capabilities array
+} SpiceLinkMess;
+```
+
+### Link Reply
+
+The server responds with:
+
+```c
+typedef struct SpiceLinkReply {
+    uint32_t error;         // SpiceLinkErr
+    uint8_t  pub_key[SPICE_TICKET_PUBKEY_BYTES];
+    uint32_t num_common_caps;
+    uint32_t num_channel_caps;
+    uint32_t caps_offset;
+    // Followed by capabilities array
+} SpiceLinkReply;
+```
+
+### Authentication Methods
+
+```c
+typedef enum {
+    SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION = 0,
+    SPICE_COMMON_CAP_AUTH_SPICE = 1,
+    SPICE_COMMON_CAP_AUTH_SASL = 2,
+    SPICE_COMMON_CAP_MINI_HEADER = 3,
+} SpiceCommonCap;
+```
+
+### Link Authentication
+
+After receiving the public key, the client sends encrypted credentials:
+
+```c
+typedef struct SpiceLinkAuthMechanism {
+    uint32_t auth_mechanism;  // SPICE_COMMON_CAP_AUTH_*
+} SpiceLinkAuthMechanism;
+
+// For SPICE auth:
+typedef struct SpiceLinkEncryptedTicket {
+    uint8_t encrypted_data[SPICE_TICKET_KEY_PAIR_LENGTH/8];
+} SpiceLinkEncryptedTicket;
+```
+
+### Security Constants
+
+```c
+#define SPICE_TICKET_KEY_PAIR_LENGTH 1024
+#define SPICE_TICKET_PUBKEY_BYTES    (SPICE_TICKET_KEY_PAIR_LENGTH/8)
+#define SPICE_MAX_PASSWORD_LENGTH    60
+```
+
 ## Protocol Basics
 
 ### Byte Order
@@ -74,7 +198,9 @@ typedef int64_t  int64;
 
 ### Message Structure
 
-Every SPICE message follows this basic structure:
+SPICE supports two header formats:
+
+#### Standard Data Header
 
 ```c
 typedef struct SpiceDataHeader {
@@ -83,6 +209,22 @@ typedef struct SpiceDataHeader {
     uint32_t size;       // Size of message body
     uint32_t sub_list;   // Offset to sub-message list (0 if none)
 } SpiceDataHeader;
+```
+
+#### Mini Header (when SPICE_COMMON_CAP_MINI_HEADER is set)
+
+```c
+typedef struct SpiceMiniDataHeader {
+    uint16_t type;       // Message type
+    uint32_t size;       // Size of message body
+} SpiceMiniDataHeader;
+```
+
+### Message Constants
+
+```c
+#define SPICE_MAX_CHANNELS 64
+#define SPICE_MAIN_CHANNEL 1
 ```
 
 ## Channel Types
@@ -481,26 +623,89 @@ typedef struct SpiceMsgMainInit {
 } SpiceMsgMainInit;
 ```
 
-### Common Capabilities
+### Capability Definitions
 
-#### Main Channel
-- `SPICE_MAIN_CAP_SEMI_SEAMLESS_MIGRATE`: Semi-seamless migration
-- `SPICE_MAIN_CAP_AGENT_CONNECTED_TOKENS`: Agent token support
-- `SPICE_MAIN_CAP_SEAMLESS_MIGRATE`: Seamless migration
+#### Common Capabilities
 
-#### Display Channel
-- `SPICE_DISPLAY_CAP_SIZED_STREAM`: Sized stream support
-- `SPICE_DISPLAY_CAP_MONITORS_CONFIG`: Multiple monitor support
-- `SPICE_DISPLAY_CAP_COMPOSITE`: Composite command support
-- `SPICE_DISPLAY_CAP_A8_SURFACE`: 8-bit alpha surface support
+```c
+enum {
+    SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION = 0,
+    SPICE_COMMON_CAP_AUTH_SPICE = 1,
+    SPICE_COMMON_CAP_AUTH_SASL = 2,
+    SPICE_COMMON_CAP_MINI_HEADER = 3,
+};
+```
 
-#### Inputs Channel
-- `SPICE_INPUTS_CAP_KEY_SCANCODE`: Scancode support
+#### Main Channel Capabilities
 
-#### Playback/Record Channels
-- `SPICE_PLAYBACK_CAP_CELT_0_5_1`: CELT codec support
-- `SPICE_PLAYBACK_CAP_VOLUME`: Volume control
-- `SPICE_PLAYBACK_CAP_OPUS`: Opus codec support
+```c
+enum {
+    SPICE_MAIN_CAP_SEMI_SEAMLESS_MIGRATE = 0,
+    SPICE_MAIN_CAP_NAME_AND_UUID = 1,
+    SPICE_MAIN_CAP_AGENT_CONNECTED_TOKENS = 2,
+    SPICE_MAIN_CAP_SEAMLESS_MIGRATE = 3,
+};
+```
+
+#### Display Channel Capabilities
+
+```c
+enum {
+    SPICE_DISPLAY_CAP_SIZED_STREAM = 0,
+    SPICE_DISPLAY_CAP_MONITORS_CONFIG = 1,
+    SPICE_DISPLAY_CAP_COMPOSITE = 2,
+    SPICE_DISPLAY_CAP_A8_SURFACE = 3,
+    SPICE_DISPLAY_CAP_STREAM_REPORT = 4,
+    SPICE_DISPLAY_CAP_LZ4_COMPRESSION = 5,
+    SPICE_DISPLAY_CAP_PREF_COMPRESSION = 6,
+    SPICE_DISPLAY_CAP_GL_SCANOUT = 7,
+    SPICE_DISPLAY_CAP_MULTI_CODEC = 8,
+    SPICE_DISPLAY_CAP_CODEC_MJPEG = 9,
+    SPICE_DISPLAY_CAP_CODEC_VP8 = 10,
+    SPICE_DISPLAY_CAP_CODEC_H264 = 11,
+    SPICE_DISPLAY_CAP_PREF_VIDEO_CODEC_TYPE = 12,
+    SPICE_DISPLAY_CAP_CODEC_VP9 = 13,
+    SPICE_DISPLAY_CAP_CODEC_H265 = 14,
+};
+```
+
+#### Inputs Channel Capabilities
+
+```c
+enum {
+    SPICE_INPUTS_CAP_KEY_SCANCODE = 0,
+};
+```
+
+#### Cursor Channel Capabilities
+
+```c
+enum {
+    SPICE_CURSOR_CAP_SIZE = 0,
+    SPICE_CURSOR_CAP_POSITION = 1,
+};
+```
+
+#### Playback Channel Capabilities
+
+```c
+enum {
+    SPICE_PLAYBACK_CAP_CELT_0_5_1 = 0,
+    SPICE_PLAYBACK_CAP_VOLUME = 1,
+    SPICE_PLAYBACK_CAP_LATENCY = 2,
+    SPICE_PLAYBACK_CAP_OPUS = 3,
+};
+```
+
+#### Record Channel Capabilities
+
+```c
+enum {
+    SPICE_RECORD_CAP_CELT_0_5_1 = 0,
+    SPICE_RECORD_CAP_VOLUME = 1,
+    SPICE_RECORD_CAP_OPUS = 2,
+};
+```
 
 ## Migration
 
@@ -621,26 +826,24 @@ typedef enum SpiceImageType {
 } SpiceImageType;
 ```
 
-### Display Capabilities
+### Notify Severity Levels
 
 ```c
-enum {
-    SPICE_DISPLAY_CAP_SIZED_STREAM = 0,
-    SPICE_DISPLAY_CAP_MONITORS_CONFIG = 1,
-    SPICE_DISPLAY_CAP_COMPOSITE = 2,
-    SPICE_DISPLAY_CAP_A8_SURFACE = 3,
-    SPICE_DISPLAY_CAP_STREAM_REPORT = 4,
-    SPICE_DISPLAY_CAP_LZ4_COMPRESSION = 5,
-    SPICE_DISPLAY_CAP_PREF_COMPRESSION = 6,
-    SPICE_DISPLAY_CAP_GL_SCANOUT = 7,
-    SPICE_DISPLAY_CAP_MULTI_CODEC = 8,
-    SPICE_DISPLAY_CAP_CODEC_MJPEG = 9,
-    SPICE_DISPLAY_CAP_CODEC_VP8 = 10,
-    SPICE_DISPLAY_CAP_CODEC_H264 = 11,
-    SPICE_DISPLAY_CAP_PREF_VIDEO_CODEC_TYPE = 12,
-    SPICE_DISPLAY_CAP_CODEC_VP9 = 13,
-    SPICE_DISPLAY_CAP_CODEC_H265 = 14,
-};
+typedef enum {
+    SPICE_NOTIFY_SEVERITY_INFO = 0,
+    SPICE_NOTIFY_SEVERITY_WARN = 1,
+    SPICE_NOTIFY_SEVERITY_ERROR = 2,
+} SpiceNotifySeverity;
+```
+
+### Notify Visibility
+
+```c
+typedef enum {
+    SPICE_NOTIFY_VISIBILITY_LOW = 0,
+    SPICE_NOTIFY_VISIBILITY_MEDIUM = 1,
+    SPICE_NOTIFY_VISIBILITY_HIGH = 2,
+} SpiceNotifyVisibility;
 ```
 
 ### Common Message Constants

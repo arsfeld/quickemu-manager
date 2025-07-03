@@ -8,6 +8,8 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
+use binrw::io::Cursor;
+use binrw::{BinRead, BinWrite};
 
 /// Mock SPICE server for testing
 #[derive(Clone)]
@@ -52,24 +54,21 @@ impl MockSpiceServer {
         self.addr
     }
     
-    pub async fn send_display_message(&self, msg_type: u16, data: &impl serde::Serialize) -> Result<()> {
-        self.send_message_to_channel(0, msg_type, data).await
+    pub async fn send_display_message(&self, msg_type: u16, data_bytes: Vec<u8>) -> Result<()> {
+        self.send_message_to_channel(0, msg_type, data_bytes).await
     }
     
-    pub async fn send_cursor_message(&self, msg_type: u16, data: &impl serde::Serialize) -> Result<()> {
-        self.send_message_to_channel(0, msg_type, data).await
+    pub async fn send_cursor_message(&self, msg_type: u16, data_bytes: Vec<u8>) -> Result<()> {
+        self.send_message_to_channel(0, msg_type, data_bytes).await
     }
     
-    pub async fn send_display_message_to_channel(&self, channel_id: u8, msg_type: u16, data: &impl serde::Serialize) -> Result<()> {
-        self.send_message_to_channel(channel_id, msg_type, data).await
+    pub async fn send_display_message_to_channel(&self, channel_id: u8, msg_type: u16, data_bytes: Vec<u8>) -> Result<()> {
+        self.send_message_to_channel(channel_id, msg_type, data_bytes).await
     }
     
-    async fn send_message_to_channel(&self, channel_id: u8, msg_type: u16, data: &impl serde::Serialize) -> Result<()> {
+    async fn send_message_to_channel(&self, channel_id: u8, msg_type: u16, data_bytes: Vec<u8>) -> Result<()> {
         let mut connections = self.connections.lock().await;
         if let Some(stream) = connections.get_mut(&channel_id) {
-            let data_bytes = bincode::serialize(data)
-                .map_err(|e| crate::error::SpiceError::Protocol(format!("Serialize error: {}", e)))?;
-            
             let header = SpiceDataHeader {
                 serial: 1,
                 msg_type,
@@ -77,12 +76,10 @@ impl MockSpiceServer {
                 sub_list: 0,
             };
             
-            let header_bytes = bincode::serialize(&header)
-                .map_err(|e| crate::error::SpiceError::Protocol(format!("Serialize error: {}", e)))?;
-            let mut padded_header = vec![0u8; 24];
-            padded_header[..header_bytes.len()].copy_from_slice(&header_bytes);
+            let mut header_bytes = Vec::new();
+            header.write_le(&mut Cursor::new(&mut header_bytes))?;
             
-            stream.write_all(&padded_header).await?;
+            stream.write_all(&header_bytes).await?;
             stream.write_all(&data_bytes).await?;
             stream.flush().await?;
         }
@@ -97,8 +94,8 @@ async fn handle_handshake(stream: &mut TcpStream) -> Result<()> {
     stream.read_exact(&mut header_buf).await?;
     
     // Read link message
-    let header: SpiceLinkHeader = bincode::deserialize(&header_buf)
-        .map_err(|e| crate::error::SpiceError::Protocol(format!("Deserialize error: {}", e)))?;
+    let mut cursor = Cursor::new(&header_buf);
+    let header = SpiceLinkHeader::read_le(&mut cursor)?;
     let mut mess_buf = vec![0u8; header.size as usize];
     stream.read_exact(&mut mess_buf).await?;
     
@@ -110,8 +107,8 @@ async fn handle_handshake(stream: &mut TcpStream) -> Result<()> {
         size: 0,
     };
     
-    let reply_bytes = bincode::serialize(&reply)
-        .map_err(|e| crate::error::SpiceError::Protocol(format!("Serialize error: {}", e)))?;
+    let mut reply_bytes = Vec::new();
+    reply.write_le(&mut Cursor::new(&mut reply_bytes))?;
     stream.write_all(&reply_bytes).await?;
     stream.flush().await?;
     

@@ -14,7 +14,7 @@ This document compares the Rust SPICE client implementation with the HTML5/JavaS
 | **Async Model** | async/await (Tokio/wasm-bindgen-futures) | Event-driven callbacks |
 | **Transport** | Abstracted via Transport trait | Direct WebSocket usage |
 | **State Management** | Type-safe enums and structs | String-based state machine |
-| **Message Serialization** | bincode with binrw | Manual ArrayBuffer/DataView |
+| **Message Serialization** | binrw | Manual ArrayBuffer/DataView |
 
 ## Detailed Comparison
 
@@ -72,7 +72,7 @@ Both implementations follow the same SPICE protocol:
 |------|------|-------|
 | **Connection** | Transport abstraction | Direct WebSocket |
 | **Message Assembly** | Built-in with async read | SpiceWireReader for buffering |
-| **Serialization** | bincode/binrw | Manual byte manipulation |
+| **Serialization** | binrw | Manual byte manipulation |
 | **Error Handling** | Result<T, SpiceError> | Exceptions/state machine |
 
 ### 4. Message Processing

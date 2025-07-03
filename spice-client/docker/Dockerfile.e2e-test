@@ -2,6 +2,9 @@
 FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
 WORKDIR /build
 
+# Accept build argument for features
+ARG FEATURES=""
+
 # Plan the build - this analyzes Cargo.toml and creates a recipe
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
@@ -10,31 +13,74 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 # Build dependencies using the recipe
 FROM chef AS builder
+ARG FEATURES=""
+
+# Install build dependencies for GTK4 and SDL2
+RUN if [ -n "$FEATURES" ]; then \
+        apt-get update && \
+        if echo "$FEATURES" | grep -q "backend-sdl2"; then \
+            apt-get install -y libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev; \
+        fi && \
+        if echo "$FEATURES" | grep -q "backend-gtk4"; then \
+            apt-get install -y libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev; \
+        fi && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
 COPY --from=planner /build/recipe.json recipe.json
 # Build dependencies - this layer is cached until dependencies change
-RUN cargo chef cook --release --recipe-path recipe.json --no-default-features
+RUN if [ -z "$FEATURES" ]; then \
+        cargo chef cook --release --recipe-path recipe.json --no-default-features; \
+    else \
+        cargo chef cook --release --recipe-path recipe.json --no-default-features --features "$FEATURES"; \
+    fi
 
 # Build the application
+ARG BUILD_GTK_BINARY=""
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY tests ./tests
-RUN cargo build --release --bin spice-e2e-test --no-default-features
+RUN if [ -z "$FEATURES" ]; then \
+        cargo build --release --bin spice-e2e-test --no-default-features; \
+    else \
+        cargo build --release --bin spice-e2e-test --no-default-features --features "$FEATURES"; \
+        if [ -n "$BUILD_GTK_BINARY" ] && echo "$FEATURES" | grep -q "backend-gtk4"; then \
+            cargo build --release --bin rusty-spice-gtk --no-default-features --features "$FEATURES"; \
+        fi; \
+    fi
 
 # Runtime stage
 FROM debian:bookworm-slim
+
+# Accept build argument for features to conditionally install dependencies
+ARG FEATURES=""
 
 # Install runtime dependencies
 RUN apt-get update && \
     apt-get install -y \
     ca-certificates \
     libssl3 \
-    && rm -rf /var/lib/apt/lists/*
+    xvfb \
+    && if echo "$FEATURES" | grep -q "backend-sdl2"; then \
+        apt-get install -y libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-ttf-2.0-0; \
+    fi && \
+    if echo "$FEATURES" | grep -q "backend-gtk4"; then \
+        apt-get install -y libgtk-4-1 libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 gstreamer1.0-plugins-good; \
+    fi && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy the binary from builder
-COPY --from=builder /build/target/release/spice-e2e-test /app/spice-e2e-test
+# Create app directory
+RUN mkdir -p /app
 
-# Make it executable
-RUN chmod +x /app/spice-e2e-test
+# Copy binaries from builder
+ARG BUILD_GTK_BINARY=""
+RUN --mount=type=bind,from=builder,source=/build/target/release,target=/release \
+    cp /release/spice-e2e-test /app/spice-e2e-test && \
+    chmod +x /app/spice-e2e-test && \
+    if [ -f /release/rusty-spice-gtk ]; then \
+        cp /release/rusty-spice-gtk /app/rusty-spice-gtk && \
+        chmod +x /app/rusty-spice-gtk; \
+    fi
 
 WORKDIR /app
 

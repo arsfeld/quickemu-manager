@@ -67,12 +67,13 @@ sequenceDiagram
         Conn->>Conn: handshake()
         Conn->>Server: SpiceLinkHeader {magic="REDQ", v2.2}
         Conn->>Server: SpiceLinkMess {channel_type=Main, caps}
-        Server->>Conn: SpiceLinkReply {error=0, RSA pubkey}
+        Server->>Conn: SpiceLinkHeader + SpiceLinkReplyData {error=0, RSA pubkey, caps}
         
         alt Has Password
+            Conn->>Server: SpiceLinkAuthMechanism {auth=SPICE}
             Conn->>Conn: encrypt_password(RSA)
             Conn->>Server: Encrypted password
-            Server->>Conn: Auth result
+            Server->>Conn: Link result (4 bytes)
         end
         
         Main->>Main: initialize()
@@ -91,7 +92,13 @@ sequenceDiagram
         
         Conn->>Server: SpiceLinkHeader {connection_id=session_id}
         Conn->>Server: SpiceLinkMess {channel_type=Display, caps}
-        Server->>Conn: SpiceLinkReply
+        Server->>Conn: SpiceLinkHeader + SpiceLinkReplyData
+        
+        alt Has Password
+            Conn->>Server: SpiceLinkAuthMechanism {auth=SPICE}
+            Conn->>Server: Encrypted password
+            Server->>Conn: Link result (4 bytes)
+        end
         
         Display->>Server: SPICE_MSGC_DISPLAY_INIT
         Server->>Display: Display configuration
@@ -186,16 +193,20 @@ Each channel connection follows this handshake sequence:
 1. **Send Link Message** (`send_link_message`)
    - Header: `SpiceLinkHeader` with magic "REDQ", version 2.2
    - Message: `SpiceLinkMess` with channel type, ID, and capabilities
-   - Capabilities include: AUTH_SELECTION, MINI_HEADER, channel-specific caps
+   - Capabilities: channel-specific caps (no MINI_HEADER support yet)
 
 2. **Receive Link Reply** (`wait_for_link_reply`)
-   - Server sends `SpiceLinkReply` with error code and RSA public key
+   - Server sends `SpiceLinkHeader` followed by `SpiceLinkReplyData`
+   - Contains error code, RSA public key, and server capabilities
    - Client validates magic number and version
+   - Client stores server capabilities for feature negotiation
 
 3. **Authentication** (if password set)
+   - Client sends `SpiceLinkAuthMechanism` selecting SPICE auth method
    - Client encrypts password using RSA-OAEP with SHA-1
    - Sends encrypted password to server
-   - Server validates and responds
+   - Reads 4-byte link result from server
+   - Server validates and responds with success/error code
 
 ### 3. Main Channel Initialization
 
@@ -272,9 +283,11 @@ The client handles various error conditions:
 
 2. **Channel Isolation**: Each channel runs in its own task/future
 
-3. **Binary Protocol**: Uses `bincode` for serialization with little-endian byte order
+3. **Binary Protocol**: Uses `binrw` for serialization with little-endian byte order
 
 4. **Capability Negotiation**: Client advertises supported features, server responds with mutual capabilities
+   - Server capabilities stored in `server_common_caps` and `server_channel_caps`
+   - Used for protocol feature detection (e.g., mini headers, compression methods)
 
 5. **Flow Control**: ACK-based flow control prevents overwhelming the client
 
@@ -296,5 +309,23 @@ The client handles various error conditions:
    - Server sends NOTIFY for warnings/errors
    - Severity levels: Info, Warn, Error
    - Client logs or displays to user
+
+## Recent Protocol Compliance Improvements
+
+The following critical protocol compliance issues have been addressed:
+
+1. **Authentication Mechanism Selection**: Now properly sends `SpiceLinkAuthMechanism` message before password
+2. **Link Reply Parsing**: Uses proper `SpiceLinkReplyData` structure parsing instead of manual byte extraction
+3. **Capability Storage**: Server capabilities are now stored and available for protocol decisions
+4. **Link Result Handling**: Properly reads and validates the 4-byte link result after authentication
+5. **Mini Header Support**: Removed advertisement of unsupported `SPICE_COMMON_CAP_MINI_HEADER` capability
+
+These changes ensure the client follows the exact SPICE protocol specification for the handshake sequence:
+1. Client → Server: `SpiceLinkHeader`
+2. Client → Server: `SpiceLinkMess` + capabilities
+3. Server → Client: `SpiceLinkHeader` + `SpiceLinkReplyData` + capabilities
+4. Client → Server: `SpiceLinkAuthMechanism` (select SPICE or SASL)
+5. Client → Server: Authentication data (encrypted password)
+6. Server → Client: Link result (success/failure)
 
 This architecture provides a robust, cross-platform SPICE client implementation that can run both as a native application and in web browsers while maintaining protocol compatibility with standard SPICE servers.

@@ -1,5 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use spice_client::protocol::*;
+use binrw::{BinRead, BinWrite};
+use binrw::io::Cursor;
 
 fn benchmark_header_serialization(c: &mut Criterion) {
     let header = SpiceDataHeader {
@@ -11,15 +13,20 @@ fn benchmark_header_serialization(c: &mut Criterion) {
     
     c.bench_function("serialize SpiceDataHeader", |b| {
         b.iter(|| {
-            bincode::serialize(&header).unwrap()
+            let mut cursor = Cursor::new(Vec::new());
+            header.write_le(&mut cursor).unwrap();
+            cursor.into_inner()
         });
     });
     
-    let serialized = bincode::serialize(&header).unwrap();
+    let mut cursor = Cursor::new(Vec::new());
+    header.write_le(&mut cursor).unwrap();
+    let serialized = cursor.into_inner();
     
     c.bench_function("deserialize SpiceDataHeader", |b| {
         b.iter(|| {
-            let _: SpiceDataHeader = bincode::deserialize(black_box(&serialized)).unwrap();
+            let mut cursor = Cursor::new(black_box(&serialized));
+            let _: SpiceDataHeader = SpiceDataHeader::read_le(&mut cursor).unwrap();
         });
     });
 }
@@ -36,15 +43,20 @@ fn benchmark_link_message_serialization(c: &mut Criterion) {
     
     c.bench_function("serialize SpiceLinkMess", |b| {
         b.iter(|| {
-            bincode::serialize(&link_mess).unwrap()
+            let mut cursor = Cursor::new(Vec::new());
+            link_mess.write_le(&mut cursor).unwrap();
+            cursor.into_inner()
         });
     });
     
-    let serialized = bincode::serialize(&link_mess).unwrap();
+    let mut cursor = Cursor::new(Vec::new());
+    link_mess.write_le(&mut cursor).unwrap();
+    let serialized = cursor.into_inner();
     
     c.bench_function("deserialize SpiceLinkMess", |b| {
         b.iter(|| {
-            let _: SpiceLinkMess = bincode::deserialize(black_box(&serialized)).unwrap();
+            let mut cursor = Cursor::new(black_box(&serialized));
+            let _: SpiceLinkMess = SpiceLinkMess::read_le(&mut cursor).unwrap();
         });
     });
 }
