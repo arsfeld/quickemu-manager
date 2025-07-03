@@ -1,0 +1,71 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Install just
+      uses: extractions/setup-just@v1
+    
+    - name: Run unit tests
+      run: just test-unit
+    
+    - name: Build E2E test binary
+      run: cargo build --release --bin spice-e2e-test
+    
+    - name: Run basic E2E test
+      run: just test-e2e
+      
+    - name: Run comprehensive E2E test
+      run: just test-e2e-full
+      
+    - name: Upload test logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-logs
+        path: |
+          docker/logs/
+          docker/captures/
+        retention-days: 7
+    
+    - name: Clean up
+      if: always()
+      run: |
+        just test-e2e-clean
+        just test-e2e-full-clean

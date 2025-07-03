@@ -1,0 +1,55 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies for SPICE server
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    meson \
+    ninja-build \
+    pkg-config \
+    libglib2.0-dev \
+    libpixman-1-dev \
+    libssl-dev \
+    libjpeg-dev \
+    libopus-dev \
+    libsasl2-dev \
+    python3-pyparsing \
+    netcat-openbsd \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    liblz4-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build spice-protocol from source
+RUN git clone https://gitlab.freedesktop.org/spice/spice-protocol.git /spice-protocol && \
+    cd /spice-protocol && \
+    git checkout master && \
+    meson setup builddir && \
+    meson compile -C builddir && \
+    meson install -C builddir
+
+# Build SPICE server from source
+RUN git clone https://gitlab.freedesktop.org/spice/spice.git /spice && \
+    cd /spice && \
+    git checkout master && \
+    meson setup builddir && \
+    meson compile -C builddir && \
+    meson install -C builddir
+
+# Update library cache
+RUN ldconfig
+
+# The test-display-no-ssl binary should be available after build
+WORKDIR /spice/builddir/server/tests
+
+# Expose SPICE port (test-display-no-ssl defaults to 5912)
+EXPOSE 5912
+
+# Health check
+HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=3 \
+    CMD nc -z localhost 5912 || exit 1
+
+# Run the test display server (defaults to port 5912)
+CMD ["./test-display-no-ssl"]

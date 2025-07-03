@@ -126,29 +126,10 @@ async-trait = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 wasm-bindgen-test = "0.3"
 
-[[example]]
-name = "dioxus_integration"
-path = "examples/dioxus_integration.rs"
-required-features = []
-
-[[example]]
-name = "basic_client"
-path = "examples/basic_client.rs"
-
 [[test]]
 name = "integration"
 path = "tests/integration/mod.rs"
 required-features = []
-
-[[test]]
-name = "mocks"
-path = "tests/mocks/mod.rs"
-required-features = []
-
-[[bench]]
-name = "protocol"
-path = "benches/protocol.rs"
-harness = false
 
 [[bin]]
 name = "spice-test-client"

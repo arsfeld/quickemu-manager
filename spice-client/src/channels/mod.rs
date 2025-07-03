@@ -374,9 +374,9 @@ impl ChannelConnection {
     /// Get common capabilities supported by this client
     fn get_common_capabilities(&self) -> Vec<u32> {
         use crate::protocol::*;
-        // Start with just AUTH_SPICE capability
+        // AUTH_SELECTION is required by the server
         vec![
-            SPICE_COMMON_CAP_AUTH_SPICE,
+            SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION,
         ]
     }
     
@@ -428,13 +428,15 @@ impl ChannelConnection {
         info!("Channel caps bitmap: {:?}", channel_caps_bitmap);
         
         // Create link message
+        info!("Creating SpiceLinkMess with connection_id={}, channel_type={}, channel_id={}", 
+              connection_id, self.channel_type as u8, self.channel_id);
         let link_mess = SpiceLinkMess {
             connection_id,
             channel_type: self.channel_type as u8,
             channel_id: self.channel_id,
             num_common_caps: common_caps_bitmap.len() as u32,
             num_channel_caps: channel_caps_bitmap.len() as u32,
-            caps_offset: std::mem::size_of::<SpiceLinkMess>() as u32,
+            caps_offset: 20, // Actual serialized size with padding
         };
 
         // Use binrw for proper SPICE protocol serialization

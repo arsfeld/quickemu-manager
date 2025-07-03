@@ -1,0 +1,42 @@
+# Build stage with cargo-chef for optimal caching
+FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+WORKDIR /build
+
+# Plan the build - this analyzes Cargo.toml and creates a recipe
+FROM chef AS planner
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+RUN cargo chef prepare --recipe-path recipe.json
+
+# Build dependencies using the recipe
+FROM chef AS builder
+COPY --from=planner /build/recipe.json recipe.json
+# Build dependencies - this layer is cached until dependencies change
+RUN cargo chef cook --release --recipe-path recipe.json --no-default-features
+
+# Build the application
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY tests ./tests
+RUN cargo build --release --bin spice-e2e-test --no-default-features
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && \
+    apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the binary from builder
+COPY --from=builder /build/target/release/spice-e2e-test /app/spice-e2e-test
+
+# Make it executable
+RUN chmod +x /app/spice-e2e-test
+
+WORKDIR /app
+
+# Default command - will be overridden by docker-compose
+CMD ["/app/spice-e2e-test"]

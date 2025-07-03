@@ -1,0 +1,151 @@
+# Unified Docker Compose configuration for all E2E tests
+# Use profiles to select specific test scenarios:
+#   - server-debug: SPICE debug test server
+#   - server-qemu: QEMU-based SPICE server
+#   - test-native: Native Rust client tests
+#   - test-wasm-core: WebAssembly core tests (no browser)
+
+# Common configuration for all services
+x-common-variables: &common-variables
+  RUST_LOG: debug
+  RUST_BACKTRACE: 1
+
+# Network configuration
+networks:
+  spice-test:
+    driver: bridge
+
+# Shared volumes
+volumes:
+  test-results:
+  qemu-images:
+
+services:
+  # ====================
+  # SPICE Servers
+  # ====================
+  
+  # Debug test server (lightweight, for protocol testing)
+  spice-debug-server:
+    profiles: ["server-debug"]
+    build:
+      context: .
+      dockerfile: Dockerfile.spice-debug
+    networks:
+      - spice-test
+    ports:
+      - "5900:5912"  # Map internal port 5912 to host port 5900
+    environment:
+      <<: *common-variables
+      SPICE_DEBUG: 1
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5912"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # QEMU-based server (realistic, full-featured)
+  spice-qemu-server:
+    profiles: ["server-qemu"]
+    build:
+      context: ../tests/docker
+      dockerfile: Dockerfile.spice-server
+    networks:
+      - spice-test
+    ports:
+      - "5900:5900"
+      - "5901:5901"  # VNC for debugging
+    volumes:
+      - qemu-images:/images
+    environment:
+      <<: *common-variables
+      SPICE_PORT: 5900
+      VNC_PORT: 5901
+      ENABLE_TICKETING: "false"
+      ENABLE_COMPRESSION: "true"
+      ENABLE_USB_REDIRECT: "false"
+    command: /usr/local/bin/start-qemu.sh
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5900"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ====================
+  # Support Services
+  # ====================
+
+  # WebSocket proxy for WASM tests
+  websocket-proxy:
+    profiles: ["test-wasm-core"]
+    build:
+      context: .
+      dockerfile: Dockerfile.ws-proxy
+    networks:
+      - spice-test
+    ports:
+      - "8080:8080"
+    environment:
+      <<: *common-variables
+      PROXY_PORT: 8080
+      SPICE_HOST: ${SPICE_SERVER:-spice-debug-server}
+      SPICE_PORT: 5900
+    depends_on:
+      - ${SPICE_SERVER:-spice-debug-server}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ====================
+  # Test Clients
+  # ====================
+
+  # Native E2E test client
+  test-native:
+    profiles: ["test-native"]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.e2e-test
+    networks:
+      - spice-test
+    volumes:
+      - test-results:/results
+    environment:
+      <<: *common-variables
+      SPICE_HOST: ${SPICE_SERVER:-spice-debug-server}
+      SPICE_PORT: ${SPICE_PORT:-5912}  # Default to 5912 for debug server
+      TEST_DURATION: ${TEST_DURATION:-30}
+      TEST_FLAGS: ${TEST_FLAGS:---require-display-channel --require-display-updates}
+    depends_on:
+      - ${SPICE_SERVER:-spice-debug-server}
+    command: [
+      "sh", "-c",
+      "sleep 5 && /app/spice-e2e-test --host $$SPICE_HOST --port $$SPICE_PORT --duration $$TEST_DURATION $$TEST_FLAGS -vv"
+    ]
+
+  # WASM Core test client (no browser)
+  test-wasm-core:
+    profiles: ["test-wasm-core"]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.wasm-core-test
+    networks:
+      - spice-test
+    volumes:
+      - test-results:/results
+    environment:
+      <<: *common-variables
+      WS_URL: ws://websocket-proxy:8080
+      TEST_DURATION: ${TEST_DURATION:-30}
+    depends_on:
+      - websocket-proxy
+    command: >
+      wasmtime 
+      --net 
+      --env WS_URL=${WS_URL:-ws://websocket-proxy:8080}
+      --env TEST_DURATION=${TEST_DURATION:-30}
+      /app/spice-client.wasm
+
+
