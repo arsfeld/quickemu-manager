@@ -149,11 +149,12 @@ impl ChannelConnection {
         let mut channel_caps: Vec<u32> = vec![];
         
         // Common capabilities for all channels
-        let common_cap_bits = (1 << SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION) |
-                              (1 << SPICE_COMMON_CAP_MINI_HEADER);
-        debug!("Common capability bits: PROTOCOL_AUTH_SELECTION={}, MINI_HEADER={}, combined={}",
-               SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION, SPICE_COMMON_CAP_MINI_HEADER, common_cap_bits);
-        common_caps.push(common_cap_bits);
+        // TODO: Add SPICE_COMMON_CAP_MINI_HEADER support once we implement 6-byte header handling
+        // TODO: test-display-no-ssl may not support AUTH_SELECTION, try without capabilities
+        // let common_cap_bits = 1 << SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION;
+        // debug!("Common capability bits: PROTOCOL_AUTH_SELECTION={}, combined={}",
+        //        SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION, common_cap_bits);
+        // common_caps.push(common_cap_bits);
         
         // Channel-specific capabilities
         match self.channel_type {
