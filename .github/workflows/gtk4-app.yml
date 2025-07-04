@@ -29,9 +29,9 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: macos-latest
-            target: x86_64-apple-darwin
+            target: aarch64-apple-darwin  # Native build on ARM64 runners
           - os: macos-latest
-            target: aarch64-apple-darwin
+            target: x86_64-apple-darwin   # Cross-compile from ARM64 to x86_64
 
     steps:
     - uses: actions/checkout@v4
@@ -52,12 +52,19 @@ jobs:
           libcairo2-dev \
           libpango1.0-dev \
           libgdk-pixbuf2.0-dev \
-          pkg-config
+          pkg-config \
+          libgstreamer1.0-dev \
+          libgstreamer-plugins-base1.0-dev \
+          gstreamer1.0-plugins-base \
+          gstreamer1.0-plugins-good \
+          gstreamer1.0-plugins-bad \
+          gstreamer1.0-plugins-ugly \
+          gstreamer1.0-libav
 
     - name: Install system dependencies (macOS)
       if: matrix.os == 'macos-latest'
       run: |
-        brew install gtk4 libadwaita pkg-config
+        brew install gtk4 libadwaita pkg-config gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly
 
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -80,10 +87,14 @@ jobs:
     - name: Build GTK4 App
       run: |
         cd gtk4-app
+        # Set PKG_CONFIG_ALLOW_CROSS only for x86_64 cross-compilation on ARM64 macOS
+        if [[ "${{ matrix.target }}" == "x86_64-apple-darwin" && "${{ runner.os }}" == "macOS" ]]; then
+          export PKG_CONFIG_ALLOW_CROSS=1
+        fi
         cargo build --release --target ${{ matrix.target }}
 
     - name: Run tests
-      if: matrix.target == 'x86_64-unknown-linux-gnu' || matrix.target == 'x86_64-apple-darwin'
+      if: matrix.target == 'x86_64-unknown-linux-gnu' || matrix.target == 'aarch64-apple-darwin'
       run: |
         cd gtk4-app
         cargo test --target ${{ matrix.target }}
