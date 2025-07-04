@@ -50,7 +50,8 @@ jobs:
       - name: Install macOS dependencies
         if: matrix.os == 'macos-latest'
         run: |
-          brew install gtk4 libadwaita gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly
+          brew install gtk4 libadwaita gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly pkg-config
+          echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
 
       - name: Build GTK4 spice app
         working-directory: spice-client
@@ -108,7 +109,7 @@ jobs:
         working-directory: spice-client
         run: |
           curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-          wasm-pack build --target web --out-dir pkg
+          wasm-pack build --target web --out-dir pkg --no-default-features
 
       - name: Upload WASM artifacts
         uses: actions/upload-artifact@v4
@@ -157,12 +158,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt update
-          sudo apt install -y libgtk-4-dev libadwaita-1-dev libwebkit2gtk-4.1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
+          sudo apt install -y libgtk-4-dev libadwaita-1-dev libwebkit2gtk-4.1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev libxdo-dev
 
       - name: Install macOS dependencies
         if: matrix.os == 'macos-latest'
         run: |
-          brew install gtk4 libadwaita gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly
+          brew install gtk4 libadwaita gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly pkg-config
+          echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
 
       - name: Build GTK4 app (Linux/macOS only)
         if: matrix.os != 'windows-latest'
