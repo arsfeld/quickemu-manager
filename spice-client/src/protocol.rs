@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use binrw::binrw;
+use serde::{Deserialize, Serialize};
 
 pub const SPICE_MAGIC: u32 = 0x51444552; // "REDQ" - official SPICE protocol magic
 pub const SPICE_VERSION_MAJOR: u32 = 2;
@@ -95,17 +95,16 @@ impl From<u8> for ChannelType {
     }
 }
 
-
 #[binrw]
 #[brw(little)]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SpiceDataHeader {
-    pub serial: u64,      // 8 bytes
-    pub msg_type: u16,    // 2 bytes  
+    pub serial: u64,   // 8 bytes
+    pub msg_type: u16, // 2 bytes
     // NO PADDING - binrw handles this correctly
-    pub msg_size: u32,    // 4 bytes
-    pub sub_list: u32,    // 4 bytes
-}  // Total: 18 bytes
+    pub msg_size: u32, // 4 bytes
+    pub sub_list: u32, // 4 bytes
+} // Total: 18 bytes
 
 #[binrw]
 #[brw(little)]
@@ -125,7 +124,7 @@ pub struct SpiceLinkMess {
     pub channel_type: u8,
     pub channel_id: u8,
     #[br(pad_before = 2)]
-    #[bw(pad_before = 2)]  // Write 2 bytes padding for alignment
+    #[bw(pad_before = 2)] // Write 2 bytes padding for alignment
     pub num_common_caps: u32,
     pub num_channel_caps: u32,
     pub caps_offset: u32,
@@ -145,8 +144,8 @@ pub struct SpiceLinkReply {
 #[brw(little)]
 #[derive(Debug, Clone)]
 pub struct SpiceLinkReplyData {
-    pub error: u32,  // LinkError enum value
-    pub pub_key: [u8; 162],  // RSA 1024-bit public key (162 bytes)
+    pub error: u32,         // LinkError enum value
+    pub pub_key: [u8; 162], // RSA 1024-bit public key (162 bytes)
     pub num_common_caps: u32,
     pub num_channel_caps: u32,
     pub caps_offset: u32,
@@ -157,7 +156,7 @@ pub struct SpiceLinkReplyData {
 #[brw(little)]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SpiceLinkAuthMechanism {
-    pub auth_mechanism: u32,  // SPICE_COMMON_CAP_AUTH_* value
+    pub auth_mechanism: u32, // SPICE_COMMON_CAP_AUTH_* value
 }
 
 // Mini header structure (for future implementation)
@@ -342,7 +341,7 @@ pub const SPICE_MSGC_DISPLAY_INIT: u16 = 101;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SpiceMsgcDisplayInit {
     pub cache_id: u8,
-    #[br(pad_before = 7)]  // Padding for 8-byte alignment before i64
+    #[br(pad_before = 7)] // Padding for 8-byte alignment before i64
     #[bw(pad_before = 7)]
     pub cache_size: i64,
     pub glz_dict_id: u8,
@@ -491,20 +490,20 @@ pub struct SpiceMsgMainAgentTokens {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SpiceBrush {
     pub brush_type: u8,
-    #[br(pad_before = 3)]  // 3 bytes padding for alignment
+    #[br(pad_before = 3)] // 3 bytes padding for alignment
     #[bw(pad_before = 3)]
-    pub color: u32,  // Only valid for SOLID type
-    // TODO: Pattern support needs to be added
+    pub color: u32, // Only valid for SOLID type
+                    // TODO: Pattern support needs to be added
 }
 
 #[binrw]
 #[brw(little)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpiceClip {
-    pub clip_type: u8,  // ClipType enum
-    #[br(pad_before = 3)]  // 3 bytes padding for alignment before u64
+    pub clip_type: u8, // ClipType enum
+    #[br(pad_before = 3)] // 3 bytes padding for alignment before u64
     #[bw(pad_before = 3)]
-    pub data: SpiceAddress,  // Address to clip data (RectList or Path)
+    pub data: SpiceAddress, // Address to clip data (RectList or Path)
 }
 
 // SPICE_ADDRESS is a 64-bit offset from the beginning of the message body
@@ -515,7 +514,7 @@ pub type SpiceAddress = u64;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpiceDrawBase {
     pub surface_id: u32,
-    pub box_: SpiceRect,  // Note: named box_ to avoid keyword conflict
+    pub box_: SpiceRect, // Note: named box_ to avoid keyword conflict
     pub clip: SpiceClip,
 }
 
@@ -541,10 +540,10 @@ pub struct SpiceDrawFillData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpiceQMask {
     pub flags: u8,
-    #[br(pad_before = 3)]  // 3 bytes padding for alignment before SpicePoint
+    #[br(pad_before = 3)] // 3 bytes padding for alignment before SpicePoint
     #[bw(pad_before = 3)]
     pub pos: SpicePoint,
-    pub bitmap: SpiceAddress,  // Address to the mask bitmap
+    pub bitmap: SpiceAddress, // Address to the mask bitmap
 }
 
 #[binrw]
@@ -563,7 +562,7 @@ pub struct SpiceDrawCopyData {
     pub src_area: SpiceRect,
     pub rop_descriptor: u16,
     pub scale_mode: u8,
-    #[br(pad_after = 1)]  // Padding for alignment
+    #[br(pad_after = 1)] // Padding for alignment
     #[bw(pad_after = 1)]
     pub mask: SpiceQMask,
 }
@@ -585,7 +584,7 @@ pub struct SpiceDrawOpaqueData {
     pub brush: SpiceBrush,
     pub rop_descriptor: u16,
     pub scale_mode: u8,
-    #[br(pad_after = 1)]  // Padding for alignment
+    #[br(pad_after = 1)] // Padding for alignment
     #[bw(pad_after = 1)]
     pub mask: SpiceQMask,
 }
@@ -606,7 +605,7 @@ pub struct SpiceDrawBlendData {
     pub src_area: SpiceRect,
     pub rop_descriptor: u16,
     pub scale_mode: u8,
-    #[br(pad_after = 1)]  // Padding for alignment
+    #[br(pad_after = 1)] // Padding for alignment
     #[bw(pad_after = 1)]
     pub mask: SpiceQMask,
 }
@@ -619,7 +618,7 @@ pub struct SpiceStreamCreate {
     pub id: u32,
     pub flags: u8,
     pub codec_type: u8,
-    #[br(pad_before = 2)]  // 2 bytes padding for alignment
+    #[br(pad_before = 2)] // 2 bytes padding for alignment
     #[bw(pad_before = 2)]
     pub stamp: u64,
     pub stream_width: u32,
@@ -654,9 +653,9 @@ pub struct SpiceStreamDestroy {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SpiceImageDescriptor {
     pub id: u64,
-    pub type_: u8,    // ImageType enum (BITMAP, QUIC, LZ, GLZ, etc.)
-    pub flags: u8,    // ImageFlags
-    #[br(pad_before = 2)]  // 2 bytes padding for alignment
+    pub type_: u8, // ImageType enum (BITMAP, QUIC, LZ, GLZ, etc.)
+    pub flags: u8, // ImageFlags
+    #[br(pad_before = 2)] // 2 bytes padding for alignment
     #[bw(pad_before = 2)]
     pub width: u32,
     pub height: u32,
@@ -701,13 +700,13 @@ pub struct SpiceImage {
 pub struct SpiceBitmap {
     pub format: u8,
     pub flags: u8,
-    #[br(pad_before = 2)]  // 2 bytes padding
+    #[br(pad_before = 2)] // 2 bytes padding
     #[bw(pad_before = 2)]
     pub x: u32,
     pub y: u32,
     pub stride: u32,
-    pub palette: SpiceAddress,  // Address to palette data if needed
-    pub data: SpiceAddress,     // Address to bitmap data
+    pub palette: SpiceAddress, // Address to palette data if needed
+    pub data: SpiceAddress,    // Address to bitmap data
 }
 
 // Surface structures

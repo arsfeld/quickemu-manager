@@ -30,14 +30,20 @@ impl CursorChannel {
     pub async fn new(host: &str, port: u16, channel_id: u8) -> Result<Self> {
         Self::new_with_connection_id(host, port, channel_id, None).await
     }
-    
-    pub async fn new_with_connection_id(host: &str, port: u16, channel_id: u8, connection_id: Option<u32>) -> Result<Self> {
-        let mut connection = ChannelConnection::new(host, port, ChannelType::Cursor, channel_id).await?;
+
+    pub async fn new_with_connection_id(
+        host: &str,
+        port: u16,
+        channel_id: u8,
+        connection_id: Option<u32>,
+    ) -> Result<Self> {
+        let mut connection =
+            ChannelConnection::new(host, port, ChannelType::Cursor, channel_id).await?;
         if let Some(conn_id) = connection_id {
             connection.set_connection_id(conn_id);
         }
         connection.handshake().await?;
-        
+
         Ok(Self {
             connection,
             current_cursor: None,
@@ -53,13 +59,30 @@ impl CursorChannel {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub async fn new_websocket_with_auth(websocket_url: &str, channel_id: u8, auth_token: Option<String>) -> Result<Self> {
-        Self::new_websocket_with_auth_and_session(websocket_url, channel_id, auth_token, None, None).await
+    pub async fn new_websocket_with_auth(
+        websocket_url: &str,
+        channel_id: u8,
+        auth_token: Option<String>,
+    ) -> Result<Self> {
+        Self::new_websocket_with_auth_and_session(websocket_url, channel_id, auth_token, None, None)
+            .await
     }
-    
+
     #[cfg(target_arch = "wasm32")]
-    pub async fn new_websocket_with_auth_and_session(websocket_url: &str, channel_id: u8, auth_token: Option<String>, password: Option<String>, connection_id: Option<u32>) -> Result<Self> {
-        let mut connection = ChannelConnection::new_websocket_with_auth(websocket_url, ChannelType::Cursor, channel_id, auth_token).await?;
+    pub async fn new_websocket_with_auth_and_session(
+        websocket_url: &str,
+        channel_id: u8,
+        auth_token: Option<String>,
+        password: Option<String>,
+        connection_id: Option<u32>,
+    ) -> Result<Self> {
+        let mut connection = ChannelConnection::new_websocket_with_auth(
+            websocket_url,
+            ChannelType::Cursor,
+            channel_id,
+            auth_token,
+        )
+        .await?;
         if let Some(pwd) = password {
             connection.set_password(pwd);
         }
@@ -67,7 +90,7 @@ impl CursorChannel {
             connection.set_connection_id(conn_id);
         }
         connection.handshake().await?;
-        
+
         Ok(Self {
             connection,
             current_cursor: None,
@@ -107,12 +130,14 @@ impl CursorChannel {
             let x = i16::from_le_bytes([data[2], data[3]]) as i32;
             let y = i16::from_le_bytes([data[4], data[5]]) as i32;
             let trail_len = u16::from_le_bytes([data[6], data[7]]);
-            
+
             self.cursor_visible = visible;
             self.cursor_position = (x, y);
-            
-            info!("Cursor init - visible: {}, position: ({}, {}), trail: {}", 
-                  visible, x, y, trail_len);
+
+            info!(
+                "Cursor init - visible: {}, position: ({}, {}), trail: {}",
+                visible, x, y, trail_len
+            );
         }
         Ok(())
     }
@@ -120,20 +145,22 @@ impl CursorChannel {
     async fn handle_cursor_set(&mut self, data: &[u8]) -> Result<()> {
         if data.len() >= 17 {
             let cursor_header = SpiceCursorHeader {
-                unique: u64::from_le_bytes([data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]]),
+                unique: u64::from_le_bytes([
+                    data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
+                ]),
                 type_: data[8],
                 width: u16::from_le_bytes([data[9], data[10]]),
                 height: u16::from_le_bytes([data[11], data[12]]),
                 hot_spot_x: u16::from_le_bytes([data[13], data[14]]),
                 hot_spot_y: u16::from_le_bytes([data[15], data[16]]),
             };
-            
+
             let data_offset = 17;
             let data_size = (cursor_header.width * cursor_header.height * 4) as usize;
-            
+
             if data.len() >= data_offset + data_size {
                 let cursor_data = data[data_offset..data_offset + data_size].to_vec();
-                
+
                 let cursor_shape = CursorShape {
                     width: cursor_header.width,
                     height: cursor_header.height,
@@ -142,14 +169,19 @@ impl CursorChannel {
                     data: cursor_data,
                     mask: None,
                 };
-                
+
                 // Cache the cursor
-                self.cursor_cache.insert(cursor_header.unique, cursor_shape.clone());
+                self.cursor_cache
+                    .insert(cursor_header.unique, cursor_shape.clone());
                 self.current_cursor = Some(cursor_shape);
-                
-                info!("Set cursor - {}x{}, hotspot: ({}, {})", 
-                      cursor_header.width, cursor_header.height,
-                      cursor_header.hot_spot_x, cursor_header.hot_spot_y);
+
+                info!(
+                    "Set cursor - {}x{}, hotspot: ({}, {})",
+                    cursor_header.width,
+                    cursor_header.height,
+                    cursor_header.hot_spot_x,
+                    cursor_header.hot_spot_y
+                );
             }
         }
         Ok(())
@@ -159,7 +191,7 @@ impl CursorChannel {
         if data.len() >= 4 {
             let x = i16::from_le_bytes([data[0], data[1]]) as i32;
             let y = i16::from_le_bytes([data[2], data[3]]) as i32;
-            
+
             self.cursor_position = (x, y);
             debug!("Cursor moved to ({}, {})", x, y);
         }
@@ -176,16 +208,21 @@ impl CursorChannel {
         if data.len() >= 4 {
             let length = u16::from_le_bytes([data[0], data[1]]);
             let frequency = u16::from_le_bytes([data[2], data[3]]);
-            
-            debug!("Cursor trail - length: {}, frequency: {}", length, frequency);
+
+            debug!(
+                "Cursor trail - length: {}, frequency: {}",
+                length, frequency
+            );
         }
         Ok(())
     }
 
     async fn handle_cursor_inval_one(&mut self, data: &[u8]) -> Result<()> {
         if data.len() >= 8 {
-            let cache_id = u64::from_le_bytes([data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]]);
-            
+            let cache_id = u64::from_le_bytes([
+                data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
+            ]);
+
             self.cursor_cache.remove(&cache_id);
             debug!("Invalidated cursor cache entry: {}", cache_id);
         }
@@ -234,7 +271,7 @@ impl Channel for CursorChannel {
                 warn!("Unknown cursor message type: {}", header.msg_type);
             }
         }
-        
+
         Ok(())
     }
 
@@ -242,7 +279,6 @@ impl Channel for CursorChannel {
         ChannelType::Cursor
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct SpiceCursorHeader {

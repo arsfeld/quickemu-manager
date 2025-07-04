@@ -1,5 +1,5 @@
-use crate::channels::display::DisplaySurface;
 use super::VideoFrame;
+use crate::channels::display::DisplaySurface;
 use std::sync::Arc;
 
 /// Trait for video output handling
@@ -8,10 +8,10 @@ use std::sync::Arc;
 pub trait VideoOutput: Send + Sync {
     /// Update the current frame
     async fn update_frame(&self, surface: &DisplaySurface);
-    
+
     /// Get the current frame
     async fn get_current_frame(&self) -> Option<VideoFrame>;
-    
+
     /// Get the total frame count
     async fn get_frame_count(&self) -> u64;
 }
@@ -22,10 +22,10 @@ pub trait VideoOutput: Send + Sync {
 pub trait VideoOutput {
     /// Update the current frame
     async fn update_frame(&self, surface: &DisplaySurface);
-    
+
     /// Get the current frame
     async fn get_current_frame(&self) -> Option<VideoFrame>;
-    
+
     /// Get the total frame count
     async fn get_frame_count(&self) -> u64;
 }
@@ -36,7 +36,7 @@ pub fn create_video_output() -> Arc<dyn VideoOutput> {
     {
         Arc::new(super::native::NativeVideoOutput::new())
     }
-    
+
     #[cfg(target_arch = "wasm32")]
     {
         Arc::new(super::wasm::WasmVideoOutput::new())

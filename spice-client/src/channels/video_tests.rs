@@ -27,7 +27,12 @@ impl VideoFrame {
             0x1 => VideoFormat::Rgba32,
             0x2 => VideoFormat::Bgr32,
             0x3 => VideoFormat::Bgra32,
-            _ => return Err(SpiceError::Protocol(format!("Unsupported format: {}", surface.format))),
+            _ => {
+                return Err(SpiceError::Protocol(format!(
+                    "Unsupported format: {}",
+                    surface.format
+                )))
+            }
         };
 
         Ok(VideoFrame {
@@ -44,7 +49,11 @@ impl VideoFrame {
             VideoFormat::Rgba32 | VideoFormat::Bgra32 => self.data.clone(),
             VideoFormat::Rgb32 => self.convert_rgb_to_rgba(),
             VideoFormat::Bgr32 => self.convert_bgr_to_rgba(),
-            VideoFormat::Yuv420 => return Err(SpiceError::Protocol("YUV420 conversion not implemented".to_string())),
+            VideoFormat::Yuv420 => {
+                return Err(SpiceError::Protocol(
+                    "YUV420 conversion not implemented".to_string(),
+                ))
+            }
         };
 
         let png_data = self.encode_as_png(&image_data)?;
@@ -68,26 +77,29 @@ impl VideoFrame {
             rgba_data.push(chunk[2]); // R
             rgba_data.push(chunk[1]); // G
             rgba_data.push(chunk[0]); // B
-            rgba_data.push(255);       // A
+            rgba_data.push(255); // A
         }
         rgba_data
     }
 
     fn encode_as_png(&self, rgba_data: &[u8]) -> Result<Vec<u8>> {
         use std::io::Cursor;
-        
+
         let mut png_data = Vec::new();
         let mut encoder = png::Encoder::new(Cursor::new(&mut png_data), self.width, self.height);
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
-        
-        let mut writer = encoder.write_header()
+
+        let mut writer = encoder
+            .write_header()
             .map_err(|e| SpiceError::Protocol(format!("PNG header error: {}", e)))?;
-        writer.write_image_data(rgba_data)
+        writer
+            .write_image_data(rgba_data)
             .map_err(|e| SpiceError::Protocol(format!("PNG write error: {}", e)))?;
-        writer.finish()
+        writer
+            .finish()
             .map_err(|e| SpiceError::Protocol(format!("PNG finish error: {}", e)))?;
-        
+
         Ok(png_data)
     }
 }
@@ -101,7 +113,7 @@ mod tests {
         let surface = DisplaySurface {
             width: 100,
             height: 50,
-            format: 0x1, // RGBA32
+            format: 0x1,                   // RGBA32
             data: vec![255; 100 * 50 * 4], // White image
         };
 
@@ -133,16 +145,16 @@ mod tests {
             height: 2,
             format: 0x1, // RGBA32
             data: vec![
-                255, 0, 0, 255,   // Red
-                0, 255, 0, 255,   // Green
-                0, 0, 255, 255,   // Blue
-                255, 255, 255, 255 // White
+                255, 0, 0, 255, // Red
+                0, 255, 0, 255, // Green
+                0, 0, 255, 255, // Blue
+                255, 255, 255, 255, // White
             ],
         };
 
         let frame = VideoFrame::from_display_surface(&surface, 1000).unwrap();
         let data_url = frame.to_base64_data_url().unwrap();
-        
+
         assert!(data_url.starts_with("data:image/png;base64,"));
         assert!(data_url.len() > 22); // Has actual base64 data
     }
@@ -152,17 +164,20 @@ mod tests {
         let surface = DisplaySurface {
             width: 2,
             height: 1,
-            format: 0x0, // RGB32
+            format: 0x0,                      // RGB32
             data: vec![255, 0, 0, 0, 255, 0], // Red, Green
         };
 
         let frame = VideoFrame::from_display_surface(&surface, 1000).unwrap();
         let rgba_data = frame.convert_rgb_to_rgba();
-        
-        assert_eq!(rgba_data, vec![
-            255, 0, 0, 255,   // Red with alpha
-            0, 255, 0, 255    // Green with alpha
-        ]);
+
+        assert_eq!(
+            rgba_data,
+            vec![
+                255, 0, 0, 255, // Red with alpha
+                0, 255, 0, 255 // Green with alpha
+            ]
+        );
     }
 
     #[test]
@@ -170,23 +185,26 @@ mod tests {
         let surface = DisplaySurface {
             width: 2,
             height: 1,
-            format: 0x2, // BGR32
+            format: 0x2,                      // BGR32
             data: vec![0, 0, 255, 0, 255, 0], // Red (BGR), Green (BGR)
         };
 
         let frame = VideoFrame::from_display_surface(&surface, 1000).unwrap();
         let rgba_data = frame.convert_bgr_to_rgba();
-        
-        assert_eq!(rgba_data, vec![
-            255, 0, 0, 255,   // Red with alpha
-            0, 255, 0, 255    // Green with alpha
-        ]);
+
+        assert_eq!(
+            rgba_data,
+            vec![
+                255, 0, 0, 255, // Red with alpha
+                0, 255, 0, 255 // Green with alpha
+            ]
+        );
     }
 
     #[test]
     fn test_video_frame_memory_size() {
         let sizes = vec![(640, 480), (1920, 1080), (3840, 2160)];
-        
+
         for (width, height) in sizes {
             let surface = DisplaySurface {
                 width,
@@ -260,7 +278,8 @@ impl VideoFrameBuffer {
     }
 
     pub fn get_memory_usage(&self) -> usize {
-        self.frames.iter()
+        self.frames
+            .iter()
             .map(|f| f.data.len() + std::mem::size_of::<VideoFrame>())
             .sum()
     }
@@ -385,7 +404,11 @@ impl VideoStreamer {
         }
     }
 
-    pub async fn process_frame(&mut self, surface: &DisplaySurface, timestamp: u64) -> Result<Option<String>> {
+    pub async fn process_frame(
+        &mut self,
+        surface: &DisplaySurface,
+        timestamp: u64,
+    ) -> Result<Option<String>> {
         let start_time = instant::Instant::now();
 
         // Create video frame
@@ -426,7 +449,7 @@ impl VideoStreamer {
         } else {
             1.0 // Full resolution for quality >= 80
         };
-        
+
         let new_width = (frame.width as f32 * scale) as u32;
         let new_height = (frame.height as f32 * scale) as u32;
 
@@ -440,7 +463,11 @@ impl VideoStreamer {
                 VideoFormat::Rgba32 | VideoFormat::Bgra32 => frame.data.clone(),
                 VideoFormat::Rgb32 => frame.convert_rgb_to_rgba(),
                 VideoFormat::Bgr32 => frame.convert_bgr_to_rgba(),
-                VideoFormat::Yuv420 => return Err(SpiceError::Protocol("YUV420 conversion not implemented".to_string())),
+                VideoFormat::Yuv420 => {
+                    return Err(SpiceError::Protocol(
+                        "YUV420 conversion not implemented".to_string(),
+                    ))
+                }
             };
             (frame.width, frame.height, rgba_data)
         };
@@ -454,8 +481,9 @@ impl VideoStreamer {
             png::Compression::Fast
         };
 
-        let png_data = self.encode_as_png_with_compression(&image_data, width, height, compression)?;
-        
+        let png_data =
+            self.encode_as_png_with_compression(&image_data, width, height, compression)?;
+
         use base64::Engine;
         let base64 = base64::engine::general_purpose::STANDARD.encode(&png_data);
         Ok(format!("data:image/png;base64,{}", base64))
@@ -501,22 +529,27 @@ impl VideoStreamer {
         self.total_encoding_time = 0;
     }
 
-    fn downsample_frame(&self, frame: &VideoFrame, new_width: u32, new_height: u32) -> Result<Vec<u8>> {
+    fn downsample_frame(
+        &self,
+        frame: &VideoFrame,
+        new_width: u32,
+        new_height: u32,
+    ) -> Result<Vec<u8>> {
         // Simple nearest-neighbor downsampling
         let mut result = Vec::with_capacity((new_width * new_height * 4) as usize);
-        
+
         let x_ratio = frame.width as f32 / new_width as f32;
         let y_ratio = frame.height as f32 / new_height as f32;
-        
+
         for y in 0..new_height {
             for x in 0..new_width {
                 let src_x = (x as f32 * x_ratio) as u32;
                 let src_y = (y as f32 * y_ratio) as u32;
-                
+
                 let src_offset = ((src_y * frame.width + src_x) * 4) as usize;
-                
+
                 if src_offset + 3 < frame.data.len() {
-                    result.push(frame.data[src_offset]);     // R
+                    result.push(frame.data[src_offset]); // R
                     result.push(frame.data[src_offset + 1]); // G
                     result.push(frame.data[src_offset + 2]); // B
                     result.push(frame.data[src_offset + 3]); // A
@@ -526,26 +559,35 @@ impl VideoStreamer {
                 }
             }
         }
-        
+
         Ok(result)
     }
 
-    fn encode_as_png_with_compression(&self, rgba_data: &[u8], width: u32, height: u32, compression: png::Compression) -> Result<Vec<u8>> {
+    fn encode_as_png_with_compression(
+        &self,
+        rgba_data: &[u8],
+        width: u32,
+        height: u32,
+        compression: png::Compression,
+    ) -> Result<Vec<u8>> {
         use std::io::Cursor;
-        
+
         let mut png_data = Vec::new();
         let mut encoder = png::Encoder::new(Cursor::new(&mut png_data), width, height);
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
         encoder.set_compression(compression);
-        
-        let mut writer = encoder.write_header()
+
+        let mut writer = encoder
+            .write_header()
             .map_err(|e| SpiceError::Protocol(format!("PNG header error: {}", e)))?;
-        writer.write_image_data(rgba_data)
+        writer
+            .write_image_data(rgba_data)
             .map_err(|e| SpiceError::Protocol(format!("PNG write error: {}", e)))?;
-        writer.finish()
+        writer
+            .finish()
             .map_err(|e| SpiceError::Protocol(format!("PNG finish error: {}", e)))?;
-        
+
         Ok(png_data)
     }
 }
@@ -580,7 +622,8 @@ mod streaming_tests {
         let mut timestamp = 0;
         let mut successful_frames = 0;
 
-        for _ in 0..60 { // 2 seconds worth of frames
+        for _ in 0..60 {
+            // 2 seconds worth of frames
             let result = streamer.process_frame(&surface, timestamp).await.unwrap();
             if result.is_some() {
                 successful_frames += 1;
@@ -614,9 +657,18 @@ mod streaming_tests {
         }
 
         let stats = streamer.get_stats();
-        assert!(stats.frames_dropped > 0, "Should drop frames when input is too fast");
-        assert!(stats.drop_rate > 0.0 && stats.drop_rate < 1.0, "Drop rate should be between 0 and 1");
-        assert!(stats.frames_encoded < 100, "Should encode fewer frames than input");
+        assert!(
+            stats.frames_dropped > 0,
+            "Should drop frames when input is too fast"
+        );
+        assert!(
+            stats.drop_rate > 0.0 && stats.drop_rate < 1.0,
+            "Drop rate should be between 0 and 1"
+        );
+        assert!(
+            stats.frames_encoded < 100,
+            "Should encode fewer frames than input"
+        );
     }
 
     #[tokio::test]
@@ -645,8 +697,14 @@ mod streaming_tests {
         }
 
         let stats = streamer.get_stats();
-        assert!(stats.quality_level < 100, "Quality should degrade under load");
-        assert!(stats.quality_level >= 25, "Quality should not go below minimum");
+        assert!(
+            stats.quality_level < 100,
+            "Quality should degrade under load"
+        );
+        assert!(
+            stats.quality_level >= 25,
+            "Quality should not go below minimum"
+        );
     }
 
     #[tokio::test]
@@ -698,11 +756,11 @@ mod streaming_tests {
         for i in 1..results.len() {
             let (_, pixels_prev, _, _) = results[i - 1];
             let (_, pixels_curr, _, time_curr) = results[i];
-            
+
             // Encoding time should increase with resolution, but not linearly
             let pixel_ratio = pixels_curr as f32 / pixels_prev as f32;
             assert!(pixel_ratio > 1.0, "Each resolution should be larger");
-            
+
             // Basic sanity check - encoding shouldn't take more than 100ms even for 4K
             assert!(time_curr < 100, "Encoding time should be reasonable");
         }
@@ -721,17 +779,21 @@ mod streaming_tests {
 
         // Fill buffer
         let mut timestamp = 0;
-        for _ in 0..10 { // More than buffer size
+        for _ in 0..10 {
+            // More than buffer size
             streamer.process_frame(&surface, timestamp).await.unwrap();
             timestamp += 33_333;
         }
 
         let stats = streamer.get_stats();
         assert!(stats.buffer_usage <= 5, "Buffer should not exceed max size");
-        
+
         // Calculate expected memory usage
         let frame_size = 1920 * 1080 * 4 + std::mem::size_of::<VideoFrame>();
         let expected_max_memory = frame_size * 5;
-        assert!(stats.memory_usage <= expected_max_memory, "Memory usage should be bounded");
+        assert!(
+            stats.memory_usage <= expected_max_memory,
+            "Memory usage should be bounded"
+        );
     }
 }

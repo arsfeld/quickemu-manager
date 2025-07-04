@@ -1,7 +1,7 @@
 use super::{MultimediaBackend, MultimediaError, Result};
 
-pub mod display;
 pub mod audio;
+pub mod display;
 pub mod input;
 
 pub struct WasmBackend;

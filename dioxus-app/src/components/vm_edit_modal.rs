@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::models::{VM, EditVMRequest};
+use crate::models::{EditVMRequest, VM};
 use crate::server_functions::edit_vm;
 
 /// VM Edit Modal Component
@@ -38,13 +38,11 @@ pub fn VMEditModal(
         use_effect(move || {
             if is_open() {
                 vm_name.set(vm_name_orig.clone());
-                vm_ram_gb.set(
-                    if vm_ram_mb_orig >= 1024 {
-                        (vm_ram_mb_orig / 1024) as i32
-                    } else {
-                        1 // Minimum 1GB
-                    }
-                );
+                vm_ram_gb.set(if vm_ram_mb_orig >= 1024 {
+                    (vm_ram_mb_orig / 1024) as i32
+                } else {
+                    1 // Minimum 1GB
+                });
                 vm_cpu_cores.set(vm_cpu_cores_orig as i32);
                 error_message.set(String::new());
             }
@@ -59,13 +57,13 @@ pub fn VMEditModal(
         let vm_name_orig = vm_name_original.clone();
         let vm_ram_mb_orig = vm_ram_mb_original;
         let vm_cpu_cores_orig = vm_cpu_cores_original;
-        
+
         // Validate inputs
         if name.is_empty() {
             error_message.set("VM name cannot be empty".to_string());
             return;
         }
-        
+
         if cpu_cores == 0 {
             error_message.set("CPU cores must be at least 1".to_string());
             return;
@@ -78,19 +76,27 @@ pub fn VMEditModal(
 
         is_saving.set(true);
         error_message.set(String::new());
-        
+
         spawn(async move {
             let request = EditVMRequest {
                 vm_id,
-                name: if name != vm_name_orig { Some(name) } else { None },
-                ram: if ram_gb != (vm_ram_mb_orig / 1024) as i32 { 
-                    Some(format!("{}G", ram_gb)) 
-                } else { 
-                    None 
+                name: if name != vm_name_orig {
+                    Some(name)
+                } else {
+                    None
                 },
-                cpu_cores: if cpu_cores != vm_cpu_cores_orig { Some(cpu_cores) } else { None },
+                ram: if ram_gb != (vm_ram_mb_orig / 1024) as i32 {
+                    Some(format!("{}G", ram_gb))
+                } else {
+                    None
+                },
+                cpu_cores: if cpu_cores != vm_cpu_cores_orig {
+                    Some(cpu_cores)
+                } else {
+                    None
+                },
             };
-            
+
             match edit_vm(request).await {
                 Ok(()) => {
                     is_saving.set(false);
@@ -117,11 +123,11 @@ pub fn VMEditModal(
                     on_close.call(());
                 }
             },
-            
+
             div {
                 class: "bg-white rounded-lg shadow-xl p-6 max-w-md mx-4 w-full",
                 onclick: move |e| e.stop_propagation(),
-                
+
                 // Modal Header
                 div { class: "flex items-center justify-between mb-6",
                     h3 { class: "text-xl font-semibold text-gray-900", "Edit Virtual Machine" }
@@ -136,21 +142,21 @@ pub fn VMEditModal(
                         "✕"
                     }
                 }
-                
+
                 // Error Message
                 if !error_message().is_empty() {
-                    div { 
+                    div {
                         class: "mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded",
                         "{error_message()}"
                     }
                 }
-                
+
                 // Form Fields
                 div { class: "space-y-4",
-                    
+
                     // VM Name
                     div {
-                        label { 
+                        label {
                             class: "block text-sm font-medium text-gray-700 mb-1",
                             "VM Name"
                         }
@@ -163,12 +169,12 @@ pub fn VMEditModal(
                             placeholder: "Enter VM name"
                         }
                     }
-                    
+
                     // RAM Configuration
                     div {
-                        label { 
-                            class: "block text-sm font-medium text-gray-700 mb-2", 
-                            "RAM: {vm_ram_gb()} GB" 
+                        label {
+                            class: "block text-sm font-medium text-gray-700 mb-2",
+                            "RAM: {vm_ram_gb()} GB"
                         }
                         input {
                             r#type: "range",
@@ -188,12 +194,12 @@ pub fn VMEditModal(
                             span { "32 GB" }
                         }
                     }
-                    
+
                     // CPU Cores Configuration
                     div {
-                        label { 
-                            class: "block text-sm font-medium text-gray-700 mb-2", 
-                            "CPU Cores: {vm_cpu_cores()}" 
+                        label {
+                            class: "block text-sm font-medium text-gray-700 mb-2",
+                            "CPU Cores: {vm_cpu_cores()}"
                         }
                         input {
                             r#type: "range",
@@ -214,7 +220,7 @@ pub fn VMEditModal(
                         }
                     }
                 }
-                
+
                 // Action Buttons
                 div { class: "flex justify-end space-x-3 mt-6",
                     button {

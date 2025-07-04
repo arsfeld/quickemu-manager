@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::multimedia::{
-        display::{Display, DisplayMode, PixelFormat, CursorData},
-        audio::{AudioOutput, AudioFormat},
+        audio::{AudioFormat, AudioOutput},
+        display::{CursorData, Display, DisplayMode, PixelFormat},
         input::{InputHandler, KeyCode, KeyboardEvent, MouseButton, MouseEvent},
         AudioSpec, MultimediaError, Result,
     };
@@ -79,7 +79,10 @@ mod tests {
             Ok(())
         }
 
-        fn set_cursor(&mut self, _cursor: Option<crate::multimedia::display::CursorData>) -> Result<()> {
+        fn set_cursor(
+            &mut self,
+            _cursor: Option<crate::multimedia::display::CursorData>,
+        ) -> Result<()> {
             Ok(())
         }
 
@@ -105,25 +108,27 @@ mod tests {
     #[test]
     fn test_mock_display() {
         let mut display = MockDisplay::new();
-        
+
         // Test surface creation
-        display.create_surface(DisplayMode {
-            width: 1920,
-            height: 1080,
-            fullscreen: true,
-        }).unwrap();
-        
+        display
+            .create_surface(DisplayMode {
+                width: 1920,
+                height: 1080,
+                fullscreen: true,
+            })
+            .unwrap();
+
         assert_eq!(display.get_dimensions(), (1920, 1080));
         assert!(display.is_fullscreen());
-        
+
         // Test resize
         display.resize(1280, 720).unwrap();
         assert_eq!(display.get_dimensions(), (1280, 720));
-        
+
         // Test title
         display.set_title("Test Title").unwrap();
         assert_eq!(display.title, "Test Title");
-        
+
         // Test fullscreen toggle
         display.toggle_fullscreen().unwrap();
         assert!(!display.is_fullscreen());
@@ -193,33 +198,33 @@ mod tests {
     #[test]
     fn test_mock_audio() {
         let mut audio = MockAudio::new();
-        
+
         // Test initialization
         let spec = AudioSpec::default();
         audio.initialize(spec, AudioFormat::S16).unwrap();
         assert!(audio.get_spec().is_some());
-        
+
         // Test volume
         audio.set_volume(0.5).unwrap();
         assert_eq!(audio.get_volume(), 0.5);
-        
+
         // Test volume clamping
         audio.set_volume(2.0).unwrap();
         assert_eq!(audio.get_volume(), 1.0);
-        
+
         audio.set_volume(-1.0).unwrap();
         assert_eq!(audio.get_volume(), 0.0);
-        
+
         // Test queuing
         audio.queue_samples(&[0; 100]).unwrap();
         assert_eq!(audio.get_queued_size(), 100);
-        
+
         audio.queue_samples(&[0; 50]).unwrap();
         assert_eq!(audio.get_queued_size(), 150);
-        
+
         audio.clear_queue().unwrap();
         assert_eq!(audio.get_queued_size(), 0);
-        
+
         // Test pause
         assert!(!audio.is_paused());
         audio.pause(true).unwrap();
@@ -279,7 +284,7 @@ mod tests {
     #[test]
     fn test_mock_input() {
         let mut input = MockInput::new();
-        
+
         // Test keyboard handling
         let key_event = KeyboardEvent {
             key: KeyCode::A,
@@ -291,17 +296,22 @@ mod tests {
         };
         input.handle_keyboard(key_event).unwrap();
         assert_eq!(input.last_key, Some(KeyCode::A));
-        
+
         // Test mouse handling
-        let mouse_event = MouseEvent::Move { x: 100, y: 200, dx: 10, dy: 20 };
+        let mouse_event = MouseEvent::Move {
+            x: 100,
+            y: 200,
+            dx: 10,
+            dy: 20,
+        };
         input.handle_mouse(mouse_event).unwrap();
         assert_eq!(input.last_mouse_pos, (100, 200));
-        
+
         // Test input grab
         assert!(!input.is_grabbed());
         input.grab_input(true).unwrap();
         assert!(input.is_grabbed());
-        
+
         // Test mouse warp
         input.warp_mouse(300, 400).unwrap();
         assert_eq!(input.last_mouse_pos, (300, 400));

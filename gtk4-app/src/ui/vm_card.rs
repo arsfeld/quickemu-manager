@@ -1,12 +1,12 @@
 use gtk::prelude::*;
-use gtk::{glib, CompositeTemplate, TemplateChild};
 use gtk::subclass::prelude::*;
+use gtk::{glib, CompositeTemplate, TemplateChild};
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use super::{MainWindow, VMEditDialog};
 use crate::AppState;
-use quickemu_core::{VM, VMStatus, DisplayProtocol};
-use super::{VMEditDialog, MainWindow};
+use quickemu_core::{DisplayProtocol, VMStatus, VM};
 
 mod imp {
     use super::*;
@@ -36,7 +36,7 @@ mod imp {
         pub connect_button: TemplateChild<gtk::Button>,
         #[template_child]
         pub edit_button: TemplateChild<gtk::Button>,
-        
+
         pub vm: Rc<RefCell<Option<VM>>>,
         pub app_state: Rc<RefCell<Option<AppState>>>,
     }
@@ -55,7 +55,6 @@ mod imp {
             obj.init_template();
         }
     }
-
 
     impl VMCard {
         fn start_vm_static(vm: VM, app_state: AppState) {
@@ -90,7 +89,7 @@ mod imp {
     impl ObjectImpl for VMCard {
         fn constructed(&self) {
             self.parent_constructed();
-            
+
             // Connect signals manually
             let start_button = self.start_button.get();
             let vm = self.vm.clone();
@@ -98,44 +97,47 @@ mod imp {
             start_button.connect_clicked(move |_| {
                 let vm_ref = vm.borrow();
                 let app_state_ref = app_state.borrow();
-                
+
                 if let (Some(vm), Some(app_state)) = (vm_ref.as_ref(), app_state_ref.as_ref()) {
                     Self::start_vm_static(vm.clone(), app_state.clone());
                 }
             });
-            
+
             let stop_button = self.stop_button.get();
             let vm = self.vm.clone();
             let app_state = self.app_state.clone();
             stop_button.connect_clicked(move |_| {
                 let vm_ref = vm.borrow();
                 let app_state_ref = app_state.borrow();
-                
+
                 if let (Some(vm), Some(app_state)) = (vm_ref.as_ref(), app_state_ref.as_ref()) {
                     Self::stop_vm_static(vm.clone(), app_state.clone());
                 }
             });
-            
+
             let connect_button = self.connect_button.get();
             let vm = self.vm.clone();
             connect_button.connect_clicked(move |button| {
                 let vm_ref = vm.borrow();
-                
+
                 if let Some(vm) = vm_ref.as_ref() {
                     Self::launch_console_static(vm.clone(), button.clone());
                 }
             });
-            
+
             let edit_button = self.edit_button.get();
             let vm = self.vm.clone();
             let app_state = self.app_state.clone();
             edit_button.connect_clicked(move |button| {
                 let vm_ref = vm.borrow();
                 let app_state_ref = app_state.borrow();
-                
+
                 if let (Some(vm), Some(app_state)) = (vm_ref.as_ref(), app_state_ref.as_ref()) {
                     // Find the parent window
-                    if let Some(window) = button.root().and_then(|root| root.downcast::<gtk::Window>().ok()) {
+                    if let Some(window) = button
+                        .root()
+                        .and_then(|root| root.downcast::<gtk::Window>().ok())
+                    {
                         let dialog = VMEditDialog::new(&window, vm.clone(), app_state.clone());
                         dialog.present();
                     }
@@ -177,13 +179,13 @@ glib::wrapper! {
 impl VMCard {
     pub fn new(vm: VM, app_state: AppState) -> Self {
         let card: Self = glib::Object::builder().build();
-        
+
         let imp = card.imp();
         imp.vm.borrow_mut().replace(vm.clone());
         imp.app_state.borrow_mut().replace(app_state);
-        
+
         card.update_display(&vm);
-        
+
         card
     }
 
@@ -193,11 +195,11 @@ impl VMCard {
 
     fn update_display(&self, vm: &VM) {
         let imp = self.imp();
-        
+
         // Update VM name and OS
         imp.vm_name.set_text(&vm.name);
         imp.vm_os.set_text(&vm.config.guest_os);
-        
+
         // Update status
         let (status_text, icon_name) = match &vm.status {
             VMStatus::Running { pid: _ } => ("Running", "media-playback-start-symbolic"),
@@ -206,20 +208,20 @@ impl VMCard {
             VMStatus::Stopping => ("Stopping", "media-playback-stop-symbolic"),
             VMStatus::Error(_) => ("Error", "dialog-error-symbolic"),
         };
-        
+
         imp.status_label.set_text(status_text);
         imp.status_icon.set_icon_name(Some(icon_name));
-        
+
         // Update resource values (placeholder for now)
         imp.cpu_value.set_text("0%");
         imp.ram_value.set_text("0 MB");
-        
+
         if let VMStatus::Running { pid: _ } = &vm.status {
             imp.uptime_value.set_text("Running");
         } else {
             imp.uptime_value.set_text("--");
         }
-        
+
         // Update button states
         match &vm.status {
             VMStatus::Stopped => {
@@ -242,15 +244,15 @@ impl VMCard {
             }
         }
     }
-    
+
     pub async fn refresh_status(&self, app_state: &AppState) {
         let imp = self.imp();
         if let Some(mut vm) = imp.vm.borrow_mut().as_mut() {
             let old_status = vm.status.clone();
-            
+
             // Update VM status from running processes
             app_state.vm_manager.update_vm_status(&mut vm).await;
-            
+
             // Only print status changes
             if std::mem::discriminant(&old_status) != std::mem::discriminant(&vm.status) {
                 match (&old_status, &vm.status) {
@@ -267,16 +269,21 @@ impl VMCard {
                         println!("VM {} stopped", vm.name);
                     }
                     _ => {
-                        println!("VM {} status changed: {:?} -> {:?}", vm.name, old_status, vm.status);
+                        println!(
+                            "VM {} status changed: {:?} -> {:?}",
+                            vm.name, old_status, vm.status
+                        );
                     }
                 }
-                
+
                 // Clone the VM to update the display when status changes
                 let vm_clone = vm.clone();
-                glib::idle_add_local(glib::clone!(@weak self as obj => @default-return glib::ControlFlow::Break, move || {
-                    obj.update_display(&vm_clone);
-                    glib::ControlFlow::Break
-                }));
+                glib::idle_add_local(
+                    glib::clone!(@weak self as obj => @default-return glib::ControlFlow::Break, move || {
+                        obj.update_display(&vm_clone);
+                        glib::ControlFlow::Break
+                    }),
+                );
             }
         }
     }

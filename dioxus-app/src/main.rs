@@ -3,16 +3,16 @@ use dioxus::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use gloo_timers::future::TimeoutFuture;
 
+mod components;
 mod models;
 mod server_functions;
-mod components;
 
+#[cfg(target_arch = "wasm32")]
+mod spice_client_wrapper;
 #[cfg(target_arch = "wasm32")]
 mod vnc_client;
 #[cfg(target_arch = "wasm32")]
 mod vnc_protocol;
-#[cfg(target_arch = "wasm32")]
-mod spice_client_wrapper;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod server_only;
@@ -37,7 +37,7 @@ const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     dioxus::launch(App);
-    
+
     #[cfg(target_arch = "wasm32")]
     dioxus::launch(App);
 }
@@ -47,7 +47,9 @@ fn App() -> Element {
     use_effect(move || {
         spawn(async move {
             #[cfg(not(target_arch = "wasm32"))]
-            crate::server_functions::init_services().await.expect("Failed to initialize services");
+            crate::server_functions::init_services()
+                .await
+                .expect("Failed to initialize services");
         });
     });
     rsx! {
@@ -105,7 +107,7 @@ pub fn Blog(id: i32) -> Element {
 #[component]
 fn Navbar() -> Element {
     rsx! {
-        div { 
+        div {
             class: "min-h-screen bg-macos-background",
             Outlet::<Route> {}
         }

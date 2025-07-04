@@ -1,6 +1,6 @@
 //! Inputs channel implementation for keyboard and mouse events
 
-use crate::channels::{Channel, ChannelConnection, InputEvent, MouseButton, KeyCode};
+use crate::channels::{Channel, ChannelConnection, InputEvent, KeyCode, MouseButton};
 use crate::error::Result;
 use crate::protocol::*;
 use tracing::{debug, info, warn};
@@ -31,14 +31,20 @@ impl InputsChannel {
     pub async fn new(host: &str, port: u16, channel_id: u8) -> Result<Self> {
         Self::new_with_connection_id(host, port, channel_id, None).await
     }
-    
-    pub async fn new_with_connection_id(host: &str, port: u16, channel_id: u8, connection_id: Option<u32>) -> Result<Self> {
-        let mut connection = ChannelConnection::new(host, port, ChannelType::Inputs, channel_id).await?;
+
+    pub async fn new_with_connection_id(
+        host: &str,
+        port: u16,
+        channel_id: u8,
+        connection_id: Option<u32>,
+    ) -> Result<Self> {
+        let mut connection =
+            ChannelConnection::new(host, port, ChannelType::Inputs, channel_id).await?;
         if let Some(conn_id) = connection_id {
             connection.set_connection_id(conn_id);
         }
         connection.handshake().await?;
-        
+
         Ok(Self {
             connection,
             mouse_mode: MouseMode::Server,
@@ -52,20 +58,42 @@ impl InputsChannel {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub async fn new_websocket_with_auth(websocket_url: &str, channel_id: u8, auth_token: Option<String>) -> Result<Self> {
-        let mut connection = ChannelConnection::new_websocket_with_auth(websocket_url, ChannelType::Inputs, channel_id, auth_token).await?;
+    pub async fn new_websocket_with_auth(
+        websocket_url: &str,
+        channel_id: u8,
+        auth_token: Option<String>,
+    ) -> Result<Self> {
+        let mut connection = ChannelConnection::new_websocket_with_auth(
+            websocket_url,
+            ChannelType::Inputs,
+            channel_id,
+            auth_token,
+        )
+        .await?;
         connection.handshake().await?;
-        
+
         Ok(Self {
             connection,
             mouse_mode: MouseMode::Server,
             modifiers: KeyModifiers::default(),
         })
     }
-    
+
     #[cfg(target_arch = "wasm32")]
-    pub async fn new_websocket_with_auth_and_session(websocket_url: &str, channel_id: u8, auth_token: Option<String>, password: Option<String>, connection_id: Option<u32>) -> Result<Self> {
-        let mut connection = ChannelConnection::new_websocket_with_auth(websocket_url, ChannelType::Inputs, channel_id, auth_token).await?;
+    pub async fn new_websocket_with_auth_and_session(
+        websocket_url: &str,
+        channel_id: u8,
+        auth_token: Option<String>,
+        password: Option<String>,
+        connection_id: Option<u32>,
+    ) -> Result<Self> {
+        let mut connection = ChannelConnection::new_websocket_with_auth(
+            websocket_url,
+            ChannelType::Inputs,
+            channel_id,
+            auth_token,
+        )
+        .await?;
         if let Some(pwd) = password {
             connection.set_password(pwd);
         }
@@ -73,7 +101,7 @@ impl InputsChannel {
             connection.set_connection_id(conn_id);
         }
         connection.handshake().await?;
-        
+
         Ok(Self {
             connection,
             mouse_mode: MouseMode::Server,
@@ -101,14 +129,16 @@ impl InputsChannel {
                 let scancode = key_to_scancode(key);
                 self.update_modifiers(&key, true);
                 self.send_key_down(scancode).await?
-            },
+            }
             InputEvent::KeyUp(key) => {
                 let scancode = key_to_scancode(key);
                 self.update_modifiers(&key, false);
                 self.send_key_up(scancode).await?
-            },
+            }
             InputEvent::MouseMove { x, y } => self.send_mouse_motion(x, y).await?,
-            InputEvent::MouseButton { button, pressed } => self.send_mouse_button(button, pressed).await?,
+            InputEvent::MouseButton { button, pressed } => {
+                self.send_mouse_button(button, pressed).await?
+            }
         }
         Ok(())
     }
@@ -117,8 +147,10 @@ impl InputsChannel {
     pub async fn send_key_down(&mut self, scancode: u32) -> Result<()> {
         let mut data = Vec::new();
         data.extend_from_slice(&scancode.to_le_bytes());
-        
-        self.connection.send_message(SPICE_MSG_INPUTS_KEY_DOWN, &data).await?;
+
+        self.connection
+            .send_message(SPICE_MSG_INPUTS_KEY_DOWN, &data)
+            .await?;
         debug!("Sent key down: scancode {}", scancode);
         Ok(())
     }
@@ -127,8 +159,10 @@ impl InputsChannel {
     pub async fn send_key_up(&mut self, scancode: u32) -> Result<()> {
         let mut data = Vec::new();
         data.extend_from_slice(&scancode.to_le_bytes());
-        
-        self.connection.send_message(SPICE_MSG_INPUTS_KEY_UP, &data).await?;
+
+        self.connection
+            .send_message(SPICE_MSG_INPUTS_KEY_UP, &data)
+            .await?;
         debug!("Sent key up: scancode {}", scancode);
         Ok(())
     }
@@ -139,8 +173,10 @@ impl InputsChannel {
         data.extend_from_slice(&x.to_le_bytes());
         data.extend_from_slice(&y.to_le_bytes());
         data.extend_from_slice(&0u32.to_le_bytes()); // button state
-        
-        self.connection.send_message(SPICE_MSG_INPUTS_MOUSE_MOTION, &data).await?;
+
+        self.connection
+            .send_message(SPICE_MSG_INPUTS_MOUSE_MOTION, &data)
+            .await?;
         debug!("Sent mouse motion: ({}, {})", x, y);
         Ok(())
     }
@@ -154,18 +190,22 @@ impl InputsChannel {
             MouseButton::WheelUp => SPICE_MOUSE_BUTTON_WHEEL_UP,
             MouseButton::WheelDown => SPICE_MOUSE_BUTTON_WHEEL_DOWN,
         };
-        
+
         let msg_type = if pressed {
             SPICE_MSG_INPUTS_MOUSE_PRESS
         } else {
             SPICE_MSG_INPUTS_MOUSE_RELEASE
         };
-        
+
         let mut data = Vec::new();
         data.extend_from_slice(&button_mask.to_le_bytes());
-        
+
         self.connection.send_message(msg_type, &data).await?;
-        debug!("Sent mouse button: {:?} {}", button, if pressed { "pressed" } else { "released" });
+        debug!(
+            "Sent mouse button: {:?} {}",
+            button,
+            if pressed { "pressed" } else { "released" }
+        );
         Ok(())
     }
 
@@ -196,7 +236,7 @@ impl InputsChannel {
         if data.len() >= 2 {
             let modifiers = u16::from_le_bytes([data[0], data[1]]);
             info!("Inputs init - modifiers: 0x{:04X}", modifiers);
-            
+
             // Update modifier state based on init message
             self.modifiers.shift = (modifiers & SPICE_KEYBOARD_MODIFIER_SHIFT) != 0;
             self.modifiers.ctrl = (modifiers & SPICE_KEYBOARD_MODIFIER_CTRL) != 0;
@@ -209,7 +249,7 @@ impl InputsChannel {
         if data.len() >= 2 {
             let modifiers = u16::from_le_bytes([data[0], data[1]]);
             debug!("Modifiers update: 0x{:04X}", modifiers);
-            
+
             self.modifiers.shift = (modifiers & SPICE_KEYBOARD_MODIFIER_SHIFT) != 0;
             self.modifiers.ctrl = (modifiers & SPICE_KEYBOARD_MODIFIER_CTRL) != 0;
             self.modifiers.alt = (modifiers & SPICE_KEYBOARD_MODIFIER_ALT) != 0;
@@ -233,7 +273,7 @@ impl Channel for InputsChannel {
                 warn!("Unknown inputs message type: {}", header.msg_type);
             }
         }
-        
+
         Ok(())
     }
 
@@ -258,7 +298,7 @@ pub const SPICE_MSG_INPUTS_MOUSE_RELEASE: u16 = 108;
 pub const SPICE_MOUSE_BUTTON_LEFT: u32 = 1 << 0;
 pub const SPICE_MOUSE_BUTTON_MIDDLE: u32 = 1 << 1;
 pub const SPICE_MOUSE_BUTTON_RIGHT: u32 = 1 << 2;
-pub const SPICE_MOUSE_BUTTON_WHEEL_UP: u32 = 1 << 3;   // Button 4
+pub const SPICE_MOUSE_BUTTON_WHEEL_UP: u32 = 1 << 3; // Button 4
 pub const SPICE_MOUSE_BUTTON_WHEEL_DOWN: u32 = 1 << 4; // Button 5
 
 // Keyboard modifier masks
@@ -373,7 +413,7 @@ mod tests {
         assert!(!modifiers.ctrl);
         assert!(!modifiers.alt);
         assert!(!modifiers.meta);
-        
+
         modifiers.shift = true;
         modifiers.ctrl = true;
         assert!(modifiers.shift);

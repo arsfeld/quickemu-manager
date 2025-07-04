@@ -1,12 +1,12 @@
 use crate::error::{Result, SpiceError};
 use crate::protocol::*;
-use crate::transport::{Transport, TransportConfig, create_transport};
+use crate::transport::{create_transport, Transport, TransportConfig};
 use crate::wire_format::{read_message, write_message};
 use binrw::io::Cursor;
 use binrw::{BinRead, BinWrite};
 use rsa::pkcs8::DecodePublicKey;
-use rsa::{Oaep, RsaPublicKey};
 use rsa::rand_core::OsRng;
+use rsa::{Oaep, RsaPublicKey};
 use sha1::Sha1;
 use std::time::Duration;
 use tracing::{debug, info, warn};
@@ -31,12 +31,21 @@ fn encrypt_password(password: &str, pub_key_der: &[u8]) -> Result<Vec<u8>> {
             let padding = Oaep::new::<Sha1>();
             match public_key.encrypt(&mut OsRng, padding, password.as_bytes()) {
                 Ok(encrypted) => Ok(encrypted),
-                Err(e) => Err(SpiceError::Protocol(format!("Failed to encrypt password: {}", e)))
+                Err(e) => Err(SpiceError::Protocol(format!(
+                    "Failed to encrypt password: {}",
+                    e
+                ))),
             }
         }
         Err(e) => {
-            warn!("Failed to parse RSA public key: {}, trying raw modulus/exponent", e);
-            Err(SpiceError::Protocol(format!("Failed to parse RSA public key: {}", e)))
+            warn!(
+                "Failed to parse RSA public key: {}, trying raw modulus/exponent",
+                e
+            );
+            Err(SpiceError::Protocol(format!(
+                "Failed to parse RSA public key: {}",
+                e
+            )))
         }
     }
 }
@@ -57,9 +66,9 @@ impl ChannelConnection {
             #[cfg(target_arch = "wasm32")]
             auth_token: None,
         };
-        
+
         let transport = create_transport(config).await?;
-        
+
         Ok(Self {
             transport,
             channel_type,
@@ -72,7 +81,7 @@ impl ChannelConnection {
             server_channel_caps: Vec::new(),
         })
     }
-    
+
     /// Create a new channel connection with WebSocket URL (WASM)
     #[cfg(target_arch = "wasm32")]
     pub async fn new_websocket(
@@ -82,7 +91,7 @@ impl ChannelConnection {
     ) -> Result<Self> {
         Self::new_websocket_with_auth(websocket_url, channel_type, channel_id, None).await
     }
-    
+
     /// Create a new channel connection with WebSocket URL and auth token (WASM)
     #[cfg(target_arch = "wasm32")]
     pub async fn new_websocket_with_auth(
@@ -93,13 +102,13 @@ impl ChannelConnection {
     ) -> Result<Self> {
         let config = TransportConfig {
             host: String::new(), // Not used for WebSocket
-            port: 0, // Not used for WebSocket
+            port: 0,             // Not used for WebSocket
             websocket_url: Some(websocket_url.to_string()),
             auth_token,
         };
-        
+
         let transport = create_transport(config).await?;
-        
+
         Ok(Self {
             transport,
             channel_type,
@@ -130,7 +139,10 @@ impl ChannelConnection {
             return Ok(());
         }
 
-        info!("Starting SPICE handshake for {:?} channel {}", self.channel_type, self.channel_id);
+        info!(
+            "Starting SPICE handshake for {:?} channel {}",
+            self.channel_type, self.channel_id
+        );
 
         // Send RedLinkMess
         self.send_link_message().await?;
@@ -141,13 +153,16 @@ impl ChannelConnection {
         // Send authentication if needed
         if self.password.is_some() {
             self.send_auth(&reply).await?;
-            
+
             // Read final link result after authentication
             self.read_link_result().await?;
         }
 
         self.handshake_complete = true;
-        info!("SPICE handshake completed for {:?} channel {}", self.channel_type, self.channel_id);
+        info!(
+            "SPICE handshake completed for {:?} channel {}",
+            self.channel_type, self.channel_id
+        );
 
         Ok(())
     }
@@ -156,7 +171,7 @@ impl ChannelConnection {
         // Prepare capabilities
         let mut common_caps: Vec<u32> = vec![];
         let mut channel_caps: Vec<u32> = vec![];
-        
+
         // Common capabilities for all channels
         // TODO: Add SPICE_COMMON_CAP_MINI_HEADER support once we implement 6-byte header handling
         // NOTE: test-display-no-ssl may not support AUTH_SELECTION
@@ -164,7 +179,7 @@ impl ChannelConnection {
         // debug!("Common capability bits: PROTOCOL_AUTH_SELECTION={}, combined={}",
         //        SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION, common_cap_bits);
         // common_caps.push(common_cap_bits);
-        
+
         // Channel-specific capabilities
         match self.channel_type {
             ChannelType::Main => {
@@ -172,18 +187,18 @@ impl ChannelConnection {
             }
             ChannelType::Display => {
                 channel_caps.push(
-                    (1 << SPICE_DISPLAY_CAP_SIZED_STREAM) |
-                    (1 << SPICE_DISPLAY_CAP_STREAM_REPORT) |
-                    (1 << SPICE_DISPLAY_CAP_MULTI_CODEC) |
-                    (1 << SPICE_DISPLAY_CAP_CODEC_MJPEG)
+                    (1 << SPICE_DISPLAY_CAP_SIZED_STREAM)
+                        | (1 << SPICE_DISPLAY_CAP_STREAM_REPORT)
+                        | (1 << SPICE_DISPLAY_CAP_MULTI_CODEC)
+                        | (1 << SPICE_DISPLAY_CAP_CODEC_MJPEG),
                 );
             }
             _ => {}
         }
-        
+
         // Calculate message size
         let message_size = 20 + (common_caps.len() + channel_caps.len()) * 4;
-        
+
         let header = SpiceLinkHeader {
             magic: SPICE_MAGIC,
             major_version: SPICE_VERSION_MAJOR,
@@ -203,45 +218,63 @@ impl ChannelConnection {
         // Serialize and send header
         let mut header_bytes = Vec::new();
         header.write_le(&mut Cursor::new(&mut header_bytes))?;
-        
-        self.transport.write_all(&header_bytes).await
+
+        self.transport
+            .write_all(&header_bytes)
+            .await
             .map_err(|e| SpiceError::Io(e))?;
 
         // Serialize and send link message
         let mut link_bytes = Vec::new();
         link_mess.write_le(&mut Cursor::new(&mut link_bytes))?;
-        
-        self.transport.write_all(&link_bytes).await
+
+        self.transport
+            .write_all(&link_bytes)
+            .await
             .map_err(|e| SpiceError::Io(e))?;
-        
+
         // Send capabilities
         for cap in &common_caps {
             let cap_bytes = cap.to_le_bytes();
-            self.transport.write_all(&cap_bytes).await
-                .map_err(|e| SpiceError::Io(e))?;
-        }
-        
-        for cap in &channel_caps {
-            let cap_bytes = cap.to_le_bytes();
-            self.transport.write_all(&cap_bytes).await
+            self.transport
+                .write_all(&cap_bytes)
+                .await
                 .map_err(|e| SpiceError::Io(e))?;
         }
 
-        debug!("Sent SpiceLinkMess with {} common caps and {} channel caps for {:?} channel {}", 
-               common_caps.len(), channel_caps.len(), self.channel_type, self.channel_id);
+        for cap in &channel_caps {
+            let cap_bytes = cap.to_le_bytes();
+            self.transport
+                .write_all(&cap_bytes)
+                .await
+                .map_err(|e| SpiceError::Io(e))?;
+        }
+
+        debug!(
+            "Sent SpiceLinkMess with {} common caps and {} channel caps for {:?} channel {}",
+            common_caps.len(),
+            channel_caps.len(),
+            self.channel_type,
+            self.channel_id
+        );
         Ok(())
     }
 
     async fn wait_for_link_reply(&mut self) -> Result<SpiceLinkReplyData> {
         let mut header_buf = vec![0u8; 16];
-        
+
         // Read the header
         let mut total_read = 0;
         while total_read < 16 {
-            let n = self.transport.read(&mut header_buf[total_read..]).await
+            let n = self
+                .transport
+                .read(&mut header_buf[total_read..])
+                .await
                 .map_err(|e| SpiceError::Io(e))?;
             if n == 0 {
-                return Err(SpiceError::Protocol("Connection closed while reading link reply header".to_string()));
+                return Err(SpiceError::Protocol(
+                    "Connection closed while reading link reply header".to_string(),
+                ));
             }
             total_read += n;
         }
@@ -250,35 +283,62 @@ impl ChannelConnection {
         let header = SpiceLinkHeader::read_le(&mut cursor)?;
 
         if header.magic != SPICE_MAGIC {
-            return Err(SpiceError::Protocol(format!("Invalid magic in link reply: {:#x}", header.magic)));
+            return Err(SpiceError::Protocol(format!(
+                "Invalid magic in link reply: {:#x}",
+                header.magic
+            )));
         }
 
         // Read the reply data
         let mut reply_data = vec![0u8; header.size as usize];
         total_read = 0;
         while total_read < header.size as usize {
-            let n = self.transport.read(&mut reply_data[total_read..]).await
+            let n = self
+                .transport
+                .read(&mut reply_data[total_read..])
+                .await
                 .map_err(|e| SpiceError::Io(e))?;
             if n == 0 {
-                return Err(SpiceError::Protocol("Connection closed while reading link reply data".to_string()));
+                return Err(SpiceError::Protocol(
+                    "Connection closed while reading link reply data".to_string(),
+                ));
             }
             total_read += n;
         }
 
         debug!("Received SpiceLinkReply, size: {}", header.size);
-        
+
         // Parse the SpiceLinkReplyData structure manually
-        if reply_data.len() < 178 { // 4 + 162 + 4 + 4 + 4
-            return Err(SpiceError::Protocol("Link reply data too short".to_string()));
+        if reply_data.len() < 178 {
+            // 4 + 162 + 4 + 4 + 4
+            return Err(SpiceError::Protocol(
+                "Link reply data too short".to_string(),
+            ));
         }
-        
-        let error = u32::from_le_bytes([reply_data[0], reply_data[1], reply_data[2], reply_data[3]]);
+
+        let error =
+            u32::from_le_bytes([reply_data[0], reply_data[1], reply_data[2], reply_data[3]]);
         let mut pub_key = [0u8; 162];
         pub_key.copy_from_slice(&reply_data[4..166]);
-        let num_common_caps = u32::from_le_bytes([reply_data[166], reply_data[167], reply_data[168], reply_data[169]]);
-        let num_channel_caps = u32::from_le_bytes([reply_data[170], reply_data[171], reply_data[172], reply_data[173]]);
-        let caps_offset = u32::from_le_bytes([reply_data[174], reply_data[175], reply_data[176], reply_data[177]]);
-        
+        let num_common_caps = u32::from_le_bytes([
+            reply_data[166],
+            reply_data[167],
+            reply_data[168],
+            reply_data[169],
+        ]);
+        let num_channel_caps = u32::from_le_bytes([
+            reply_data[170],
+            reply_data[171],
+            reply_data[172],
+            reply_data[173],
+        ]);
+        let caps_offset = u32::from_le_bytes([
+            reply_data[174],
+            reply_data[175],
+            reply_data[176],
+            reply_data[177],
+        ]);
+
         let reply = SpiceLinkReplyData {
             error,
             pub_key,
@@ -286,12 +346,12 @@ impl ChannelConnection {
             num_channel_caps,
             caps_offset,
         };
-        
+
         // Parse capabilities if present
         let caps_start = reply.caps_offset as usize;
         if caps_start < reply_data.len() {
             let mut offset = caps_start;
-            
+
             // Read common capabilities
             for _ in 0..reply.num_common_caps {
                 if offset + 4 <= reply_data.len() {
@@ -305,7 +365,7 @@ impl ChannelConnection {
                     offset += 4;
                 }
             }
-            
+
             // Read channel capabilities
             for _ in 0..reply.num_channel_caps {
                 if offset + 4 <= reply_data.len() {
@@ -320,63 +380,76 @@ impl ChannelConnection {
                 }
             }
         }
-        
-        debug!("Server capabilities - common: {:?}, channel: {:?}", 
-               self.server_common_caps, self.server_channel_caps);
-        
+
+        debug!(
+            "Server capabilities - common: {:?}, channel: {:?}",
+            self.server_common_caps, self.server_channel_caps
+        );
+
         Ok(reply)
     }
 
     async fn send_auth(&mut self, reply: &SpiceLinkReplyData) -> Result<()> {
         if reply.error != 0 {
-            return Err(SpiceError::Protocol(format!("Server returned error: {}", reply.error)));
+            return Err(SpiceError::Protocol(format!(
+                "Server returned error: {}",
+                reply.error
+            )));
         }
 
         let pub_key = &reply.pub_key;
         let password = self.password.as_ref().unwrap();
-        
+
         // Check if server supports AUTH_SELECTION
-        let supports_auth_selection = self.server_common_caps.iter()
+        let supports_auth_selection = self
+            .server_common_caps
+            .iter()
             .any(|&cap| cap & (1 << SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION) != 0);
-        
+
         if supports_auth_selection {
             // Step 1: Send authentication mechanism selection
             info!("Sending authentication mechanism selection (SPICE auth)");
             let auth_mechanism = SpiceLinkAuthMechanism {
                 auth_mechanism: SPICE_COMMON_CAP_AUTH_SPICE,
             };
-            
+
             let mut auth_mech_bytes = Vec::new();
             auth_mechanism.write_le(&mut Cursor::new(&mut auth_mech_bytes))?;
-            
-            self.transport.write_all(&auth_mech_bytes).await
+
+            self.transport
+                .write_all(&auth_mech_bytes)
+                .await
                 .map_err(|e| SpiceError::Io(e))?;
-            
+
             debug!("Sent authentication mechanism: SPICE_COMMON_CAP_AUTH_SPICE");
         } else {
             debug!("Server does not support AUTH_SELECTION, skipping mechanism selection");
         }
-        
+
         // Step 2: Send encrypted password
         info!("Encrypting password for authentication");
         let encrypted = encrypt_password(password, pub_key)?;
 
-        self.transport.write_all(&encrypted).await
+        self.transport
+            .write_all(&encrypted)
+            .await
             .map_err(|e| SpiceError::Io(e))?;
 
         debug!("Sent encrypted password");
         Ok(())
     }
-    
+
     async fn read_link_result(&mut self) -> Result<()> {
         // The server sends a 4-byte result after authentication
         let mut result_buf = vec![0u8; 4];
         let mut total_read = 0;
-        
+
         while total_read < 4 {
             match self.transport.read(&mut result_buf[total_read..]).await {
                 Ok(0) => {
-                    return Err(SpiceError::Protocol("Connection closed while reading link result".to_string()));
+                    return Err(SpiceError::Protocol(
+                        "Connection closed while reading link result".to_string(),
+                    ));
                 }
                 Ok(n) => {
                     total_read += n;
@@ -386,13 +459,17 @@ impl ChannelConnection {
                 }
             }
         }
-        
-        let result = u32::from_le_bytes([result_buf[0], result_buf[1], result_buf[2], result_buf[3]]);
-        
+
+        let result =
+            u32::from_le_bytes([result_buf[0], result_buf[1], result_buf[2], result_buf[3]]);
+
         if result != 0 {
-            return Err(SpiceError::Protocol(format!("Authentication failed with error code: {}", result)));
+            return Err(SpiceError::Protocol(format!(
+                "Authentication failed with error code: {}",
+                result
+            )));
         }
-        
+
         debug!("Link authentication successful");
         Ok(())
     }
@@ -413,7 +490,10 @@ impl ChannelConnection {
         read_message(&mut self.transport).await
     }
 
-    pub async fn read_message_with_timeout(&mut self, timeout: Duration) -> Result<(SpiceDataHeader, Vec<u8>)> {
+    pub async fn read_message_with_timeout(
+        &mut self,
+        timeout: Duration,
+    ) -> Result<(SpiceDataHeader, Vec<u8>)> {
         // For now, just call read_message
         // TODO: Implement actual timeout logic
         self.read_message().await

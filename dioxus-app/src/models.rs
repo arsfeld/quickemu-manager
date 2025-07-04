@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(not(target_arch = "wasm32"))]
-use quickemu_core::models::{VM as CoreVM, VMTemplate as CoreVMTemplate};
+use quickemu_core::models::{VMTemplate as CoreVMTemplate, VM as CoreVM};
 
 // Re-export core types for server side only
 #[cfg(not(target_arch = "wasm32"))]
-pub use quickemu_core::models::{VMStatus as CoreVMStatus};
+pub use quickemu_core::models::VMStatus as CoreVMStatus;
 
 // Define our own VMStatus for cross-platform compatibility
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -49,7 +49,7 @@ impl VMStatusExt for VMStatus {
     fn is_running(&self) -> bool {
         matches!(self, VMStatus::Running { .. })
     }
-    
+
     fn display_text(&self) -> &str {
         match self {
             VMStatus::Running { .. } => "Running",
@@ -80,7 +80,7 @@ impl From<&CoreVM> for VM {
     fn from(core_vm: &CoreVM) -> Self {
         // Parse RAM from string format (e.g., "4G" -> 4096MB)
         let ram_mb = parse_ram_size(&core_vm.config.ram);
-        
+
         // Convert core VMStatus to our VMStatus
         let status = match &core_vm.status {
             CoreVMStatus::Running { pid } => VMStatus::Running { pid: *pid },
@@ -89,7 +89,7 @@ impl From<&CoreVM> for VM {
             CoreVMStatus::Stopping => VMStatus::Stopping,
             CoreVMStatus::Error(msg) => VMStatus::Error(msg.clone()),
         };
-        
+
         Self {
             id: core_vm.id.0.clone(),
             name: core_vm.name.clone(),
@@ -98,7 +98,11 @@ impl From<&CoreVM> for VM {
             status,
             cpu_cores: core_vm.config.cpu_cores,
             ram_mb,
-            disk_size: core_vm.config.disk_size.clone().unwrap_or_else(|| "N/A".to_string()),
+            disk_size: core_vm
+                .config
+                .disk_size
+                .clone()
+                .unwrap_or_else(|| "N/A".to_string()),
             config_path: core_vm.config_path.to_string_lossy().to_string(),
         }
     }
@@ -127,7 +131,9 @@ pub struct EditVMRequest {
 impl From<CreateVMRequest> for CoreVMTemplate {
     fn from(request: CreateVMRequest) -> Self {
         Self {
-            name: request.name.unwrap_or_else(|| format!("{} {}", request.os, request.version)),
+            name: request
+                .name
+                .unwrap_or_else(|| format!("{} {}", request.os, request.version)),
             os: request.os,
             version: request.version,
             edition: request.edition,
@@ -143,19 +149,19 @@ mod helpers {
     // Helper function to parse RAM size from quickemu format
     pub fn parse_ram_size(ram_str: &str) -> u32 {
         let ram_str = ram_str.trim().to_uppercase();
-        
+
         if let Some(gb_pos) = ram_str.find('G') {
             if let Ok(gb) = ram_str[..gb_pos].parse::<u32>() {
                 return gb * 1024; // Convert GB to MB
             }
         }
-        
+
         if let Some(mb_pos) = ram_str.find('M') {
             if let Ok(mb) = ram_str[..mb_pos].parse::<u32>() {
                 return mb;
             }
         }
-        
+
         // Default fallback
         4096 // 4GB in MB
     }
@@ -191,7 +197,7 @@ pub struct ConsoleInfo {
 impl From<quickemu_core::services::vnc_proxy::ConsoleInfo> for ConsoleInfo {
     fn from(core_info: quickemu_core::services::vnc_proxy::ConsoleInfo) -> Self {
         use quickemu_core::services::vnc_proxy::ConsoleProtocol as CoreProtocol;
-        
+
         Self {
             websocket_url: core_info.websocket_url,
             auth_token: core_info.auth_token,
@@ -226,7 +232,11 @@ pub enum ThemeDto {
 impl From<quickemu_core::models::config::AppConfig> for AppConfigDto {
     fn from(config: quickemu_core::models::config::AppConfig) -> Self {
         Self {
-            vm_directories: config.vm_directories.into_iter().map(|p| p.to_string_lossy().to_string()).collect(),
+            vm_directories: config
+                .vm_directories
+                .into_iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect(),
             auto_download_tools: config.auto_download_tools,
             theme: match config.theme {
                 quickemu_core::models::config::Theme::System => ThemeDto::System,
@@ -258,14 +268,12 @@ impl From<AppConfigDto> for quickemu_core::models::config::AppConfig {
 
 impl AppConfigDto {
     pub fn get_primary_vm_directory(&self) -> String {
-        self.vm_directories.first()
-            .cloned()
-            .unwrap_or_else(|| {
-                if let Some(home) = std::env::var("HOME").ok() {
-                    format!("{}/VMs", home)
-                } else {
-                    "/tmp/VMs".to_string()
-                }
-            })
+        self.vm_directories.first().cloned().unwrap_or_else(|| {
+            if let Some(home) = std::env::var("HOME").ok() {
+                format!("{}/VMs", home)
+            } else {
+                "/tmp/VMs".to_string()
+            }
+        })
     }
 }

@@ -1,6 +1,6 @@
 //! # spice-client
 //!
-//! A pure Rust implementation of the SPICE (Simple Protocol for Independent Computing Environments) 
+//! A pure Rust implementation of the SPICE (Simple Protocol for Independent Computing Environments)
 //! client protocol with support for both native and WebAssembly targets.
 //!
 //! ## Features
@@ -21,7 +21,7 @@
 //! ```toml
 //! [dependencies]
 //! spice-client = "0.1.0"
-//! 
+//!
 //! # For native builds
 //! tokio = { version = "1", features = ["full"] }
 //! ```
@@ -70,7 +70,7 @@
 //!     spawn_local(async {
 //!         // WebSocket proxy URL (ws:// or wss://)
 //!         let mut client = SpiceClient::new(
-//!             "ws://localhost:8080/spice".to_string(), 
+//!             "ws://localhost:8080/spice".to_string(),
 //!             0  // Port is included in WebSocket URL
 //!         );
 //!         
@@ -135,15 +135,15 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::missing_crate_level_docs)]
 
-pub mod protocol;
+pub mod channels;
 pub mod client;
 pub mod client_shared;
-pub mod channels;
 pub mod error;
+pub mod protocol;
+pub mod transport;
+pub mod utils;
 pub mod video;
 pub mod wire_format;
-pub mod utils;
-pub mod transport;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod multimedia;
@@ -182,23 +182,24 @@ impl ClientBuilder {
         let uri = uri.trim_start_matches("spice://");
         let parts: Vec<&str> = uri.split(':').collect();
         let host = parts.get(0).unwrap_or(&"localhost").to_string();
-        let port = parts.get(1)
+        let port = parts
+            .get(1)
             .and_then(|p| p.parse::<u16>().ok())
             .unwrap_or(5900);
-        
+
         Self {
             host,
             port,
             password: None,
         }
     }
-    
+
     /// Set the password for authentication
     pub fn with_password(mut self, password: String) -> Self {
         self.password = Some(password);
         self
     }
-    
+
     /// Build the client
     pub fn build(self) -> Result<SpiceClient> {
         let mut client = SpiceClient::new(self.host, self.port);
@@ -210,9 +211,9 @@ impl ClientBuilder {
 }
 
 pub use client_shared::SpiceClientShared;
-pub use error::{SpiceError, Result};
+pub use error::{Result, SpiceError};
 pub use protocol::*;
 pub use video::{VideoFrame, VideoOutput};
 
 // Re-export commonly used types
-pub use channels::{DisplaySurface, InputEvent, MouseButton, KeyCode};
+pub use channels::{DisplaySurface, InputEvent, KeyCode, MouseButton};

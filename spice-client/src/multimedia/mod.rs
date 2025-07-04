@@ -1,15 +1,14 @@
+use crate::error::SpiceError;
 use std::error::Error;
 use std::fmt;
-use crate::error::SpiceError;
 
-pub mod display;
 pub mod audio;
+pub mod display;
 pub mod input;
 pub mod spice_adapter;
 
 #[cfg(test)]
 mod tests;
-
 
 #[cfg(feature = "backend-gtk4")]
 pub mod gtk4;

@@ -2,28 +2,26 @@ use dioxus::prelude::*;
 
 #[cfg(not(target_arch = "wasm32"))]
 use {
-    std::sync::Arc,
-    std::path::PathBuf,
-    tokio::sync::{mpsc, RwLock, Mutex},
-    std::collections::HashMap,
     anyhow::Result,
-    quickemu_core::{
-        VMManager, VMDiscovery, QuickgetService, BinaryDiscovery, ProcessMonitor,
-        
-        models::{VM as CoreVM, VMId, VMTemplate as CoreVMTemplate},
-        DiscoveryEvent,
-        services::vnc_proxy::VncProxy,
-    },
-    tokio::process::Command,
-    tokio::io::{AsyncBufReadExt, BufReader},
-    std::process::Stdio,
-    image::{DynamicImage, ImageFormat},
     base64::{engine::general_purpose::STANDARD, Engine as _},
+    image::{DynamicImage, ImageFormat},
+    quickemu_core::{
+        models::{VMId, VMTemplate as CoreVMTemplate, VM as CoreVM},
+        services::vnc_proxy::VncProxy,
+        BinaryDiscovery, DiscoveryEvent, ProcessMonitor, QuickgetService, VMDiscovery, VMManager,
+    },
+    std::collections::HashMap,
     std::io::Cursor,
+    std::path::PathBuf,
+    std::process::Stdio,
+    std::sync::Arc,
     sysinfo::System,
+    tokio::io::{AsyncBufReadExt, BufReader},
+    tokio::process::Command,
+    tokio::sync::{mpsc, Mutex, RwLock},
 };
 
-use crate::models::{VM, VMMetrics, VMMetricsHistory, CreateVMRequest, EditVMRequest, ConsoleInfo};
+use crate::models::{ConsoleInfo, CreateVMRequest, EditVMRequest, VMMetrics, VMMetricsHistory, VM};
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::fs;
@@ -42,8 +40,11 @@ pub async fn init_services() -> Result<()> {
     drop(config_manager);
     // Use unified binary discovery
     let binary_discovery = BinaryDiscovery::new().await;
-    tracing::info!("Binary discovery results:
-{}", binary_discovery.discovery_info());
+    tracing::info!(
+        "Binary discovery results:
+{}",
+        binary_discovery.discovery_info()
+    );
 
     let mut vm_manager = VM_MANAGER.write().await;
     if vm_manager.is_none() {
@@ -54,14 +55,14 @@ pub async fn init_services() -> Result<()> {
     let mut process_monitor = PROCESS_MONITOR.write().await;
     if process_monitor.is_none() {
         let monitor = Arc::new(ProcessMonitor::new());
-        
+
         // Set the process monitor on the VM manager
         let mut vm_manager = VM_MANAGER.write().await;
         if let Some(ref mut manager) = vm_manager.as_mut() {
             manager.set_process_monitor(monitor.clone());
         }
         drop(vm_manager);
-        
+
         *process_monitor = Some(monitor.clone());
     }
     drop(process_monitor);
@@ -83,7 +84,7 @@ pub async fn init_services() -> Result<()> {
         let (event_tx, mut event_rx) = mpsc::unbounded_channel();
         let vm_manager_ref = VM_MANAGER.read().await.clone().unwrap();
         let mut discovery = VMDiscovery::with_vm_manager(event_tx, Arc::new(vm_manager_ref));
-        
+
         // Add VM directories from config
         let config_manager = CONFIG_MANAGER.read().await;
         if let Some(ref config_mgr) = config_manager.as_ref() {
@@ -91,7 +92,7 @@ pub async fn init_services() -> Result<()> {
             discovery.add_watch_directories(vm_directories);
         }
         drop(config_manager);
-        
+
         // Spawn background task to handle discovery events
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
@@ -110,28 +111,28 @@ pub async fn init_services() -> Result<()> {
                         cache.remove(&vm_id.0);
                     }
                 }
-                
+
                 // Increment cache version to notify clients of changes
                 let mut version = VM_CACHE_VERSION.write().await;
                 *version += 1;
                 tracing::debug!("VM cache updated, version: {}", *version);
             }
         });
-        
+
         // Do initial scan of VM directories
         if let Err(e) = discovery.scan_all_directories().await {
             tracing::error!("Failed to scan VM directories: {}", e);
         } else {
             tracing::info!("Completed initial VM directory scan");
         }
-        
+
         // Start watching for file changes
         if let Err(e) = discovery.start_watching().await {
             tracing::error!("Failed to start VM directory watching: {}", e);
         } else {
             tracing::info!("Started watching VM directories for changes");
         }
-        
+
         *vm_discovery = Some(discovery);
     }
 
@@ -139,58 +140,60 @@ pub async fn init_services() -> Result<()> {
     let mut vnc_proxy = VNC_PROXY.write().await;
     if vnc_proxy.is_none() {
         let proxy_service = VncProxy::new();
-        
+
         tracing::info!("VNC proxy service initialized");
-        
+
         // Create an Arc for the proxy service
         let proxy_arc = Arc::new(proxy_service);
-        
+
         // Set the proxy service on the VM manager
         let mut vm_manager = VM_MANAGER.write().await;
         if let Some(ref mut manager) = vm_manager.as_mut() {
             manager.set_vnc_proxy(proxy_arc.clone());
         }
         drop(vm_manager);
-        
+
         *vnc_proxy = Some(proxy_arc);
     }
     drop(vnc_proxy);
-    
+
     Ok(())
 }
 
 #[server(GetVMs)]
 pub async fn get_vms() -> Result<Vec<VM>, ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     // Always refresh VM status from cache and update runtime status
     let vm_manager = VM_MANAGER.read().await;
     let mut cache = VM_CACHE.write().await;
-    
+
     if let Some(ref manager) = vm_manager.as_ref() {
         // Update runtime status for all cached VMs
         for (vm_id, vm) in cache.iter_mut() {
             // Check current runtime status
             let vm_id_obj = VMId(vm_id.clone());
             let is_running = manager.is_vm_running(&vm_id_obj).await;
-            
+
             // Update the VM status based on actual runtime state
             vm.status = if is_running {
-                quickemu_core::models::VMStatus::Running { 
-                    pid: 0 // We don't have the PID here, but that's okay for display
+                quickemu_core::models::VMStatus::Running {
+                    pid: 0, // We don't have the PID here, but that's okay for display
                 }
             } else {
                 quickemu_core::models::VMStatus::Stopped
             };
         }
-        
+
         let vms: Vec<VM> = cache.values().map(|core_vm| core_vm.into()).collect();
         if !vms.is_empty() {
             return Ok(vms);
         }
     }
     drop(cache);
-    
+
     // If cache is empty, scan configured VM directories
     let mut discovery = VM_DISCOVERY.write().await;
     if let Some(ref mut discovery) = discovery.as_mut() {
@@ -207,10 +210,10 @@ pub async fn get_vms() -> Result<Vec<VM>, ServerFnError> {
             ]
         };
         drop(config_manager);
-        
+
         let mut all_vms = Vec::new();
         let mut cache_update = HashMap::new();
-        
+
         for dir in vm_dirs {
             if dir.exists() {
                 match discovery.scan_directory(&dir).await {
@@ -227,68 +230,74 @@ pub async fn get_vms() -> Result<Vec<VM>, ServerFnError> {
                 }
             }
         }
-        
+
         // Update the cache with discovered VMs
         drop(discovery);
         let mut cache = VM_CACHE.write().await;
         for (id, vm) in cache_update {
             cache.insert(id, vm);
         }
-        
+
         Ok(all_vms)
     } else {
-        Err(ServerFnError::new("VM Discovery service not initialized".to_string()))
+        Err(ServerFnError::new(
+            "VM Discovery service not initialized".to_string(),
+        ))
     }
 }
 
 #[server(StartVM)]
 pub async fn start_vm(vm_id: String) -> Result<(), ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let vm_manager = VM_MANAGER.read().await;
     let cache = VM_CACHE.read().await;
-    
+
     if let (Some(ref manager), Some(vm)) = (vm_manager.as_ref(), cache.get(&vm_id)) {
         manager.start_vm(vm).await.map_err(|e| {
             tracing::error!("Failed to start VM {}: {}", vm_id, e);
             ServerFnError::new(format!("Failed to start VM: {}", e))
         })?;
-        
+
         // Update cache immediately after starting
         drop(cache);
         let mut cache = VM_CACHE.write().await;
         if let Some(vm) = cache.get_mut(&vm_id) {
-            vm.status = quickemu_core::models::VMStatus::Running { 
-                pid: 0 
-            };
+            vm.status = quickemu_core::models::VMStatus::Running { pid: 0 };
         }
-        
+
         tracing::info!("Successfully started VM: {}", vm_id);
         Ok(())
     } else {
-        Err(ServerFnError::new("VM not found or VM Manager not initialized".to_string()))
+        Err(ServerFnError::new(
+            "VM not found or VM Manager not initialized".to_string(),
+        ))
     }
 }
 
 #[server(StopVM)]
 pub async fn stop_vm(vm_id: String) -> Result<(), ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let vm_manager = VM_MANAGER.read().await;
-    
+
     if let Some(ref manager) = vm_manager.as_ref() {
         let vm_id_obj = VMId(vm_id.clone());
         manager.stop_vm(&vm_id_obj).await.map_err(|e| {
             tracing::error!("Failed to stop VM {}: {}", vm_id, e);
             ServerFnError::new(format!("Failed to stop VM: {}", e))
         })?;
-        
+
         // Update cache immediately after stopping
         let mut cache = VM_CACHE.write().await;
         if let Some(vm) = cache.get_mut(&vm_id) {
             vm.status = quickemu_core::models::VMStatus::Stopped;
         }
-        
+
         tracing::info!("Successfully stopped VM: {}", vm_id);
         Ok(())
     } else {
@@ -298,17 +307,23 @@ pub async fn stop_vm(vm_id: String) -> Result<(), ServerFnError> {
 
 #[server(DeleteVM)]
 pub async fn delete_vm(vm_id: String) -> Result<(), ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     tracing::info!("Attempting to delete VM: {}", vm_id);
-    
+
     let vm_manager = VM_MANAGER.read().await;
     let cache = VM_CACHE.read().await;
-    
+
     tracing::info!("VM Manager initialized: {}", vm_manager.is_some());
     tracing::info!("Cache contains {} VMs", cache.len());
-    tracing::info!("VM {} exists in cache: {}", vm_id, cache.contains_key(&vm_id));
-    
+    tracing::info!(
+        "VM {} exists in cache: {}",
+        vm_id,
+        cache.contains_key(&vm_id)
+    );
+
     if let (Some(ref manager), Some(vm)) = (vm_manager.as_ref(), cache.get(&vm_id)) {
         // First stop the VM if it's running
         if vm.is_running() {
@@ -317,11 +332,13 @@ pub async fn delete_vm(vm_id: String) -> Result<(), ServerFnError> {
                 tracing::warn!("Failed to stop VM before deletion: {}", e);
             }
         }
-        
+
         // Delete the VM files manually
-        let config_dir = vm.config_path.parent()
+        let config_dir = vm
+            .config_path
+            .parent()
             .ok_or_else(|| ServerFnError::new("Invalid VM config path".to_string()))?;
-        
+
         // Delete the VM directory and all its contents
         if config_dir.exists() {
             std::fs::remove_dir_all(config_dir).map_err(|e| {
@@ -330,47 +347,54 @@ pub async fn delete_vm(vm_id: String) -> Result<(), ServerFnError> {
             })?;
             tracing::info!("Deleted VM directory: {:?}", config_dir);
         }
-        
+
         // Remove from cache
         drop(cache);
         let mut cache = VM_CACHE.write().await;
         cache.remove(&vm_id);
-        
+
         tracing::info!("Successfully deleted VM: {}", vm_id);
         Ok(())
     } else {
-        Err(ServerFnError::new("VM not found or VM Manager not initialized".to_string()))
+        Err(ServerFnError::new(
+            "VM not found or VM Manager not initialized".to_string(),
+        ))
     }
 }
 
 #[server(EditVM)]
 pub async fn edit_vm(request: EditVMRequest) -> Result<(), ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     tracing::info!("Attempting to edit VM: {}", request.vm_id);
-    
+
     let cache = VM_CACHE.read().await;
-    
+
     if let Some(vm) = cache.get(&request.vm_id) {
         // Check if VM is running - don't allow editing running VMs
         if vm.is_running() {
-            return Err(ServerFnError::new("Cannot edit a running VM. Please stop the VM first.".to_string()));
+            return Err(ServerFnError::new(
+                "Cannot edit a running VM. Please stop the VM first.".to_string(),
+            ));
         }
-        
+
         let config_path = PathBuf::from(&vm.config_path);
-        
+
         if !config_path.exists() {
-            return Err(ServerFnError::new("VM configuration file not found".to_string()));
+            return Err(ServerFnError::new(
+                "VM configuration file not found".to_string(),
+            ));
         }
-        
+
         // Read current config file
-        let content = fs::read_to_string(&config_path).map_err(|e| {
-            ServerFnError::new(format!("Failed to read VM config: {}", e))
-        })?;
-        
+        let content = fs::read_to_string(&config_path)
+            .map_err(|e| ServerFnError::new(format!("Failed to read VM config: {}", e)))?;
+
         let mut new_content = content;
         let mut updated = false;
-        
+
         // Update VM name if provided
         if let Some(ref name) = request.name {
             if !name.trim().is_empty() && name != &vm.name {
@@ -391,7 +415,7 @@ pub async fn edit_vm(request: EditVMRequest) -> Result<(), ServerFnError> {
                 tracing::info!("Updated VM name from '{}' to '{}'", vm.name, name);
             }
         }
-        
+
         // Update RAM if provided
         if let Some(ref ram) = request.ram {
             if !ram.trim().is_empty() {
@@ -411,7 +435,7 @@ pub async fn edit_vm(request: EditVMRequest) -> Result<(), ServerFnError> {
                 tracing::info!("Updated VM RAM to '{}'", ram);
             }
         }
-        
+
         // Update CPU cores if provided
         if let Some(cpu_cores) = request.cpu_cores {
             if cpu_cores > 0 && cpu_cores != vm.config.cpu_cores {
@@ -429,23 +453,22 @@ pub async fn edit_vm(request: EditVMRequest) -> Result<(), ServerFnError> {
                     })
                     .collect::<Vec<_>>()
                     .join("\n");
-                
+
                 // If cpu_cores line doesn't exist, add it
                 if !found_cpu_line {
                     new_content.push_str(&format!("\ncpu_cores={}", cpu_cores));
                 }
-                
+
                 updated = true;
                 tracing::info!("Updated VM CPU cores to {}", cpu_cores);
             }
         }
-        
+
         // Write updated config if changes were made
         if updated {
-            fs::write(&config_path, new_content).map_err(|e| {
-                ServerFnError::new(format!("Failed to write VM config: {}", e))
-            })?;
-            
+            fs::write(&config_path, new_content)
+                .map_err(|e| ServerFnError::new(format!("Failed to write VM config: {}", e)))?;
+
             // Update cache with new values
             drop(cache);
             let mut cache = VM_CACHE.write().await;
@@ -466,7 +489,7 @@ pub async fn edit_vm(request: EditVMRequest) -> Result<(), ServerFnError> {
                     }
                 }
             }
-            
+
             tracing::info!("Successfully updated VM: {}", request.vm_id);
             Ok(())
         } else {
@@ -480,19 +503,26 @@ pub async fn edit_vm(request: EditVMRequest) -> Result<(), ServerFnError> {
 
 #[server(GetVMMetrics)]
 pub async fn get_vm_metrics(vm_id: String) -> Result<VMMetrics, ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let process_monitor = PROCESS_MONITOR.read().await;
-    
+
     if let Some(ref monitor) = process_monitor.as_ref() {
         // Update metrics first to get current data
         monitor.update_metrics().await;
-        
+
         let vm_id_obj = VMId(vm_id.clone());
         match monitor.get_vm_metrics(&vm_id_obj).await {
             Some(core_metrics) => {
-                tracing::info!("Got metrics for VM '{}': CPU: {:.1}%, Memory: {} MB ({:.1}%)", 
-                    vm_id, core_metrics.cpu_percent, core_metrics.memory_mb, core_metrics.memory_percent);
+                tracing::info!(
+                    "Got metrics for VM '{}': CPU: {:.1}%, Memory: {} MB ({:.1}%)",
+                    vm_id,
+                    core_metrics.cpu_percent,
+                    core_metrics.memory_mb,
+                    core_metrics.memory_percent
+                );
                 // Convert from core metrics to our metrics
                 Ok(VMMetrics {
                     cpu_percent: core_metrics.cpu_percent,
@@ -519,19 +549,23 @@ pub async fn get_vm_metrics(vm_id: String) -> Result<VMMetrics, ServerFnError> {
             }
         }
     } else {
-        Err(ServerFnError::new("Process Monitor not initialized".to_string()))
+        Err(ServerFnError::new(
+            "Process Monitor not initialized".to_string(),
+        ))
     }
 }
 
 #[server(GetVMMetricsHistory)]
 pub async fn get_vm_metrics_history(vm_id: String) -> Result<VMMetricsHistory, ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let process_monitor = PROCESS_MONITOR.read().await;
-    
+
     if let Some(ref monitor) = process_monitor.as_ref() {
         let vm_id_obj = VMId(vm_id.clone());
-        
+
         // For now, we'll simulate historical data by collecting current metrics
         // In a real implementation, you'd store historical data over time
         let mut timestamps = Vec::new();
@@ -539,23 +573,31 @@ pub async fn get_vm_metrics_history(vm_id: String) -> Result<VMMetricsHistory, S
         let mut memory_history = Vec::new();
         let mut network_rx_history = Vec::new();
         let mut network_tx_history = Vec::new();
-        
+
         // Generate some sample historical data (last 30 data points)
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-            
+
         for i in 0..30 {
             let timestamp = current_time - (29 - i) * 2; // 2-second intervals
             timestamps.push(timestamp);
-            
+
             // Get current metrics for this VM
             if let Some(current_metrics) = monitor.get_vm_metrics(&vm_id_obj).await {
                 // Add some variation to simulate historical data
                 let time_factor = (i as f32 * 0.1).sin();
-                cpu_history.push((current_metrics.cpu_percent + time_factor * 10.0).max(0.0).min(100.0));
-                memory_history.push((current_metrics.memory_percent + time_factor * 5.0).max(0.0).min(100.0));
+                cpu_history.push(
+                    (current_metrics.cpu_percent + time_factor * 10.0)
+                        .max(0.0)
+                        .min(100.0),
+                );
+                memory_history.push(
+                    (current_metrics.memory_percent + time_factor * 5.0)
+                        .max(0.0)
+                        .min(100.0),
+                );
                 network_rx_history.push(current_metrics.network_rx_bytes + (i as u64 * 1024));
                 network_tx_history.push(current_metrics.network_tx_bytes + (i as u64 * 512));
             } else {
@@ -566,7 +608,7 @@ pub async fn get_vm_metrics_history(vm_id: String) -> Result<VMMetricsHistory, S
                 network_tx_history.push(0);
             }
         }
-        
+
         Ok(VMMetricsHistory {
             timestamps,
             cpu_history,
@@ -575,19 +617,23 @@ pub async fn get_vm_metrics_history(vm_id: String) -> Result<VMMetricsHistory, S
             network_tx_history,
         })
     } else {
-        Err(ServerFnError::new("Process Monitor not initialized".to_string()))
+        Err(ServerFnError::new(
+            "Process Monitor not initialized".to_string(),
+        ))
     }
 }
 
 #[server(CreateVM)]
 pub async fn create_vm(request: CreateVMRequest) -> Result<String, ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let vm_manager = VM_MANAGER.read().await;
-    
+
     if let Some(ref manager) = vm_manager.as_ref() {
         let template: CoreVMTemplate = request.into();
-        
+
         // Get VM directory from config
         let config_manager = CONFIG_MANAGER.read().await;
         let output_dir = if let Some(ref config_mgr) = config_manager.as_ref() {
@@ -596,27 +642,30 @@ pub async fn create_vm(request: CreateVMRequest) -> Result<String, ServerFnError
             PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("VMs")
         };
         drop(config_manager);
-        
+
         // Create directory if it doesn't exist
         if !output_dir.exists() {
-            std::fs::create_dir_all(&output_dir).map_err(|e| {
-                ServerFnError::new(format!("Failed to create VM directory: {}", e))
-            })?;
+            std::fs::create_dir_all(&output_dir)
+                .map_err(|e| ServerFnError::new(format!("Failed to create VM directory: {}", e)))?;
         }
-        
-        match manager.create_vm_from_template(&template, &output_dir).await {
+
+        match manager
+            .create_vm_from_template(&template, &output_dir)
+            .await
+        {
             Ok(config_path) => {
-                let vm_id = config_path.file_stem()
+                let vm_id = config_path
+                    .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("new-vm")
                     .to_string();
-                
+
                 tracing::info!("Successfully created VM: {} at {:?}", vm_id, config_path);
                 Ok(vm_id)
             }
             Err(e) => {
                 tracing::error!("Failed to create VM: {}", e);
-                
+
                 // Check if this is a quickget-related error
                 if e.to_string().contains("No such file") || e.to_string().contains("quickget") {
                     Err(ServerFnError::new(
@@ -634,8 +683,10 @@ pub async fn create_vm(request: CreateVMRequest) -> Result<String, ServerFnError
 
 #[server(GetVMDirectory)]
 pub async fn get_vm_directory() -> Result<String, ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let config_manager = CONFIG_MANAGER.read().await;
     if let Some(ref config_mgr) = config_manager.as_ref() {
         let vm_dir = config_mgr.get_primary_vm_directory().await;
@@ -649,8 +700,10 @@ pub async fn get_vm_directory() -> Result<String, ServerFnError> {
 
 #[server(CreateVMWithOutput)]
 pub async fn create_vm_with_output(request: CreateVMRequest) -> Result<String, ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     // Get VM directory from config
     let config_manager = CONFIG_MANAGER.read().await;
     let output_dir = if let Some(ref config_mgr) = config_manager.as_ref() {
@@ -659,28 +712,35 @@ pub async fn create_vm_with_output(request: CreateVMRequest) -> Result<String, S
         PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("VMs")
     };
     drop(config_manager);
-    
+
     // Create directory if it doesn't exist
     if !output_dir.exists() {
-        std::fs::create_dir_all(&output_dir).map_err(|e| {
-            ServerFnError::new(format!("Failed to create VM directory: {}", e))
-        })?;
+        std::fs::create_dir_all(&output_dir)
+            .map_err(|e| ServerFnError::new(format!("Failed to create VM directory: {}", e)))?;
     }
-    
+
     // Get quickget path
     let binary_discovery = BinaryDiscovery::new().await;
-    let quickget_path = binary_discovery.quickget_path()
-        .ok_or_else(|| ServerFnError::new("quickget not found. Please install quickemu.".to_string()))?;
-    
+    let quickget_path = binary_discovery.quickget_path().ok_or_else(|| {
+        ServerFnError::new("quickget not found. Please install quickemu.".to_string())
+    })?;
+
     // Generate VM name if not provided
     let vm_name = if let Some(ref name) = request.name {
         name.clone()
     } else {
         format!("{}-{}", request.os, request.version)
     };
-    
-    let creation_id = format!("{}_{}", vm_name, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
-    
+
+    let creation_id = format!(
+        "{}_{}",
+        vm_name,
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    );
+
     // Build quickget command
     let mut cmd = Command::new(quickget_path);
     cmd.current_dir(&output_dir)
@@ -688,40 +748,48 @@ pub async fn create_vm_with_output(request: CreateVMRequest) -> Result<String, S
         .arg(&request.version)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    
+
     // Add edition if specified
     if let Some(ref edition) = request.edition {
         if !edition.is_empty() {
             cmd.arg(edition);
         }
     }
-    
-    tracing::info!("Starting VM creation: quickget {} {} (ID: {})", request.os, request.version, creation_id);
-    
+
+    tracing::info!(
+        "Starting VM creation: quickget {} {} (ID: {})",
+        request.os,
+        request.version,
+        creation_id
+    );
+
     // Initialize the log for this creation process
     {
         let mut logs = VM_CREATION_LOGS.lock().await;
-        logs.insert(creation_id.clone(), vec![
-            format!("Starting VM creation: {} {}", request.os, request.version),
-            "Executing quickget command...".to_string(),
-        ]);
+        logs.insert(
+            creation_id.clone(),
+            vec![
+                format!("Starting VM creation: {} {}", request.os, request.version),
+                "Executing quickget command...".to_string(),
+            ],
+        );
     }
-    
+
     // Execute command and stream output in real-time
-    let mut child = cmd.spawn().map_err(|e| {
-        ServerFnError::new(format!("Failed to start quickget: {}", e))
-    })?;
-    
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| ServerFnError::new(format!("Failed to start quickget: {}", e)))?;
+
     // Stream stdout and stderr in real-time
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
-    
+
     let mut stdout_reader = BufReader::new(stdout).lines();
     let mut stderr_reader = BufReader::new(stderr).lines();
-    
+
     let creation_id_stdout = creation_id.clone();
     let creation_id_stderr = creation_id.clone();
-    
+
     // Spawn background task to handle the process and update logs
     let creation_id_bg = creation_id.clone();
     tokio::spawn(async move {
@@ -734,7 +802,7 @@ pub async fn create_vm_with_output(request: CreateVMRequest) -> Result<String, S
                 }
             }
         });
-        
+
         // Read stderr
         let stderr_task = tokio::spawn(async move {
             while let Ok(Some(line)) = stderr_reader.next_line().await {
@@ -744,23 +812,25 @@ pub async fn create_vm_with_output(request: CreateVMRequest) -> Result<String, S
                 }
             }
         });
-        
+
         // Wait for process to complete
         let status = child.wait().await;
-        
+
         // Wait for all output to be read
         let _ = tokio::join!(stdout_task, stderr_task);
-        
+
         // Update final status
         let mut logs = VM_CREATION_LOGS.lock().await;
         if let Some(log_lines) = logs.get_mut(&creation_id_bg) {
             match status {
                 Ok(status) if status.success() => {
                     log_lines.push("✓ VM created successfully!".to_string());
-                    
                 }
                 Ok(status) => {
-                    log_lines.push(format!("✗ quickget failed with exit code: {:?}", status.code()));
+                    log_lines.push(format!(
+                        "✗ quickget failed with exit code: {:?}",
+                        status.code()
+                    ));
                 }
                 Err(e) => {
                     log_lines.push(format!("✗ Process error: {}", e));
@@ -768,7 +838,7 @@ pub async fn create_vm_with_output(request: CreateVMRequest) -> Result<String, S
             }
         }
     });
-    
+
     // Return immediately with the creation ID
     Ok(creation_id)
 }
@@ -779,26 +849,26 @@ pub async fn create_vm_with_output(request: CreateVMRequest) -> Result<String, S
 #[server(GetVMScreenshot)]
 pub async fn get_vm_screenshot(vm_id: String) -> Result<String, ServerFnError> {
     init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+
     let vm_manager = VM_MANAGER.read().await;
-    
+
     if let Some(ref manager) = vm_manager.as_ref() {
         let vm_id_obj = VMId(vm_id.clone());
-        
+
         // Take screenshot (returns a DynamicImage)
         let screenshot = manager.get_vm_screenshot(&vm_id_obj).await.map_err(|e| {
             tracing::error!("Failed to get screenshot for VM {}: {}", vm_id, e);
             ServerFnError::new(format!("Failed to get screenshot: {}", e))
         })?;
-        
+
         // Convert to PNG and then to base64
         let mut image_data = Cursor::new(Vec::new());
         screenshot.write_to(&mut image_data, ImageFormat::Png).map_err(|e| {
             ServerFnError::new(format!("Failed to encode screenshot: {}", e))
         })?;
-        
+
         let base64_string = STANDARD.encode(image_data.into_inner());
-        
+
         Ok(format!("data:image/png;base64,{}", base64_string))
     } else {
         Err(ServerFnError::new("VM Manager not initialized".to_string()))
@@ -809,7 +879,9 @@ pub async fn get_vm_screenshot(vm_id: String) -> Result<String, ServerFnError> {
 #[server(GetVMScreenshot)]
 pub async fn get_vm_screenshot(_vm_id: String) -> Result<String, ServerFnError> {
     // Placeholder implementation - screenshot functionality not yet implemented
-    Err(ServerFnError::new("Screenshot functionality not yet implemented".to_string()))
+    Err(ServerFnError::new(
+        "Screenshot functionality not yet implemented".to_string(),
+    ))
 }
 
 #[server(GetVMCreationLogs)]
@@ -831,10 +903,12 @@ pub async fn cleanup_vm_creation_logs(creation_id: String) -> Result<(), ServerF
 
 #[server(GetAvailableOS)]
 pub async fn get_available_os() -> Result<Vec<(String, Vec<String>)>, ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let quickget_service = QUICKGET_SERVICE.read().await;
-    
+
     if let Some(ref service) = quickget_service.as_ref() {
         match service.get_supported_systems().await {
             Ok(systems) => {
@@ -842,26 +916,33 @@ pub async fn get_available_os() -> Result<Vec<(String, Vec<String>)>, ServerFnEr
                     .iter()
                     .map(|system| (system.name.clone(), system.versions.clone()))
                     .collect();
-                
+
                 tracing::info!("Retrieved {} operating systems from quickget", result.len());
                 Ok(result)
             }
             Err(e) => {
                 tracing::error!("Failed to get supported systems from quickget: {}", e);
-                Err(ServerFnError::new(format!("Failed to get OS list from quickget: {}", e)))
+                Err(ServerFnError::new(format!(
+                    "Failed to get OS list from quickget: {}",
+                    e
+                )))
             }
         }
     } else {
-        Err(ServerFnError::new("Quickget service not available. Please ensure quickemu is installed.".to_string()))
+        Err(ServerFnError::new(
+            "Quickget service not available. Please ensure quickemu is installed.".to_string(),
+        ))
     }
 }
 
 #[server(GetPopularOS)]
 pub async fn get_popular_os() -> Result<Vec<(String, Vec<String>)>, ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let quickget_service = QUICKGET_SERVICE.read().await;
-    
+
     if let Some(ref service) = quickget_service.as_ref() {
         match service.get_popular_systems().await {
             Ok(systems) => {
@@ -869,31 +950,49 @@ pub async fn get_popular_os() -> Result<Vec<(String, Vec<String>)>, ServerFnErro
                     .iter()
                     .map(|system| (system.name.clone(), system.versions.clone()))
                     .collect();
-                
-                tracing::info!("Retrieved {} popular operating systems from quickget", result.len());
+
+                tracing::info!(
+                    "Retrieved {} popular operating systems from quickget",
+                    result.len()
+                );
                 Ok(result)
             }
             Err(e) => {
                 tracing::error!("Failed to get popular systems from quickget: {}", e);
-                Err(ServerFnError::new(format!("Failed to get popular OS list from quickget: {}", e)))
+                Err(ServerFnError::new(format!(
+                    "Failed to get popular OS list from quickget: {}",
+                    e
+                )))
             }
         }
     } else {
-        Err(ServerFnError::new("Quickget service not available. Please ensure quickemu is installed.".to_string()))
+        Err(ServerFnError::new(
+            "Quickget service not available. Please ensure quickemu is installed.".to_string(),
+        ))
     }
 }
 
 #[server(GetOSEditions)]
-pub async fn get_os_editions(os_name: String, version: String) -> Result<Vec<String>, ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+pub async fn get_os_editions(
+    os_name: String,
+    version: String,
+) -> Result<Vec<String>, ServerFnError> {
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let quickget_service = QUICKGET_SERVICE.read().await;
-    
+
     if let Some(ref service) = quickget_service.as_ref() {
         // Use the get_editions method to fetch editions dynamically from quickget
         match service.get_editions(&os_name).await {
             Ok(editions) => {
-                tracing::info!("Retrieved {} editions for {}: {:?}", editions.len(), os_name, editions);
+                tracing::info!(
+                    "Retrieved {} editions for {}: {:?}",
+                    editions.len(),
+                    os_name,
+                    editions
+                );
                 Ok(editions)
             }
             Err(e) => {
@@ -902,17 +1001,20 @@ pub async fn get_os_editions(os_name: String, version: String) -> Result<Vec<Str
             }
         }
     } else {
-        Err(ServerFnError::new("Quickget service not available. Please ensure quickemu is installed.".to_string()))
+        Err(ServerFnError::new(
+            "Quickget service not available. Please ensure quickemu is installed.".to_string(),
+        ))
     }
 }
 
-
 #[server(GetOSIcon)]
 pub async fn get_os_icon(os_name: String) -> Result<Option<String>, ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let quickget_service = QUICKGET_SERVICE.read().await;
-    
+
     if let Some(ref service) = quickget_service.as_ref() {
         match service.get_supported_systems().await {
             Ok(systems) => {
@@ -933,38 +1035,55 @@ pub async fn get_os_icon(os_name: String) -> Result<Option<String>, ServerFnErro
 }
 
 #[server(StartVMConsole)]
-pub async fn start_vm_console(vm_id: String, hostname: Option<String>) -> Result<ConsoleInfo, ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+pub async fn start_vm_console(
+    vm_id: String,
+    hostname: Option<String>,
+) -> Result<ConsoleInfo, ServerFnError> {
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let vm_manager = VM_MANAGER.read().await;
-    
+
     if let Some(ref manager) = vm_manager.as_ref() {
         let vm_id_obj = VMId(vm_id.clone());
-        
+
         // Check if VM is running and supports SPICE
         let cache = VM_CACHE.read().await;
         if let Some(vm) = cache.get(&vm_id) {
             if !vm.is_running() {
                 return Err(ServerFnError::new("VM is not running".to_string()));
             }
-            
+
             // Check if VM supports console access
             if !manager.supports_console_access(vm).await {
-                return Err(ServerFnError::new("VM does not support console access".to_string()));
+                return Err(ServerFnError::new(
+                    "VM does not support console access".to_string(),
+                ));
             }
         } else {
             return Err(ServerFnError::new("VM not found".to_string()));
         }
-        
+
         // Create console session with host override
-        match manager.create_console_session_with_host(&vm_id_obj, hostname).await {
+        match manager
+            .create_console_session_with_host(&vm_id_obj, hostname)
+            .await
+        {
             Ok(console_info) => {
-                tracing::info!("Started console session for VM '{}': {}", vm_id, console_info.websocket_url);
+                tracing::info!(
+                    "Started console session for VM '{}': {}",
+                    vm_id,
+                    console_info.websocket_url
+                );
                 Ok(console_info.into()) // Convert from core ConsoleInfo to our model ConsoleInfo
             }
             Err(e) => {
                 tracing::error!("Failed to start console session for VM '{}': {}", vm_id, e);
-                Err(ServerFnError::new(format!("Failed to start console session: {}", e)))
+                Err(ServerFnError::new(format!(
+                    "Failed to start console session: {}",
+                    e
+                )))
             }
         }
     } else {
@@ -974,10 +1093,12 @@ pub async fn start_vm_console(vm_id: String, hostname: Option<String>) -> Result
 
 #[server(StopVMConsole)]
 pub async fn stop_vm_console(connection_id: String) -> Result<(), ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let vm_manager = VM_MANAGER.read().await;
-    
+
     if let Some(ref manager) = vm_manager.as_ref() {
         match manager.remove_console_session(&connection_id).await {
             Ok(()) => {
@@ -986,7 +1107,10 @@ pub async fn stop_vm_console(connection_id: String) -> Result<(), ServerFnError>
             }
             Err(e) => {
                 tracing::error!("Failed to stop console session '{}': {}", connection_id, e);
-                Err(ServerFnError::new(format!("Failed to stop console session: {}", e)))
+                Err(ServerFnError::new(format!(
+                    "Failed to stop console session: {}",
+                    e
+                )))
             }
         }
     } else {
@@ -996,25 +1120,42 @@ pub async fn stop_vm_console(connection_id: String) -> Result<(), ServerFnError>
 
 #[server(GetConsoleStatus)]
 pub async fn get_console_status(connection_id: String) -> Result<Option<String>, ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let vm_manager = VM_MANAGER.read().await;
-    
+
     if let Some(ref manager) = vm_manager.as_ref() {
         match manager.get_console_status(&connection_id).await {
             Ok(Some(status)) => {
                 let status_str = match status {
-                    quickemu_core::services::vnc_proxy::ConnectionStatus::Authenticating => "authenticating".to_string(),
-                    quickemu_core::services::vnc_proxy::ConnectionStatus::Connected => "connected".to_string(),
-                    quickemu_core::services::vnc_proxy::ConnectionStatus::Disconnected => "disconnected".to_string(),
-                    quickemu_core::services::vnc_proxy::ConnectionStatus::Error(e) => format!("error: {}", e),
+                    quickemu_core::services::vnc_proxy::ConnectionStatus::Authenticating => {
+                        "authenticating".to_string()
+                    }
+                    quickemu_core::services::vnc_proxy::ConnectionStatus::Connected => {
+                        "connected".to_string()
+                    }
+                    quickemu_core::services::vnc_proxy::ConnectionStatus::Disconnected => {
+                        "disconnected".to_string()
+                    }
+                    quickemu_core::services::vnc_proxy::ConnectionStatus::Error(e) => {
+                        format!("error: {}", e)
+                    }
                 };
                 Ok(Some(status_str))
             }
             Ok(None) => Ok(None),
             Err(e) => {
-                tracing::error!("Failed to get console status for '{}': {}", connection_id, e);
-                Err(ServerFnError::new(format!("Failed to get console status: {}", e)))
+                tracing::error!(
+                    "Failed to get console status for '{}': {}",
+                    connection_id,
+                    e
+                );
+                Err(ServerFnError::new(format!(
+                    "Failed to get console status: {}",
+                    e
+                )))
             }
         }
     } else {
@@ -1024,11 +1165,13 @@ pub async fn get_console_status(connection_id: String) -> Result<Option<String>,
 
 #[server(SupportsConsoleAccess)]
 pub async fn supports_console_access(vm_id: String) -> Result<bool, ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let vm_manager = VM_MANAGER.read().await;
     let cache = VM_CACHE.read().await;
-    
+
     if let Some(ref manager) = vm_manager.as_ref() {
         if let Some(vm) = cache.get(&vm_id) {
             Ok(manager.supports_console_access(vm).await)
@@ -1042,46 +1185,62 @@ pub async fn supports_console_access(vm_id: String) -> Result<bool, ServerFnErro
 
 #[server(SetVMDirectory)]
 pub async fn set_vm_directory(directory: String) -> Result<(), ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let config_manager = CONFIG_MANAGER.read().await;
     if let Some(ref config_mgr) = config_manager.as_ref() {
         let path = PathBuf::from(directory);
-        config_mgr.set_primary_vm_directory(path).await
+        config_mgr
+            .set_primary_vm_directory(path)
+            .await
             .map_err(|e| ServerFnError::new(format!("Failed to set VM directory: {}", e)))?;
         Ok(())
     } else {
-        Err(ServerFnError::new("Configuration manager not initialized".to_string()))
+        Err(ServerFnError::new(
+            "Configuration manager not initialized".to_string(),
+        ))
     }
 }
 
 #[server(GetAppConfig)]
 pub async fn get_app_config() -> Result<crate::models::AppConfigDto, ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let config_manager = CONFIG_MANAGER.read().await;
     if let Some(ref config_mgr) = config_manager.as_ref() {
         let config = config_mgr.get_config().await;
         Ok(config.into())
     } else {
-        Err(ServerFnError::new("Configuration manager not initialized".to_string()))
+        Err(ServerFnError::new(
+            "Configuration manager not initialized".to_string(),
+        ))
     }
 }
 
 #[server(UpdateAppConfig)]
 pub async fn update_app_config(config: crate::models::AppConfigDto) -> Result<(), ServerFnError> {
-    init_services().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-    
+    init_services()
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
     let config_manager = CONFIG_MANAGER.read().await;
     if let Some(ref config_mgr) = config_manager.as_ref() {
         let core_config = config.into();
-        config_mgr.update_config(move |current_config| {
-            *current_config = core_config;
-        }).await
-        .map_err(|e| ServerFnError::new(format!("Failed to update config: {}", e)))?;
+        config_mgr
+            .update_config(move |current_config| {
+                *current_config = core_config;
+            })
+            .await
+            .map_err(|e| ServerFnError::new(format!("Failed to update config: {}", e)))?;
         Ok(())
     } else {
-        Err(ServerFnError::new("Configuration manager not initialized".to_string()))
+        Err(ServerFnError::new(
+            "Configuration manager not initialized".to_string(),
+        ))
     }
 }
 
@@ -1090,4 +1249,3 @@ pub async fn get_vm_cache_version() -> Result<u64, ServerFnError> {
     let version = VM_CACHE_VERSION.read().await;
     Ok(*version)
 }
-

@@ -8,12 +8,12 @@ async fn test_multi_display_support() {
     // Start mock server
     let server = MockSpiceServer::new("127.0.0.1:0").await.unwrap();
     let addr = server.local_addr();
-    
+
     // Create display channel
     let channel = DisplayChannel::new(&addr.ip().to_string(), addr.port(), 0)
         .await
         .unwrap();
-    
+
     // Test creating multiple surfaces
     let surface1 = SpiceSurfaceCreate {
         surface_id: 0,
@@ -22,7 +22,7 @@ async fn test_multi_display_support() {
         format: 32, // SPICE_SURFACE_FMT_32_xRGB
         flags: 0,
     };
-    
+
     let surface2 = SpiceSurfaceCreate {
         surface_id: 1,
         width: 1920,
@@ -30,22 +30,26 @@ async fn test_multi_display_support() {
         format: 32,
         flags: 0,
     };
-    
+
     // Send surface create messages
-    server.send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface1).await;
-    server.send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface2).await;
-    
+    server
+        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface1)
+        .await;
+    server
+        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface2)
+        .await;
+
     // Wait for processing
     tokio::time::sleep(Duration::from_millis(100)).await;
-    
+
     // Verify surfaces were created
     assert!(channel.get_surface(0).is_some());
     assert!(channel.get_surface(1).is_some());
-    
+
     let surface0 = channel.get_surface(0).unwrap();
     assert_eq!(surface0.width, 1920);
     assert_eq!(surface0.height, 1080);
-    
+
     let surface1 = channel.get_surface(1).unwrap();
     assert_eq!(surface1.width, 1920);
     assert_eq!(surface1.height, 1080);
@@ -55,11 +59,11 @@ async fn test_multi_display_support() {
 async fn test_monitors_config() {
     let server = MockSpiceServer::new("127.0.0.1:0").await.unwrap();
     let addr = server.local_addr();
-    
+
     let channel = DisplayChannel::new(&addr.ip().to_string(), addr.port(), 0)
         .await
         .unwrap();
-    
+
     // Create monitors configuration
     let monitors_config = SpiceMonitorsConfig {
         count: 2,
@@ -85,22 +89,24 @@ async fn test_monitors_config() {
             },
         ],
     };
-    
+
     // Send monitors config message
-    server.send_display_message(SPICE_MSG_DISPLAY_MONITORS_CONFIG, &monitors_config).await;
-    
+    server
+        .send_display_message(SPICE_MSG_DISPLAY_MONITORS_CONFIG, &monitors_config)
+        .await;
+
     // Wait for processing
     tokio::time::sleep(Duration::from_millis(100)).await;
-    
+
     // Verify monitors configuration
     let monitors = channel.get_monitors();
     assert_eq!(monitors.len(), 2);
-    
+
     assert_eq!(monitors[0].width, 1920);
     assert_eq!(monitors[0].height, 1080);
     assert_eq!(monitors[0].x, 0);
     assert_eq!(monitors[0].flags, SPICE_HEAD_FLAGS_PRIMARY);
-    
+
     assert_eq!(monitors[1].width, 1920);
     assert_eq!(monitors[1].height, 1080);
     assert_eq!(monitors[1].x, 1920);
@@ -111,11 +117,11 @@ async fn test_monitors_config() {
 async fn test_multi_display_video_streams() {
     let server = MockSpiceServer::new("127.0.0.1:0").await.unwrap();
     let addr = server.local_addr();
-    
+
     let channel = DisplayChannel::new(&addr.ip().to_string(), addr.port(), 0)
         .await
         .unwrap();
-    
+
     // Create two surfaces first
     let surface1 = SpiceSurfaceCreate {
         surface_id: 0,
@@ -124,7 +130,7 @@ async fn test_multi_display_video_streams() {
         format: 32,
         flags: 0,
     };
-    
+
     let surface2 = SpiceSurfaceCreate {
         surface_id: 1,
         width: 1920,
@@ -132,10 +138,14 @@ async fn test_multi_display_video_streams() {
         format: 32,
         flags: 0,
     };
-    
-    server.send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface1).await;
-    server.send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface2).await;
-    
+
+    server
+        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface1)
+        .await;
+    server
+        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface2)
+        .await;
+
     // Create video streams on different surfaces
     let stream1 = SpiceStreamCreate {
         id: 0,
@@ -157,7 +167,7 @@ async fn test_multi_display_video_streams() {
             data: None,
         },
     };
-    
+
     let stream2 = SpiceStreamCreate {
         id: 1,
         flags: 0,
@@ -178,13 +188,17 @@ async fn test_multi_display_video_streams() {
             data: None,
         },
     };
-    
-    server.send_display_message(DisplayChannelMessage::StreamCreate as u16, &stream1).await;
-    server.send_display_message(DisplayChannelMessage::StreamCreate as u16, &stream2).await;
-    
+
+    server
+        .send_display_message(DisplayChannelMessage::StreamCreate as u16, &stream1)
+        .await;
+    server
+        .send_display_message(DisplayChannelMessage::StreamCreate as u16, &stream2)
+        .await;
+
     // Wait for processing
     tokio::time::sleep(Duration::from_millis(100)).await;
-    
+
     // TODO: Add assertions once we have access to active_streams
     // For now, just verify no panic occurred
 }
@@ -193,11 +207,11 @@ async fn test_multi_display_video_streams() {
 async fn test_surface_cleanup_on_reset() {
     let server = MockSpiceServer::new("127.0.0.1:0").await.unwrap();
     let addr = server.local_addr();
-    
+
     let channel = DisplayChannel::new(&addr.ip().to_string(), addr.port(), 0)
         .await
         .unwrap();
-    
+
     // Create multiple surfaces
     for i in 0..3 {
         let surface = SpiceSurfaceCreate {
@@ -207,23 +221,27 @@ async fn test_surface_cleanup_on_reset() {
             format: 32,
             flags: 0,
         };
-        server.send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface).await;
+        server
+            .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface)
+            .await;
     }
-    
+
     // Wait for processing
     tokio::time::sleep(Duration::from_millis(100)).await;
-    
+
     // Verify surfaces exist
     assert!(channel.get_surface(0).is_some());
     assert!(channel.get_surface(1).is_some());
     assert!(channel.get_surface(2).is_some());
-    
+
     // Send reset message
-    server.send_display_message(DisplayChannelMessage::Reset as u16, &[]).await;
-    
+    server
+        .send_display_message(DisplayChannelMessage::Reset as u16, &[])
+        .await;
+
     // Wait for processing
     tokio::time::sleep(Duration::from_millis(100)).await;
-    
+
     // Verify all surfaces were cleared
     assert!(channel.get_surface(0).is_none());
     assert!(channel.get_surface(1).is_none());

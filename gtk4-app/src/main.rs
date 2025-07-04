@@ -2,10 +2,10 @@ mod ui;
 
 use gtk::prelude::*;
 use gtk::{gio, glib, Application};
-use std::sync::Arc;
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use quickemu_core::{ConfigManager, VMManager, QuickgetService, BinaryDiscovery};
+use quickemu_core::{BinaryDiscovery, ConfigManager, QuickgetService, VMManager};
 use ui::MainWindow;
 
 // Import AppState from lib.rs instead of defining it here
@@ -20,17 +20,17 @@ fn main() -> glib::ExitCode {
     adw::init().expect("Failed to initialize libadwaita");
 
     // Load resources
-    gio::resources_register_include!("resources.gresource")
-        .expect("Failed to register resources");
-    
+    gio::resources_register_include!("resources.gresource").expect("Failed to register resources");
+
     // Verify that the template resource exists
-    let resources = gio::resources_enumerate_children("/org/quickemu/Manager/ui", gio::ResourceLookupFlags::NONE)
-        .expect("Failed to enumerate resources");
+    let resources = gio::resources_enumerate_children(
+        "/org/quickemu/Manager/ui",
+        gio::ResourceLookupFlags::NONE,
+    )
+    .expect("Failed to enumerate resources");
     println!("Available UI resources: {:?}", resources);
 
-    let app = Application::builder()
-        .application_id(APP_ID)
-        .build();
+    let app = Application::builder().application_id(APP_ID).build();
 
     app.connect_activate(build_ui);
 
@@ -41,20 +41,25 @@ fn build_ui(app: &Application) {
     // Initialize application state
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
     let app_state = rt.block_on(async {
-        let config_manager = ConfigManager::new().await
+        let config_manager = ConfigManager::new()
+            .await
             .expect("Failed to initialize ConfigManager");
-        
+
         // Use unified binary discovery
         let binary_discovery = BinaryDiscovery::new().await;
-        println!("Binary discovery results:\n{}", binary_discovery.discovery_info());
-        
-        let vm_manager = VMManager::from_binary_discovery(binary_discovery.clone()).await
+        println!(
+            "Binary discovery results:\n{}",
+            binary_discovery.discovery_info()
+        );
+
+        let vm_manager = VMManager::from_binary_discovery(binary_discovery.clone())
+            .await
             .expect("Failed to initialize VMManager");
 
         // Initialize quickget service if available
-        let quickget_service = binary_discovery.quickget_path().map(|path| {
-            Arc::new(QuickgetService::new(path.to_path_buf()))
-        });
+        let quickget_service = binary_discovery
+            .quickget_path()
+            .map(|path| Arc::new(QuickgetService::new(path.to_path_buf())));
 
         if quickget_service.is_some() {
             println!("✅ Quickget service initialized");

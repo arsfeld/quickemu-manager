@@ -1,7 +1,7 @@
-use crate::models::{VMId, VMMetrics, MetricsHistory};
+use crate::models::{MetricsHistory, VMId, VMMetrics};
 use std::collections::HashMap;
-use tokio::sync::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 pub struct MetricsService {
     histories: Arc<RwLock<HashMap<VMId, MetricsHistory>>>,
@@ -15,29 +15,29 @@ impl MetricsService {
             max_history_points,
         }
     }
-    
+
     pub async fn record_metrics(&self, vm_id: VMId, metrics: VMMetrics) {
         let mut histories = self.histories.write().await;
-        
+
         let history = histories
             .entry(vm_id)
             .or_insert_with(|| MetricsHistory::new(self.max_history_points));
-        
+
         history.add_sample(&metrics);
     }
-    
+
     pub async fn get_history(&self, vm_id: &VMId) -> Option<MetricsHistory> {
         self.histories.read().await.get(vm_id).cloned()
     }
-    
+
     pub async fn get_all_histories(&self) -> HashMap<VMId, MetricsHistory> {
         self.histories.read().await.clone()
     }
-    
+
     pub async fn clear_history(&self, vm_id: &VMId) {
         self.histories.write().await.remove(vm_id);
     }
-    
+
     pub async fn clear_all_histories(&self) {
         self.histories.write().await.clear();
     }

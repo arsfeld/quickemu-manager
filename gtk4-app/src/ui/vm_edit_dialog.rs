@@ -1,8 +1,8 @@
-use gtk::prelude::*;
 use adw::prelude::*;
+use gtk::prelude::*;
 
 use crate::AppState;
-use quickemu_core::{VM, ConfigParser};
+use quickemu_core::{ConfigParser, VM};
 
 pub struct VMEditDialog {
     dialog: adw::Window,
@@ -26,16 +26,14 @@ impl VMEditDialog {
             .build();
 
         let header_bar = adw::HeaderBar::new();
-        
-        let cancel_button = gtk::Button::builder()
-            .label("Cancel")
-            .build();
-        
+
+        let cancel_button = gtk::Button::builder().label("Cancel").build();
+
         let save_button = gtk::Button::builder()
             .label("Save")
             .css_classes(["suggested-action"])
             .build();
-        
+
         header_bar.pack_start(&cancel_button);
         header_bar.pack_end(&save_button);
 
@@ -59,37 +57,29 @@ impl VMEditDialog {
             .text(&vm.name)
             .sensitive(false) // VM name shouldn't be changed as it's tied to the filename
             .build();
-        
-        let name_row = adw::ActionRow::builder()
-            .title("VM Name")
-            .build();
+
+        let name_row = adw::ActionRow::builder().title("VM Name").build();
         name_row.add_suffix(&name_entry);
         basic_group.add(&name_row);
 
         // Guest OS row (read-only)
-        let os_label = gtk::Label::builder()
-            .label(&vm.config.guest_os)
-            .build();
-        
-        let os_row = adw::ActionRow::builder()
-            .title("Guest OS")
-            .build();
+        let os_label = gtk::Label::builder().label(&vm.config.guest_os).build();
+
+        let os_row = adw::ActionRow::builder().title("Guest OS").build();
         os_row.add_suffix(&os_label);
         basic_group.add(&os_row);
 
         content_box.append(&basic_group);
 
         // Resources Group
-        let resources_group = adw::PreferencesGroup::builder()
-            .title("Resources")
-            .build();
+        let resources_group = adw::PreferencesGroup::builder().title("Resources").build();
 
         // RAM row
         let ram_entry = gtk::Entry::builder()
             .text(&vm.config.ram)
             .placeholder_text("e.g., 2G, 4096M")
             .build();
-        
+
         let ram_row = adw::ActionRow::builder()
             .title("RAM")
             .subtitle("Amount of memory (e.g., 2G, 4096M)")
@@ -104,13 +94,13 @@ impl VMEditDialog {
             .step_increment(1.0)
             .value(vm.config.cpu_cores as f64)
             .build();
-        
+
         let cpu_spin = gtk::SpinButton::builder()
             .adjustment(&cpu_adjustment)
             .climb_rate(1.0)
             .digits(0)
             .build();
-        
+
         let cpu_row = adw::ActionRow::builder()
             .title("CPU Cores")
             .subtitle("Number of virtual CPU cores")
@@ -123,7 +113,7 @@ impl VMEditDialog {
             .text(vm.config.disk_size.as_deref().unwrap_or(""))
             .placeholder_text("e.g., 20G, 100G")
             .build();
-        
+
         let disk_row = adw::ActionRow::builder()
             .title("Disk Size")
             .subtitle("Virtual disk size (e.g., 20G)")
@@ -168,19 +158,19 @@ impl VMEditDialog {
         let ram_entry_clone = ram_entry.clone();
         let cpu_spin_clone = cpu_spin.clone();
         let disk_size_entry_clone = disk_size_entry.clone();
-        
+
         save_button.connect_clicked(move |_| {
             let mut updated_config = vm_clone.config.clone();
-            
+
             // Update configuration values
             updated_config.ram = ram_entry_clone.text().to_string();
             updated_config.cpu_cores = cpu_spin_clone.value() as u32;
-            
+
             let disk_size_text = disk_size_entry_clone.text();
             if !disk_size_text.is_empty() {
                 updated_config.disk_size = Some(disk_size_text.to_string());
             }
-            
+
             // Save the configuration
             if let Err(e) = ConfigParser::save_config(&vm_clone.config_path, &updated_config) {
                 eprintln!("Failed to save VM configuration: {}", e);
@@ -190,7 +180,7 @@ impl VMEditDialog {
                 if let Some(dialog) = dialog_weak.upgrade() {
                     dialog.close();
                 }
-                
+
                 // TODO: Trigger refresh of VM list
             }
         });

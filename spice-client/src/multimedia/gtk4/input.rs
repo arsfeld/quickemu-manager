@@ -1,5 +1,5 @@
 use crate::multimedia::{
-    input::{InputHandler, LegacyKeyboardEvent, MouseEvent, KeyCode, MouseButton},
+    input::{InputHandler, KeyCode, LegacyKeyboardEvent, MouseButton, MouseEvent},
     Result,
 };
 use gtk4::{gdk, glib};
@@ -24,7 +24,7 @@ impl Gtk4Input {
     /// Convert GDK keyval to our KeyCode enum
     pub fn keyval_to_keycode(keyval: gdk::Key) -> KeyCode {
         use gdk::Key;
-        
+
         match keyval {
             Key::a | Key::A => KeyCode::A,
             Key::b | Key::B => KeyCode::B,
@@ -52,7 +52,7 @@ impl Gtk4Input {
             Key::x | Key::X => KeyCode::X,
             Key::y | Key::Y => KeyCode::Y,
             Key::z | Key::Z => KeyCode::Z,
-            
+
             Key::_0 | Key::parenright => KeyCode::Num0,
             Key::_1 | Key::exclam => KeyCode::Num1,
             Key::_2 | Key::at => KeyCode::Num2,
@@ -63,7 +63,7 @@ impl Gtk4Input {
             Key::_7 | Key::ampersand => KeyCode::Num7,
             Key::_8 | Key::asterisk => KeyCode::Num8,
             Key::_9 | Key::parenleft => KeyCode::Num9,
-            
+
             Key::F1 => KeyCode::F1,
             Key::F2 => KeyCode::F2,
             Key::F3 => KeyCode::F3,
@@ -76,7 +76,7 @@ impl Gtk4Input {
             Key::F10 => KeyCode::F10,
             Key::F11 => KeyCode::F11,
             Key::F12 => KeyCode::F12,
-            
+
             Key::Escape => KeyCode::Escape,
             Key::Tab => KeyCode::Tab,
             Key::Caps_Lock => KeyCode::CapsLock,
@@ -84,27 +84,27 @@ impl Gtk4Input {
             Key::Control_L | Key::Control_R => KeyCode::Ctrl,
             Key::Alt_L | Key::Alt_R => KeyCode::Alt,
             Key::Super_L | Key::Super_R => KeyCode::Super,
-            
+
             Key::space => KeyCode::Space,
             Key::Return => KeyCode::Enter,
             Key::BackSpace => KeyCode::Backspace,
             Key::Delete => KeyCode::Delete,
-            
+
             Key::Left => KeyCode::Left,
             Key::Right => KeyCode::Right,
             Key::Up => KeyCode::Up,
             Key::Down => KeyCode::Down,
-            
+
             Key::Home => KeyCode::Home,
             Key::End => KeyCode::End,
             Key::Page_Up => KeyCode::PageUp,
             Key::Page_Down => KeyCode::PageDown,
-            
+
             Key::Insert => KeyCode::Insert,
             Key::Print => KeyCode::PrintScreen,
             Key::Scroll_Lock => KeyCode::ScrollLock,
             Key::Pause => KeyCode::Pause,
-            
+
             _ => KeyCode::Unknown(0), // GTK4 Key doesn't provide raw value
         }
     }
@@ -115,7 +115,7 @@ impl Gtk4Input {
         let ctrl = state.contains(gdk::ModifierType::CONTROL_MASK);
         let alt = state.contains(gdk::ModifierType::ALT_MASK);
         let super_key = state.contains(gdk::ModifierType::SUPER_MASK);
-        
+
         (shift, ctrl, alt, super_key)
     }
 
@@ -125,8 +125,8 @@ impl Gtk4Input {
             1 => MouseButton::Left,
             2 => MouseButton::Middle,
             3 => MouseButton::Right,
-            8 => MouseButton::X1, // Back button
-            9 => MouseButton::X2, // Forward button
+            8 => MouseButton::X1,   // Back button
+            9 => MouseButton::X2,   // Forward button
             _ => MouseButton::Left, // Default to left for unknown buttons
         }
     }
@@ -137,12 +137,12 @@ impl InputHandler for Gtk4Input {
         // This is handled by the GTK4 event system in the application
         Ok(())
     }
-    
+
     fn handle_mouse(&mut self, _event: MouseEvent) -> Result<()> {
         // This is handled by the GTK4 event system in the application
         Ok(())
     }
-    
+
     fn grab_input(&mut self, grab: bool) -> Result<()> {
         if let Ok(mut grabbed) = self.grabbed.lock() {
             *grabbed = grab;
@@ -150,18 +150,18 @@ impl InputHandler for Gtk4Input {
         // Note: Actual pointer grabbing should be done at the widget level
         Ok(())
     }
-    
+
     fn is_grabbed(&self) -> bool {
         self.grabbed.lock().map(|g| *g).unwrap_or(false)
     }
-    
+
     fn set_relative_mouse(&mut self, relative: bool) -> Result<()> {
         if let Ok(mut rel) = self.relative_mode.lock() {
             *rel = relative;
         }
         Ok(())
     }
-    
+
     fn warp_mouse(&mut self, _x: i32, _y: i32) -> Result<()> {
         // GTK4 doesn't provide direct mouse warping
         // This would need to be implemented at the window level if needed

@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::protocol::*;
-    use binrw::{BinRead, BinWrite};
     use binrw::io::Cursor;
+    use binrw::{BinRead, BinWrite};
 
     #[test]
     fn test_spice_magic_constants() {
@@ -24,7 +24,7 @@ mod tests {
         assert_eq!(ChannelType::Playback as u8, 5);
         assert_eq!(ChannelType::Record as u8, 6);
     }
-    
+
     #[test]
     fn test_spice_data_header_size() {
         // SPICE protocol expects exactly 18 bytes for data header
@@ -34,18 +34,34 @@ mod tests {
             msg_size: 0x56789ABC,
             sub_list: 0xDEF01234,
         };
-        
+
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
         header.write(&mut cursor).unwrap();
-        
-        assert_eq!(buffer.len(), 18, "SpiceDataHeader should be exactly 18 bytes on wire");
-        
+
+        assert_eq!(
+            buffer.len(),
+            18,
+            "SpiceDataHeader should be exactly 18 bytes on wire"
+        );
+
         // Verify the exact byte layout
-        assert_eq!(&buffer[0..8], &0x0123456789ABCDEF_u64.to_le_bytes(), "serial field");
+        assert_eq!(
+            &buffer[0..8],
+            &0x0123456789ABCDEF_u64.to_le_bytes(),
+            "serial field"
+        );
         assert_eq!(&buffer[8..10], &0x1234_u16.to_le_bytes(), "msg_type field");
-        assert_eq!(&buffer[10..14], &0x56789ABC_u32.to_le_bytes(), "msg_size field");
-        assert_eq!(&buffer[14..18], &0xDEF01234_u32.to_le_bytes(), "sub_list field");
+        assert_eq!(
+            &buffer[10..14],
+            &0x56789ABC_u32.to_le_bytes(),
+            "msg_size field"
+        );
+        assert_eq!(
+            &buffer[14..18],
+            &0xDEF01234_u32.to_le_bytes(),
+            "sub_list field"
+        );
     }
 
     #[test]
@@ -62,7 +78,7 @@ mod tests {
         header.write(&mut cursor).unwrap();
         let bytes = cursor.into_inner();
         assert_eq!(bytes.len(), 16); // 4 u32 fields = 16 bytes
-        
+
         // Read back
         let mut cursor = Cursor::new(&bytes);
         let deserialized = SpiceLinkHeader::read(&mut cursor).unwrap();
@@ -89,7 +105,7 @@ mod tests {
         mess.write(&mut cursor).unwrap();
         let bytes = cursor.into_inner();
         assert_eq!(bytes.len(), 20, "SpiceLinkMess should be 20 bytes");
-        
+
         // Read back
         let mut cursor = Cursor::new(&bytes);
         let deserialized = SpiceLinkMess::read(&mut cursor).unwrap();
@@ -115,7 +131,7 @@ mod tests {
         let mut cursor = Cursor::new(Vec::new());
         reply.write(&mut cursor).unwrap();
         let bytes = cursor.into_inner();
-        
+
         // Read back
         let mut cursor = Cursor::new(&bytes);
         let deserialized = SpiceLinkReply::read(&mut cursor).unwrap();
@@ -140,11 +156,11 @@ mod tests {
         header.write(&mut cursor).unwrap();
         let bytes = cursor.into_inner();
         assert_eq!(bytes.len(), 18); // packed size: 8 + 2 + 4 + 4 = 18
-        
+
         // Read back
         let mut cursor = Cursor::new(&bytes);
         let deserialized = SpiceDataHeader::read(&mut cursor).unwrap();
-            
+
         assert_eq!(header.serial, deserialized.serial);
         assert_eq!(header.msg_type, deserialized.msg_type);
         assert_eq!(header.msg_size, deserialized.msg_size);
@@ -174,14 +190,26 @@ mod tests {
         assert_eq!(std::mem::size_of::<SpiceLinkHeader>(), 16);
         assert_eq!(std::mem::size_of::<SpiceLinkMess>(), 20);
         assert_eq!(std::mem::size_of::<SpiceLinkReply>(), 16); // Updated - has 4 u32 fields
-        // With binrw, sizes depend on the serialization, not memory layout
-        // We test the serialized sizes instead
-        let header = SpiceLinkHeader { magic: 0, major_version: 0, minor_version: 0, size: 0 };
+                                                               // With binrw, sizes depend on the serialization, not memory layout
+                                                               // We test the serialized sizes instead
+        let header = SpiceLinkHeader {
+            magic: 0,
+            major_version: 0,
+            minor_version: 0,
+            size: 0,
+        };
         let mut cursor = Cursor::new(Vec::new());
         header.write(&mut cursor).unwrap();
         assert_eq!(cursor.into_inner().len(), 16);
-        
-        let mess = SpiceLinkMess { connection_id: 0, channel_type: 0, channel_id: 0, num_common_caps: 0, num_channel_caps: 0, caps_offset: 0 };
+
+        let mess = SpiceLinkMess {
+            connection_id: 0,
+            channel_type: 0,
+            channel_id: 0,
+            num_common_caps: 0,
+            num_channel_caps: 0,
+            caps_offset: 0,
+        };
         let mut cursor = Cursor::new(Vec::new());
         mess.write(&mut cursor).unwrap();
         assert_eq!(cursor.into_inner().len(), 20);
@@ -234,7 +262,11 @@ mod tests {
         ];
 
         let unique_codes: std::collections::HashSet<_> = error_codes.iter().cloned().collect();
-        assert_eq!(error_codes.len(), unique_codes.len(), "Error codes must be unique");
+        assert_eq!(
+            error_codes.len(),
+            unique_codes.len(),
+            "Error codes must be unique"
+        );
     }
 
     #[test]
@@ -255,14 +287,20 @@ mod tests {
         init_msg.write(&mut cursor).unwrap();
         let bytes = cursor.into_inner();
         assert_eq!(bytes.len(), 32); // 8 u32 fields
-        
+
         // Read back
         let mut cursor = Cursor::new(&bytes);
         let deserialized = SpiceMsgMainInit::read(&mut cursor).unwrap();
 
         assert_eq!(init_msg.session_id, deserialized.session_id);
-        assert_eq!(init_msg.display_channels_hint, deserialized.display_channels_hint);
-        assert_eq!(init_msg.supported_mouse_modes, deserialized.supported_mouse_modes);
+        assert_eq!(
+            init_msg.display_channels_hint,
+            deserialized.display_channels_hint
+        );
+        assert_eq!(
+            init_msg.supported_mouse_modes,
+            deserialized.supported_mouse_modes
+        );
         assert_eq!(init_msg.current_mouse_mode, deserialized.current_mouse_mode);
         assert_eq!(init_msg.agent_connected, deserialized.agent_connected);
         assert_eq!(init_msg.agent_tokens, deserialized.agent_tokens);
@@ -284,18 +322,22 @@ mod tests {
         rect.write_le(&mut cursor).unwrap();
         let bytes = cursor.into_inner();
         assert_eq!(bytes.len(), 16); // 4 i32 values
-        
+
         // Verify field order in serialized data
         let left_bytes = (-100i32).to_le_bytes();
         let top_bytes = (-50i32).to_le_bytes();
         let right_bytes = (1024i32).to_le_bytes();
         let bottom_bytes = (768i32).to_le_bytes();
-        
+
         assert_eq!(&bytes[0..4], &left_bytes, "left field should be first");
         assert_eq!(&bytes[4..8], &top_bytes, "top field should be second");
         assert_eq!(&bytes[8..12], &right_bytes, "right field should be third");
-        assert_eq!(&bytes[12..16], &bottom_bytes, "bottom field should be fourth");
-        
+        assert_eq!(
+            &bytes[12..16],
+            &bottom_bytes,
+            "bottom field should be fourth"
+        );
+
         // Read back
         let mut cursor = Cursor::new(&bytes);
         let deserialized = SpiceRect::read_le(&mut cursor).unwrap();
@@ -314,7 +356,7 @@ mod tests {
         point.write_le(&mut cursor).unwrap();
         let bytes = cursor.into_inner();
         assert_eq!(bytes.len(), 8); // 2 i32 values
-        
+
         // Read back
         let mut cursor = Cursor::new(&bytes);
         let deserialized = SpicePoint::read_le(&mut cursor).unwrap();
@@ -324,14 +366,17 @@ mod tests {
 
     #[test]
     fn test_spice_size_serialization() {
-        let size = SpiceSize { width: 1920, height: 1080 };
+        let size = SpiceSize {
+            width: 1920,
+            height: 1080,
+        };
 
         // Write to bytes
         let mut cursor = Cursor::new(Vec::new());
         size.write_le(&mut cursor).unwrap();
         let bytes = cursor.into_inner();
         assert_eq!(bytes.len(), 8); // 2 u32 values
-        
+
         // Read back
         let mut cursor = Cursor::new(&bytes);
         let deserialized = SpiceSize::read_le(&mut cursor).unwrap();
@@ -343,7 +388,7 @@ mod tests {
     fn test_invalid_channel_type() {
         // Test that invalid channel types are handled properly
         let invalid_types = vec![0u8, 12u8, 255u8];
-        
+
         for invalid_type in invalid_types {
             // This assumes channel type validation is implemented
             assert!(invalid_type == 0 || invalid_type > 11 || invalid_type == 255);
@@ -357,7 +402,7 @@ mod tests {
         assert_eq!(MainChannelMessage::ChannelsList as u16, 104);
         assert_eq!(MainChannelMessage::MouseMode as u16, 105);
         assert_eq!(MainChannelMessage::MultiMediaTime as u16, 106);
-        
+
         // Test DisplayChannelMessage enum conversions
         assert_eq!(DisplayChannelMessage::Mode as u16, 101);
         assert_eq!(DisplayChannelMessage::DrawCopy as u16, 304);

@@ -1,17 +1,17 @@
-use crate::channels::main::MainChannel;
+use crate::channels::cursor::{CursorChannel, CursorShape};
 use crate::channels::display::DisplayChannel;
 use crate::channels::inputs::InputsChannel;
-use crate::channels::cursor::{CursorChannel, CursorShape};
+use crate::channels::main::MainChannel;
 use crate::channels::MouseButton;
 use crate::error::{Result, SpiceError};
 use crate::protocol::ChannelType;
-use crate::video::{VideoOutput, create_video_output};
 use crate::utils::sleep;
+use crate::video::{create_video_output, VideoOutput};
+use instant::Duration;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{error, info};
-use instant::Duration;
 
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::task::JoinHandle;
@@ -152,10 +152,14 @@ impl SpiceClientShared {
     #[cfg(target_arch = "wasm32")]
     pub fn new_websocket_with_auth(websocket_url: String, auth_token: Option<String>) -> Self {
         let (host, port) = if websocket_url.contains("://") {
-            let without_protocol = websocket_url.split("://").nth(1).unwrap_or("localhost:8080");
+            let without_protocol = websocket_url
+                .split("://")
+                .nth(1)
+                .unwrap_or("localhost:8080");
             let parts: Vec<&str> = without_protocol.split(':').collect();
             let host = parts.get(0).unwrap_or(&"localhost").to_string();
-            let port = parts.get(1)
+            let port = parts
+                .get(1)
                 .and_then(|p| p.parse::<u16>().ok())
                 .unwrap_or(8080);
             (host, port)
@@ -181,7 +185,7 @@ impl SpiceClientShared {
             })),
         }
     }
-    
+
     /// Sets the password for authenticating with the SPICE server.
     ///
     /// This password will be used during the connection handshake if the server
@@ -206,7 +210,7 @@ impl SpiceClientShared {
         let mut inner = self.inner.lock().await;
         inner.password = Some(password);
     }
-    
+
     /// Gets the current error state of the client (WebAssembly only).
     ///
     /// This method is only available on WebAssembly targets and returns any
@@ -256,129 +260,226 @@ impl SpiceClientShared {
     /// ```
     pub async fn connect(&self) -> Result<()> {
         let mut inner = self.inner.lock().await;
-        
+
         #[cfg(target_arch = "wasm32")]
         {
             if let Some(ws_url) = inner.websocket_url.clone() {
                 info!("Connecting to SPICE server via WebSocket: {}", ws_url);
-                let mut main_channel = MainChannel::new_websocket_with_password(&ws_url, inner.auth_token.clone(), inner.password.clone()).await?;
+                let mut main_channel = MainChannel::new_websocket_with_password(
+                    &ws_url,
+                    inner.auth_token.clone(),
+                    inner.password.clone(),
+                )
+                .await?;
                 main_channel.initialize().await?;
-                
+
                 let channels = main_channel.get_channels_list().await?;
                 info!("Available channels: {:?}", channels);
-                
+
                 // Get session_id from main channel (for information only)
                 let session_id = main_channel.get_session_id();
                 info!("Got session_id {:?} from main channel", session_id);
-                
+
                 // Connect to Display channel as it might be required
                 for (channel_type, channel_id) in &channels {
                     match channel_type {
                         ChannelType::Display => {
                             info!("Connecting to display channel {} via WebSocket", channel_id);
                             // All channels in a new session use connection_id = 0
-                            match DisplayChannel::new_websocket_with_auth_and_session(&ws_url, *channel_id, inner.auth_token.clone(), inner.password.clone(), Some(0)).await {
+                            match DisplayChannel::new_websocket_with_auth_and_session(
+                                &ws_url,
+                                *channel_id,
+                                inner.auth_token.clone(),
+                                inner.password.clone(),
+                                Some(0),
+                            )
+                            .await
+                            {
                                 Ok(display_channel) => {
-                                    inner.display_channels.insert(*channel_id, Arc::new(Mutex::new(display_channel)));
+                                    inner
+                                        .display_channels
+                                        .insert(*channel_id, Arc::new(Mutex::new(display_channel)));
                                     info!("Connected to display channel {}", channel_id);
                                 }
                                 Err(e) => {
-                                    warn!("Failed to connect to display channel {}: {}", channel_id, e);
+                                    warn!(
+                                        "Failed to connect to display channel {}: {}",
+                                        channel_id, e
+                                    );
                                 }
                             }
                         }
                         ChannelType::Inputs => {
                             info!("Connecting to inputs channel {} via WebSocket", channel_id);
                             // All channels in a new session use connection_id = 0
-                            match InputsChannel::new_websocket_with_auth_and_session(&ws_url, *channel_id, inner.auth_token.clone(), inner.password.clone(), Some(0)).await {
+                            match InputsChannel::new_websocket_with_auth_and_session(
+                                &ws_url,
+                                *channel_id,
+                                inner.auth_token.clone(),
+                                inner.password.clone(),
+                                Some(0),
+                            )
+                            .await
+                            {
                                 Ok(inputs_channel) => {
-                                    inner.inputs_channels.insert(*channel_id, Arc::new(Mutex::new(inputs_channel)));
+                                    inner
+                                        .inputs_channels
+                                        .insert(*channel_id, Arc::new(Mutex::new(inputs_channel)));
                                     info!("Connected to inputs channel {}", channel_id);
                                 }
                                 Err(e) => {
-                                    warn!("Failed to connect to inputs channel {}: {}", channel_id, e);
+                                    warn!(
+                                        "Failed to connect to inputs channel {}: {}",
+                                        channel_id, e
+                                    );
                                 }
                             }
                         }
                         ChannelType::Cursor => {
                             info!("Connecting to cursor channel {} via WebSocket", channel_id);
                             // All channels in a new session use connection_id = 0
-                            match CursorChannel::new_websocket_with_auth_and_session(&ws_url, *channel_id, inner.auth_token.clone(), inner.password.clone(), Some(0)).await {
+                            match CursorChannel::new_websocket_with_auth_and_session(
+                                &ws_url,
+                                *channel_id,
+                                inner.auth_token.clone(),
+                                inner.password.clone(),
+                                Some(0),
+                            )
+                            .await
+                            {
                                 Ok(cursor_channel) => {
-                                    inner.cursor_channels.insert(*channel_id, Arc::new(Mutex::new(cursor_channel)));
+                                    inner
+                                        .cursor_channels
+                                        .insert(*channel_id, Arc::new(Mutex::new(cursor_channel)));
                                     info!("Connected to cursor channel {}", channel_id);
                                 }
                                 Err(e) => {
-                                    warn!("Failed to connect to cursor channel {}: {}", channel_id, e);
+                                    warn!(
+                                        "Failed to connect to cursor channel {}: {}",
+                                        channel_id, e
+                                    );
                                 }
                             }
                         }
                         _ => {
-                            info!("Skipping channel type {:?} id {} for now", channel_type, channel_id);
+                            info!(
+                                "Skipping channel type {:?} id {} for now",
+                                channel_type, channel_id
+                            );
                         }
                     }
                 }
-                
+
                 inner.main_channel = Some(Arc::new(Mutex::new(main_channel)));
                 return Ok(());
             }
         }
-        
+
         #[cfg(not(target_arch = "wasm32"))]
         {
-            info!("Connecting to SPICE server at {}:{}", inner.host, inner.port);
+            info!(
+                "Connecting to SPICE server at {}:{}",
+                inner.host, inner.port
+            );
 
             let mut main_channel = MainChannel::new(&inner.host, inner.port).await?;
             main_channel.initialize().await?;
-            
+
             // Get the session_id from main channel
             let session_id = main_channel.get_session_id();
             info!("Got session_id from main channel: {:?}", session_id);
-            
+
             // If session_id is None, the main channel didn't receive SPICE_MSG_MAIN_INIT yet
             if session_id.is_none() {
                 error!("CRITICAL: Main channel initialization didn't provide session_id!");
                 error!("The server should have sent SPICE_MSG_MAIN_INIT with session_id");
-                return Err(SpiceError::Protocol("No session_id received from main channel".to_string()));
+                return Err(SpiceError::Protocol(
+                    "No session_id received from main channel".to_string(),
+                ));
             }
-            
+
             // Longer delay to ensure server has fully processed main channel initialization
             sleep(Duration::from_millis(500)).await;
-            
+
             let channels = main_channel.get_channels_list().await?;
             info!("Available channels: {:?}", channels);
 
             // Try different connection_id approaches based on SPICE protocol understanding
             info!("Attempting to connect secondary channels");
-            
+
             // Wait a bit more to ensure server is ready
             sleep(Duration::from_secs(1)).await;
-            
+
             for (channel_type, channel_id) in channels {
                 match channel_type {
                     ChannelType::Display => {
-                        info!("Connecting to display channel {} with session_id as connection_id", channel_id);
-                        
+                        info!(
+                            "Connecting to display channel {} with session_id as connection_id",
+                            channel_id
+                        );
+
                         // According to SPICE protocol: non-main channels use session_id as connection_id
-                        let display_channel = DisplayChannel::new_with_connection_id(&inner.host, inner.port, channel_id, session_id).await?;
-                        inner.display_channels.insert(channel_id, Arc::new(Mutex::new(display_channel)));
-                        info!("✓ Connected to display channel {} with connection_id = {}", channel_id, session_id.unwrap_or(0));
+                        let display_channel = DisplayChannel::new_with_connection_id(
+                            &inner.host,
+                            inner.port,
+                            channel_id,
+                            session_id,
+                        )
+                        .await?;
+                        inner
+                            .display_channels
+                            .insert(channel_id, Arc::new(Mutex::new(display_channel)));
+                        info!(
+                            "✓ Connected to display channel {} with connection_id = {}",
+                            channel_id,
+                            session_id.unwrap_or(0)
+                        );
                     }
                     ChannelType::Inputs => {
-                        info!("Connecting to inputs channel {} with session_id as connection_id", channel_id);
-                        
+                        info!(
+                            "Connecting to inputs channel {} with session_id as connection_id",
+                            channel_id
+                        );
+
                         // According to SPICE protocol: non-main channels use session_id as connection_id
-                        let inputs_channel = InputsChannel::new_with_connection_id(&inner.host, inner.port, channel_id, session_id).await?;
-                        inner.inputs_channels.insert(channel_id, Arc::new(Mutex::new(inputs_channel)));
-                        info!("✓ Connected to inputs channel {} with connection_id = {}", channel_id, session_id.unwrap_or(0));
+                        let inputs_channel = InputsChannel::new_with_connection_id(
+                            &inner.host,
+                            inner.port,
+                            channel_id,
+                            session_id,
+                        )
+                        .await?;
+                        inner
+                            .inputs_channels
+                            .insert(channel_id, Arc::new(Mutex::new(inputs_channel)));
+                        info!(
+                            "✓ Connected to inputs channel {} with connection_id = {}",
+                            channel_id,
+                            session_id.unwrap_or(0)
+                        );
                     }
                     ChannelType::Cursor => {
-                        info!("Connecting to cursor channel {} with session_id as connection_id", channel_id);
-                        
+                        info!(
+                            "Connecting to cursor channel {} with session_id as connection_id",
+                            channel_id
+                        );
+
                         // According to SPICE protocol: non-main channels use session_id as connection_id
-                        let cursor_channel = CursorChannel::new_with_connection_id(&inner.host, inner.port, channel_id, session_id).await?;
-                        inner.cursor_channels.insert(channel_id, Arc::new(Mutex::new(cursor_channel)));
-                        info!("✓ Connected to cursor channel {} with connection_id = {}", channel_id, session_id.unwrap_or(0));
+                        let cursor_channel = CursorChannel::new_with_connection_id(
+                            &inner.host,
+                            inner.port,
+                            channel_id,
+                            session_id,
+                        )
+                        .await?;
+                        inner
+                            .cursor_channels
+                            .insert(channel_id, Arc::new(Mutex::new(cursor_channel)));
+                        info!(
+                            "✓ Connected to cursor channel {} with connection_id = {}",
+                            channel_id,
+                            session_id.unwrap_or(0)
+                        );
                     }
                     _ => {
                         info!("Ignoring channel type {:?} id {}", channel_type, channel_id);
@@ -390,7 +491,9 @@ impl SpiceClientShared {
             return Ok(());
         }
 
-        Err(SpiceError::Protocol("No connection method available".to_string()))
+        Err(SpiceError::Protocol(
+            "No connection method available".to_string(),
+        ))
     }
 
     /// Starts the event processing loops for all connected channels.
@@ -420,9 +523,11 @@ impl SpiceClientShared {
     /// ```
     pub async fn start_event_loop(&self) -> Result<()> {
         let mut inner = self.inner.lock().await;
-        
+
         if inner.main_channel.is_none() {
-            return Err(SpiceError::Protocol("Not connected to main channel".to_string()));
+            return Err(SpiceError::Protocol(
+                "Not connected to main channel".to_string(),
+            ));
         }
 
         #[cfg(not(target_arch = "wasm32"))]
@@ -435,7 +540,9 @@ impl SpiceClientShared {
                 inner.channel_tasks.push(main_task);
             }
 
-            let display_channels: Vec<(u8, Arc<Mutex<DisplayChannel>>)> = inner.display_channels.iter()
+            let display_channels: Vec<(u8, Arc<Mutex<DisplayChannel>>)> = inner
+                .display_channels
+                .iter()
                 .map(|(id, ch)| (*id, ch.clone()))
                 .collect();
             for (channel_id, display_channel_arc) in display_channels {
@@ -447,7 +554,9 @@ impl SpiceClientShared {
                 info!("Started event loop for display channel {}", channel_id);
             }
 
-            let inputs_channels: Vec<(u8, Arc<Mutex<InputsChannel>>)> = inner.inputs_channels.iter()
+            let inputs_channels: Vec<(u8, Arc<Mutex<InputsChannel>>)> = inner
+                .inputs_channels
+                .iter()
                 .map(|(id, ch)| (*id, ch.clone()))
                 .collect();
             for (channel_id, inputs_channel_arc) in inputs_channels {
@@ -458,8 +567,10 @@ impl SpiceClientShared {
                 inner.channel_tasks.push(inputs_task);
                 info!("Started event loop for inputs channel {}", channel_id);
             }
-            
-            let cursor_channels: Vec<(u8, Arc<Mutex<CursorChannel>>)> = inner.cursor_channels.iter()
+
+            let cursor_channels: Vec<(u8, Arc<Mutex<CursorChannel>>)> = inner
+                .cursor_channels
+                .iter()
                 .map(|(id, ch)| (*id, ch.clone()))
                 .collect();
             for (channel_id, cursor_channel_arc) in cursor_channels {
@@ -475,7 +586,7 @@ impl SpiceClientShared {
         #[cfg(target_arch = "wasm32")]
         {
             let error_state = inner.error_state.clone();
-            
+
             if let Some(main_channel_arc) = inner.main_channel.clone() {
                 let error_state_clone = error_state.clone();
                 wasm_bindgen_futures::spawn_local(async move {
@@ -483,13 +594,16 @@ impl SpiceClientShared {
                     if let Err(e) = main_channel.run().await {
                         error!("Main channel error: {}", e);
                         // Set error state to stop other operations
-                        *error_state_clone.lock().unwrap() = Some(format!("Main channel error: {}", e));
+                        *error_state_clone.lock().unwrap() =
+                            Some(format!("Main channel error: {}", e));
                     }
                 });
                 inner.channel_tasks.push(());
             }
 
-            let display_channels: Vec<(u8, Arc<Mutex<DisplayChannel>>)> = inner.display_channels.iter()
+            let display_channels: Vec<(u8, Arc<Mutex<DisplayChannel>>)> = inner
+                .display_channels
+                .iter()
                 .map(|(id, ch)| (*id, ch.clone()))
                 .collect();
             for (channel_id, display_channel_arc) in display_channels {
@@ -499,14 +613,17 @@ impl SpiceClientShared {
                     if let Err(e) = display_channel.run().await {
                         error!("Display channel {} error: {}", channel_id, e);
                         // Set error state to stop other operations
-                        *error_state_clone.lock().unwrap() = Some(format!("Display channel {} error: {}", channel_id, e));
+                        *error_state_clone.lock().unwrap() =
+                            Some(format!("Display channel {} error: {}", channel_id, e));
                     }
                 });
                 inner.channel_tasks.push(());
                 info!("Started event loop for display channel {}", channel_id);
             }
 
-            let inputs_channels: Vec<(u8, Arc<Mutex<InputsChannel>>)> = inner.inputs_channels.iter()
+            let inputs_channels: Vec<(u8, Arc<Mutex<InputsChannel>>)> = inner
+                .inputs_channels
+                .iter()
                 .map(|(id, ch)| (*id, ch.clone()))
                 .collect();
             for (channel_id, inputs_channel_arc) in inputs_channels {
@@ -516,14 +633,17 @@ impl SpiceClientShared {
                     if let Err(e) = inputs_channel.run().await {
                         error!("Inputs channel {} error: {}", channel_id, e);
                         // Set error state to stop other operations
-                        *error_state_clone.lock().unwrap() = Some(format!("Inputs channel {} error: {}", channel_id, e));
+                        *error_state_clone.lock().unwrap() =
+                            Some(format!("Inputs channel {} error: {}", channel_id, e));
                     }
                 });
                 inner.channel_tasks.push(());
                 info!("Started event loop for inputs channel {}", channel_id);
             }
-            
-            let cursor_channels: Vec<(u8, Arc<Mutex<CursorChannel>>)> = inner.cursor_channels.iter()
+
+            let cursor_channels: Vec<(u8, Arc<Mutex<CursorChannel>>)> = inner
+                .cursor_channels
+                .iter()
                 .map(|(id, ch)| (*id, ch.clone()))
                 .collect();
             for (channel_id, cursor_channel_arc) in cursor_channels {
@@ -533,7 +653,8 @@ impl SpiceClientShared {
                     if let Err(e) = cursor_channel.run().await {
                         error!("Cursor channel {} error: {}", channel_id, e);
                         // Set error state to stop other operations
-                        *error_state_clone.lock().unwrap() = Some(format!("Cursor channel {} error: {}", channel_id, e));
+                        *error_state_clone.lock().unwrap() =
+                            Some(format!("Cursor channel {} error: {}", channel_id, e));
                     }
                 });
                 inner.channel_tasks.push(());
@@ -566,7 +687,7 @@ impl SpiceClientShared {
             None
         }
     }
-    
+
     /// Gets the current display surface for a specific channel.
     ///
     /// Returns the primary display surface data for the specified display channel,
@@ -594,7 +715,10 @@ impl SpiceClientShared {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_display_surface(&self, channel_id: u8) -> Option<crate::channels::display::DisplaySurface> {
+    pub async fn get_display_surface(
+        &self,
+        channel_id: u8,
+    ) -> Option<crate::channels::display::DisplaySurface> {
         let inner = self.inner.lock().await;
         if let Some(channel_arc) = inner.display_channels.get(&channel_id) {
             let channel = channel_arc.lock().await;
@@ -641,12 +765,12 @@ impl SpiceClientShared {
 
     pub async fn wait_for_completion(&self) -> Result<()> {
         let mut inner = self.inner.lock().await;
-        
+
         #[cfg(not(target_arch = "wasm32"))]
         {
             let tasks = std::mem::take(&mut inner.channel_tasks);
             drop(inner); // Release lock before waiting
-            
+
             for task in tasks {
                 match task.await {
                     Ok(Ok(())) => {
@@ -663,7 +787,7 @@ impl SpiceClientShared {
                 }
             }
         }
-        
+
         #[cfg(target_arch = "wasm32")]
         {
             inner.channel_tasks.clear();
@@ -676,7 +800,7 @@ impl SpiceClientShared {
     pub async fn disconnect(&self) {
         let mut inner = self.inner.lock().await;
         info!("Disconnecting from SPICE server");
-        
+
         #[cfg(not(target_arch = "wasm32"))]
         {
             for task in inner.channel_tasks.drain(..) {
@@ -695,76 +819,104 @@ impl SpiceClientShared {
     }
 
     // Input forwarding methods
-    
+
     /// Sends a key down event to the specified inputs channel.
     pub async fn send_key_down(&self, channel_id: u8, scancode: u32) -> Result<()> {
         let inner = self.inner.lock().await;
-        
+
         if let Some(inputs_channel_arc) = inner.inputs_channels.get(&channel_id) {
             let mut inputs_channel = inputs_channel_arc.lock().await;
             inputs_channel.send_key_down(scancode).await
         } else {
-            Err(SpiceError::Protocol(format!("Inputs channel {} not connected", channel_id)))
+            Err(SpiceError::Protocol(format!(
+                "Inputs channel {} not connected",
+                channel_id
+            )))
         }
     }
-    
+
     /// Sends a key up event to the specified inputs channel.
     pub async fn send_key_up(&self, channel_id: u8, scancode: u32) -> Result<()> {
         let inner = self.inner.lock().await;
-        
+
         if let Some(inputs_channel_arc) = inner.inputs_channels.get(&channel_id) {
             let mut inputs_channel = inputs_channel_arc.lock().await;
             inputs_channel.send_key_up(scancode).await
         } else {
-            Err(SpiceError::Protocol(format!("Inputs channel {} not connected", channel_id)))
+            Err(SpiceError::Protocol(format!(
+                "Inputs channel {} not connected",
+                channel_id
+            )))
         }
     }
-    
+
     /// Sends a mouse motion event to the specified inputs channel.
     pub async fn send_mouse_motion(&self, channel_id: u8, x: i32, y: i32) -> Result<()> {
         let inner = self.inner.lock().await;
-        
+
         if let Some(inputs_channel_arc) = inner.inputs_channels.get(&channel_id) {
             let mut inputs_channel = inputs_channel_arc.lock().await;
             inputs_channel.send_mouse_motion(x, y).await
         } else {
-            Err(SpiceError::Protocol(format!("Inputs channel {} not connected", channel_id)))
+            Err(SpiceError::Protocol(format!(
+                "Inputs channel {} not connected",
+                channel_id
+            )))
         }
     }
-    
+
     /// Sends a mouse button event to the specified inputs channel.
-    pub async fn send_mouse_button(&self, channel_id: u8, button: MouseButton, pressed: bool) -> Result<()> {
+    pub async fn send_mouse_button(
+        &self,
+        channel_id: u8,
+        button: MouseButton,
+        pressed: bool,
+    ) -> Result<()> {
         let inner = self.inner.lock().await;
-        
+
         if let Some(inputs_channel_arc) = inner.inputs_channels.get(&channel_id) {
             let mut inputs_channel = inputs_channel_arc.lock().await;
             inputs_channel.send_mouse_button(button, pressed).await
         } else {
-            Err(SpiceError::Protocol(format!("Inputs channel {} not connected", channel_id)))
+            Err(SpiceError::Protocol(format!(
+                "Inputs channel {} not connected",
+                channel_id
+            )))
         }
     }
-    
+
     /// Sends a mouse wheel event to the specified inputs channel.
     pub async fn send_mouse_wheel(&self, channel_id: u8, delta_x: i32, delta_y: i32) -> Result<()> {
         let inner = self.inner.lock().await;
-        
+
         if let Some(inputs_channel_arc) = inner.inputs_channels.get(&channel_id) {
             let mut inputs_channel = inputs_channel_arc.lock().await;
             // Convert wheel deltas to button presses (SPICE protocol uses button events for wheel)
             if delta_y > 0 {
-                inputs_channel.send_mouse_button(MouseButton::WheelUp, true).await?;
-                inputs_channel.send_mouse_button(MouseButton::WheelUp, false).await
+                inputs_channel
+                    .send_mouse_button(MouseButton::WheelUp, true)
+                    .await?;
+                inputs_channel
+                    .send_mouse_button(MouseButton::WheelUp, false)
+                    .await
             } else if delta_y < 0 {
-                inputs_channel.send_mouse_button(MouseButton::WheelDown, true).await?;
-                inputs_channel.send_mouse_button(MouseButton::WheelDown, false).await
+                inputs_channel
+                    .send_mouse_button(MouseButton::WheelDown, true)
+                    .await?;
+                inputs_channel
+                    .send_mouse_button(MouseButton::WheelDown, false)
+                    .await
             } else {
                 Ok(())
             }
         } else {
-            Err(SpiceError::Protocol(format!("Inputs channel {} not connected", channel_id)))
+            Err(SpiceError::Protocol(format!(
+                "Inputs channel {} not connected",
+                channel_id
+            )))
         }
     }
-    
+
     /// Sets a callback that will be called whenever a display surface is updated.
     /// This allows external code to be notified when new frames are ready.
     pub async fn set_display_update_callback<F>(&self, channel_id: u8, callback: F) -> Result<()>
@@ -772,13 +924,16 @@ impl SpiceClientShared {
         F: Fn(&crate::channels::display::DisplaySurface) + Send + Sync + 'static,
     {
         let inner = self.inner.lock().await;
-        
+
         if let Some(display_channel_arc) = inner.display_channels.get(&channel_id) {
             let mut display_channel = display_channel_arc.lock().await;
             display_channel.set_update_callback(callback);
             Ok(())
         } else {
-            Err(SpiceError::Protocol(format!("Display channel {} not connected", channel_id)))
+            Err(SpiceError::Protocol(format!(
+                "Display channel {} not connected",
+                channel_id
+            )))
         }
     }
 }

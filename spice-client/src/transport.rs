@@ -9,19 +9,19 @@ use std::io;
 pub trait Transport: Send + Sync {
     /// Read data from the transport
     async fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;
-    
+
     /// Write data to the transport
     async fn write(&mut self, buf: &[u8]) -> io::Result<()>;
-    
+
     /// Write all data to the transport
     async fn write_all(&mut self, buf: &[u8]) -> io::Result<()>;
-    
+
     /// Flush any buffered data
     async fn flush(&mut self) -> io::Result<()>;
-    
+
     /// Check if the transport is connected
     fn is_connected(&self) -> bool;
-    
+
     /// Close the transport
     async fn close(&mut self) -> io::Result<()>;
 }
@@ -32,19 +32,19 @@ pub trait Transport: Send + Sync {
 pub trait Transport {
     /// Read data from the transport
     async fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;
-    
+
     /// Write data to the transport
     async fn write(&mut self, buf: &[u8]) -> io::Result<()>;
-    
+
     /// Write all data to the transport
     async fn write_all(&mut self, buf: &[u8]) -> io::Result<()>;
-    
+
     /// Flush any buffered data
     async fn flush(&mut self) -> io::Result<()>;
-    
+
     /// Check if the transport is connected
     fn is_connected(&self) -> bool;
-    
+
     /// Close the transport
     async fn close(&mut self) -> io::Result<()>;
 }
@@ -65,7 +65,7 @@ pub async fn create_transport(config: TransportConfig) -> Result<Box<dyn Transpo
     {
         tcp::create_tcp_transport(&config.host, config.port).await
     }
-    
+
     #[cfg(target_arch = "wasm32")]
     {
         websocket::create_websocket_transport(config).await

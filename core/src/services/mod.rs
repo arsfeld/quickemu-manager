@@ -1,9 +1,9 @@
-pub mod vm_manager;
-pub mod parser;
-pub mod discovery;
 pub mod binary_discovery;
-pub mod process_monitor;
-pub mod metrics;
-pub mod quickget;
 pub mod config_manager;
+pub mod discovery;
+pub mod metrics;
+pub mod parser;
+pub mod process_monitor;
+pub mod quickget;
+pub mod vm_manager;
 pub mod vnc_proxy;

@@ -1,8 +1,8 @@
-use crate::channels::main::MainChannel;
 use crate::channels::display::DisplayChannel;
+use crate::channels::main::MainChannel;
 use crate::error::{Result, SpiceError};
 use crate::protocol::ChannelType;
-use crate::video::{VideoOutput, create_video_output};
+use crate::video::{create_video_output, VideoOutput};
 
 #[cfg(test)]
 #[path = "client_tests.rs"]
@@ -16,7 +16,7 @@ use tokio::task::JoinHandle;
 
 // For WASM, we'll use a different approach for task handles
 #[cfg(target_arch = "wasm32")]
-type TaskHandle = ();  // Placeholder since we can't cancel wasm tasks easily
+type TaskHandle = (); // Placeholder since we can't cancel wasm tasks easily
 
 pub struct SpiceClient {
     host: String,
@@ -61,10 +61,14 @@ impl SpiceClient {
     pub fn new_websocket_with_auth(websocket_url: String, auth_token: Option<String>) -> Self {
         // Extract host/port from WebSocket URL for display purposes
         let (host, port) = if websocket_url.contains("://") {
-            let without_protocol = websocket_url.split("://").nth(1).unwrap_or("localhost:8080");
+            let without_protocol = websocket_url
+                .split("://")
+                .nth(1)
+                .unwrap_or("localhost:8080");
             let parts: Vec<&str> = without_protocol.split(':').collect();
             let host = parts.get(0).unwrap_or(&"localhost").to_string();
-            let port = parts.get(1)
+            let port = parts
+                .get(1)
                 .and_then(|p| p.parse::<u16>().ok())
                 .unwrap_or(8080);
             (host, port)
@@ -84,7 +88,7 @@ impl SpiceClient {
             video_output: create_video_output(),
         }
     }
-    
+
     pub fn set_password(&mut self, password: String) {
         self.password = Some(password);
     }
@@ -95,9 +99,14 @@ impl SpiceClient {
             if let Some(ref ws_url) = self.websocket_url {
                 info!("Connecting to SPICE server via WebSocket: {}", ws_url);
                 // Connect to main channel via WebSocket
-                let mut main_channel = MainChannel::new_websocket_with_password(ws_url, self.auth_token.clone(), self.password.clone()).await?;
+                let mut main_channel = MainChannel::new_websocket_with_password(
+                    ws_url,
+                    self.auth_token.clone(),
+                    self.password.clone(),
+                )
+                .await?;
                 main_channel.initialize().await?;
-                
+
                 // Get available channels
                 let channels = main_channel.get_channels_list().await?;
                 info!("Available channels: {:?}", channels);
@@ -105,12 +114,12 @@ impl SpiceClient {
                 // TODO: For now, skip additional channels due to WebSocket proxy limitations
                 // The proxy creates one TCP connection per WebSocket, but SPICE expects multiple TCP connections
                 info!("Skipping additional channels - using main channel only for now");
-                
+
                 self.main_channel = Some(main_channel);
                 return Ok(());
             }
         }
-        
+
         #[cfg(not(target_arch = "wasm32"))]
         {
             info!("Connecting to SPICE server at {}:{}", self.host, self.port);
@@ -121,11 +130,11 @@ impl SpiceClient {
             info!("Main channel created, initializing...");
             main_channel.initialize().await?;
             info!("Main channel initialized, getting channels list...");
-            
+
             // Get the session_id from main channel
             let session_id = main_channel.get_session_id();
             info!("Got session_id from main channel: {:?}", session_id);
-            
+
             // Get available channels
             let channels = main_channel.get_channels_list().await?;
             info!("Available channels: {:?}", channels);
@@ -134,9 +143,16 @@ impl SpiceClient {
             for (channel_type, channel_id) in channels {
                 match channel_type {
                     ChannelType::Display => {
-                        let display_channel = DisplayChannel::new_with_connection_id(&self.host, self.port, channel_id, session_id).await?;
+                        let display_channel = DisplayChannel::new_with_connection_id(
+                            &self.host, self.port, channel_id, session_id,
+                        )
+                        .await?;
                         self.display_channels.insert(channel_id, display_channel);
-                        info!("Connected to display channel {} with connection_id = {}", channel_id, session_id.unwrap_or(0));
+                        info!(
+                            "Connected to display channel {} with connection_id = {}",
+                            channel_id,
+                            session_id.unwrap_or(0)
+                        );
                     }
                     _ => {
                         info!("Ignoring channel type {:?} id {}", channel_type, channel_id);
@@ -148,30 +164,30 @@ impl SpiceClient {
             return Ok(());
         }
 
-        Err(SpiceError::Protocol("No connection method available".to_string()))
+        Err(SpiceError::Protocol(
+            "No connection method available".to_string(),
+        ))
     }
 
     pub async fn start_event_loop(&mut self) -> Result<()> {
         if self.main_channel.is_none() {
-            return Err(SpiceError::Protocol("Not connected to main channel".to_string()));
+            return Err(SpiceError::Protocol(
+                "Not connected to main channel".to_string(),
+            ));
         }
 
         #[cfg(not(target_arch = "wasm32"))]
         {
             // Start main channel task
             if let Some(mut main_channel) = self.main_channel.take() {
-                let main_task = tokio::spawn(async move {
-                    main_channel.run().await
-                });
+                let main_task = tokio::spawn(async move { main_channel.run().await });
                 self.channel_tasks.push(main_task);
             }
 
             // Start display channel tasks
             let display_channels = std::mem::take(&mut self.display_channels);
             for (channel_id, mut display_channel) in display_channels {
-                let display_task = tokio::spawn(async move {
-                    display_channel.run().await
-                });
+                let display_task = tokio::spawn(async move { display_channel.run().await });
                 self.channel_tasks.push(display_task);
                 info!("Started event loop for display channel {}", channel_id);
             }
@@ -186,7 +202,7 @@ impl SpiceClient {
                         error!("Main channel error: {}", e);
                     }
                 });
-                self.channel_tasks.push(());  // Placeholder since we can't track/cancel these
+                self.channel_tasks.push(()); // Placeholder since we can't track/cancel these
             }
 
             // Start display channel tasks
@@ -197,7 +213,7 @@ impl SpiceClient {
                         error!("Display channel {} error: {}", channel_id, e);
                     }
                 });
-                self.channel_tasks.push(());  // Placeholder since we can't track/cancel these
+                self.channel_tasks.push(()); // Placeholder since we can't track/cancel these
                 info!("Started event loop for display channel {}", channel_id);
             }
         }
@@ -205,8 +221,13 @@ impl SpiceClient {
         Ok(())
     }
 
-    pub async fn get_display_surface(&self, channel_id: u8) -> Option<&crate::channels::display::DisplaySurface> {
-        self.display_channels.get(&channel_id)?.get_primary_surface()
+    pub async fn get_display_surface(
+        &self,
+        channel_id: u8,
+    ) -> Option<&crate::channels::display::DisplaySurface> {
+        self.display_channels
+            .get(&channel_id)?
+            .get_primary_surface()
     }
 
     pub fn get_video_output(&self) -> Arc<dyn VideoOutput> {
@@ -224,7 +245,7 @@ impl SpiceClient {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let tasks = std::mem::take(&mut self.channel_tasks);
-            
+
             for task in tasks {
                 match task.await {
                     Ok(Ok(())) => {
@@ -241,7 +262,7 @@ impl SpiceClient {
                 }
             }
         }
-        
+
         #[cfg(target_arch = "wasm32")]
         {
             // In WASM, we can't wait for spawned tasks, so just clear the placeholder list
@@ -254,7 +275,7 @@ impl SpiceClient {
 
     pub fn disconnect(&mut self) {
         info!("Disconnecting from SPICE server");
-        
+
         // Cancel all running tasks (native only)
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -263,11 +284,11 @@ impl SpiceClient {
             }
         }
         self.channel_tasks.clear();
-        
+
         // Clear channels and schedule video output clearing
         self.main_channel = None;
         self.display_channels.clear();
-        
+
         // Video output will be cleared when new frames arrive
     }
 }

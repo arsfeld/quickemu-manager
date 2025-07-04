@@ -1,6 +1,8 @@
-use dioxus::prelude::*;
-use crate::server_functions::{get_vm_directory, set_vm_directory, get_app_config, update_app_config};
 use crate::models::{AppConfigDto, ThemeDto};
+use crate::server_functions::{
+    get_app_config, get_vm_directory, set_vm_directory, update_app_config,
+};
+use dioxus::prelude::*;
 
 /// Settings Modal Component
 #[component]
@@ -9,7 +11,7 @@ pub fn SettingsModal(show: Signal<bool>) -> Element {
     let mut vm_directory = use_signal(|| "/home/user/VMs".to_string());
     let mut theme = use_signal(|| "dark".to_string());
     let mut show_advanced = use_signal(|| false);
-    
+
     // Load saved settings on mount
     use_effect(move || {
         spawn(async move {
@@ -27,25 +29,25 @@ pub fn SettingsModal(show: Signal<bool>) -> Element {
                     vm_directory.set(dir);
                 }
             }
-            
+
             // Load other settings from localStorage (web-specific settings)
             load_settings(vm_directory, theme);
         });
     });
-    
+
     if !show() {
         return rsx! { div {} };
     }
-    
+
     rsx! {
-        div { 
+        div {
             class: "fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4",
             onclick: move |_| show.set(false),
-            
-            div { 
+
+            div {
                 class: "modal-macos w-full max-w-2xl",
                 onclick: move |e| e.stop_propagation(),
-                
+
                 // Header
                 div { class: "border-b border-macos-border px-6 py-4",
                     div { class: "flex items-center justify-between",
@@ -68,14 +70,14 @@ pub fn SettingsModal(show: Signal<bool>) -> Element {
                         }
                     }
                 }
-                
+
                 // Content
                 div { class: "p-6 bg-white space-y-6 max-h-[60vh] overflow-y-auto",
-                    
+
                     // VM Directory Settings
                     div { class: "space-y-3",
                         h3 { class: "text-lg font-medium text-gray-900", "Virtual Machine Storage" }
-                        
+
                         div {
                             label { class: "block text-sm font-medium text-gray-700 mb-2", "VM Directory" }
                             div { class: "flex gap-2",
@@ -93,16 +95,16 @@ pub fn SettingsModal(show: Signal<bool>) -> Element {
                                     "Browse"
                                 }
                             }
-                            p { class: "text-xs text-gray-500 mt-1", 
-                                "Default location where new VMs will be created" 
+                            p { class: "text-xs text-gray-500 mt-1",
+                                "Default location where new VMs will be created"
                             }
                         }
                     }
-                    
+
                     // Theme Settings
                     div { class: "space-y-3",
                         h3 { class: "text-lg font-medium text-gray-900", "Appearance" }
-                        
+
                         div {
                             label { class: "block text-sm font-medium text-gray-700 mb-2", "Theme" }
                             select {
@@ -115,7 +117,7 @@ pub fn SettingsModal(show: Signal<bool>) -> Element {
                             }
                         }
                     }
-                    
+
                     // Advanced Settings Toggle
                     div { class: "border-t border-gray-200 pt-6",
                         button {
@@ -135,10 +137,10 @@ pub fn SettingsModal(show: Signal<bool>) -> Element {
                             }
                             "Advanced Settings"
                         }
-                        
+
                         if show_advanced() {
                             div { class: "mt-4 space-y-4 pl-6 border-l-2 border-gray-100",
-                                
+
                                 // SPICE Settings
                                 div {
                                     h4 { class: "font-medium text-gray-800 mb-2", "Console Settings" }
@@ -161,7 +163,7 @@ pub fn SettingsModal(show: Signal<bool>) -> Element {
                                         }
                                     }
                                 }
-                                
+
                                 // Debug Settings
                                 div {
                                     h4 { class: "font-medium text-gray-800 mb-2", "Debug" }
@@ -188,7 +190,7 @@ pub fn SettingsModal(show: Signal<bool>) -> Element {
                         }
                     }
                 }
-                
+
                 // Footer
                 div { class: "border-t border-gray-200 bg-gray-50 px-6 py-4 flex justify-between items-center",
                     button {
@@ -205,14 +207,14 @@ pub fn SettingsModal(show: Signal<bool>) -> Element {
                         },
                         "Reset to Defaults"
                     }
-                    
+
                     div { class: "flex space-x-3",
                         button {
                             class: "btn-macos",
                             onclick: move |_| show.set(false),
                             "Cancel"
                         }
-                        
+
                         button {
                             class: "btn-macos-primary",
                             onclick: move |_| {
@@ -221,7 +223,7 @@ pub fn SettingsModal(show: Signal<bool>) -> Element {
                                     if let Err(_e) = set_vm_directory(vm_directory()).await {
                                         // Error handled by server
                                     }
-                                    
+
                                     // Save other settings (theme) to config
                                     if let Ok(mut config) = get_app_config().await {
                                         config.theme = match theme().as_str() {
@@ -229,12 +231,12 @@ pub fn SettingsModal(show: Signal<bool>) -> Element {
                                             "dark" => ThemeDto::Dark,
                                             _ => ThemeDto::System,
                                         };
-                                        
+
                                         if let Err(_e) = update_app_config(config).await {
                                             // Error handled by server
                                         }
                                     }
-                                    
+
                                     // Also save web-specific settings to localStorage
                                     save_settings(
                                         vm_directory(),
@@ -252,12 +254,8 @@ pub fn SettingsModal(show: Signal<bool>) -> Element {
     }
 }
 
-
 /// Load settings from localStorage (web)
-fn load_settings(
-    mut _vm_directory: Signal<String>,
-    mut _theme: Signal<String>,
-) {
+fn load_settings(mut _vm_directory: Signal<String>, mut _theme: Signal<String>) {
     #[cfg(target_arch = "wasm32")]
     {
         use web_sys::window;
@@ -275,10 +273,7 @@ fn load_settings(
 }
 
 /// Save settings to localStorage (web)
-fn save_settings(
-    vm_directory: String,
-    theme: String,
-) {
+fn save_settings(vm_directory: String, theme: String) {
     #[cfg(target_arch = "wasm32")]
     {
         use web_sys::window;

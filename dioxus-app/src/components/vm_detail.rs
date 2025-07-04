@@ -1,17 +1,17 @@
 use dioxus::prelude::*;
 
-use crate::models::{VM, VMStatus, VMStatusExt};
-use crate::server_functions::{start_vm, stop_vm, delete_vm, supports_console_access};
+use crate::components::vm_console::VmConsole;
 use crate::components::vm_edit_modal::VMEditModal;
 use crate::components::vm_metrics::VMMetricsCard;
-use crate::components::vm_console::VmConsole;
+use crate::models::{VMStatus, VMStatusExt, VM};
+use crate::server_functions::{delete_vm, start_vm, stop_vm, supports_console_access};
 
 /// VM Detail Component - Desktop style
 #[component]
 pub fn VmDetail(
-    vm: VM, 
+    vm: VM,
     on_close: EventHandler<()>,
-    on_delete: EventHandler<String>, 
+    on_delete: EventHandler<String>,
     on_status_change: EventHandler<()>,
 ) -> Element {
     let vm_id_start = vm.id.clone();
@@ -25,7 +25,7 @@ pub fn VmDetail(
     let mut show_console = use_signal(|| false);
     let mut is_changing_state = use_signal(|| false);
     let mut console_supported = use_signal(|| false);
-    
+
     // Check console support when VM is running
     use_effect(move || {
         if is_running {
@@ -40,7 +40,7 @@ pub fn VmDetail(
             console_supported.set(false);
         }
     });
-    
+
     rsx! {
         div { class: "flex flex-col h-full",
             // Header bar
@@ -59,7 +59,7 @@ pub fn VmDetail(
                         "{vm.status.display_text()}"
                     }
                 }
-                
+
                 // Actions
                 div { class: "flex items-center gap-2",
                     if is_running {
@@ -78,13 +78,13 @@ pub fn VmDetail(
                                 is_changing_state.set(true);
                                 spawn(async move {
                                     let _ = stop_vm(id).await;
-                                    
+
                                     #[cfg(target_arch = "wasm32")]
                                     gloo_timers::future::TimeoutFuture::new(500).await;
-                                    
+
                                     #[cfg(not(target_arch = "wasm32"))]
                                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                                    
+
                                     is_changing_state.set(false);
                                     on_status_change.call(());
                                 });
@@ -100,13 +100,13 @@ pub fn VmDetail(
                                 is_changing_state.set(true);
                                 spawn(async move {
                                     let _ = start_vm(id).await;
-                                    
+
                                     #[cfg(target_arch = "wasm32")]
                                     gloo_timers::future::TimeoutFuture::new(500).await;
-                                    
+
                                     #[cfg(not(target_arch = "wasm32"))]
                                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                                    
+
                                     is_changing_state.set(false);
                                     on_status_change.call(());
                                 });
@@ -114,14 +114,14 @@ pub fn VmDetail(
                             if is_changing_state() { "Starting..." } else { "Start" }
                         }
                     }
-                    
+
                     button {
                         class: "btn-macos h-7 px-3 text-xs",
                         disabled: is_running,
                         onclick: move |_| show_edit_modal.set(true),
                         "Edit"
                     }
-                    
+
                     button {
                         class: "btn-macos h-7 px-3 text-xs",
                         onclick: move |_| show_delete_confirm.set(true),
@@ -129,7 +129,7 @@ pub fn VmDetail(
                     }
                 }
             }
-            
+
             // Main content
             div { class: "flex-1 flex overflow-hidden",
                 // Info panel
@@ -154,7 +154,7 @@ pub fn VmDetail(
                                         span { class: "text-sm font-medium text-macos-text", "{vm.cpu_cores}" }
                                     }
                                 }
-                                
+
                                 // Memory
                                 div { class: "flex items-center justify-between py-2 border-b border-macos-border",
                                     span { class: "text-sm text-macos-text-secondary", "Memory" }
@@ -168,13 +168,13 @@ pub fn VmDetail(
                                         span { class: "text-sm font-medium text-macos-text", "{vm.ram_mb / 1024} GB" }
                                     }
                                 }
-                                
+
                                 // Storage
                                 div { class: "flex items-center justify-between py-2 border-b border-macos-border",
                                     span { class: "text-sm text-macos-text-secondary", "Storage" }
                                     span { class: "text-sm font-medium text-macos-text", "{vm.disk_size}" }
                                 }
-                                
+
                                 // OS
                                 div { class: "flex items-center justify-between py-2 border-b border-macos-border",
                                     span { class: "text-sm text-macos-text-secondary", "Operating System" }
@@ -182,7 +182,7 @@ pub fn VmDetail(
                                 }
                             }
                         }
-                        
+
                         // Network metrics if running
                         if is_running {
                             div {
@@ -209,7 +209,7 @@ pub fn VmDetail(
                         }
                     }
                 }
-                
+
                 // Console area
                 if show_console() && is_running {
                     div { class: "flex-1 bg-black",
@@ -221,22 +221,22 @@ pub fn VmDetail(
                     }
                 }
             }
-            
+
             // Delete confirmation dialog
             if show_delete_confirm() {
-                div { 
+                div {
                     class: "fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50",
                     onclick: move |_| show_delete_confirm.set(false),
-                    
-                    div { 
+
+                    div {
                         class: "bg-macos-surface rounded-macos-lg shadow-macos-xl p-6 max-w-sm mx-4",
                         onclick: move |e| e.stop_propagation(),
-                        
+
                         h3 { class: "text-base font-medium text-macos-text mb-2", "Delete \"{vm.name}\"?" }
-                        p { class: "text-sm text-macos-text-secondary mb-4", 
+                        p { class: "text-sm text-macos-text-secondary mb-4",
                             "This action cannot be undone. All VM data will be permanently deleted."
                         }
-                        
+
                         div { class: "flex justify-end gap-2",
                             button {
                                 class: "btn-macos",
@@ -260,7 +260,7 @@ pub fn VmDetail(
                     }
                 }
             }
-            
+
             // Edit VM modal
             VMEditModal {
                 vm: vm.clone(),

@@ -9,6 +9,6 @@ pub fn KeyboardShortcuts(
 ) -> Element {
     // Keyboard shortcuts are not available in this version of dioxus
     // TODO: Implement keyboard shortcuts when available
-    
+
     rsx! {}
 }

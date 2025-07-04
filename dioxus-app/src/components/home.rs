@@ -1,12 +1,12 @@
 use dioxus::prelude::*;
 
-use crate::models::{VM, VMStatus, VMStatusExt};
-use crate::server_functions::{get_vms, get_vm_cache_version};
-use crate::components::vm_create_modal::CreateVMModal;
-use crate::components::vm_console::VmConsole;
-use crate::components::settings_modal::SettingsModal;
-use crate::components::vm_detail::VmDetail;
 use crate::components::keyboard_shortcuts::KeyboardShortcuts;
+use crate::components::settings_modal::SettingsModal;
+use crate::components::vm_console::VmConsole;
+use crate::components::vm_create_modal::CreateVMModal;
+use crate::components::vm_detail::VmDetail;
+use crate::models::{VMStatus, VMStatusExt, VM};
+use crate::server_functions::{get_vm_cache_version, get_vms};
 
 /// Home page - VM Management Dashboard with desktop layout
 #[component]
@@ -16,7 +16,7 @@ pub fn Home() -> Element {
     let mut selected_vm = use_signal(|| None::<VM>);
     let mut show_settings = use_signal(|| false);
     let mut cache_version = use_signal(|| 0u64);
-    
+
     // Function to refresh VM list
     let refresh_vms = move || {
         spawn(async move {
@@ -25,21 +25,21 @@ pub fn Home() -> Element {
             }
         });
     };
-    
+
     // Load VMs on component mount and set up smart refresh
     use_effect(move || {
         // Initial load
         refresh_vms();
-        
+
         // Set up background task to check for file system changes
         spawn(async move {
             loop {
                 #[cfg(target_arch = "wasm32")]
                 gloo_timers::future::TimeoutFuture::new(2000).await;
-                
+
                 #[cfg(not(target_arch = "wasm32"))]
                 tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
-                
+
                 // Check if cache version has changed
                 if let Ok(new_version) = get_vm_cache_version().await {
                     let current_version = cache_version();
@@ -54,7 +54,7 @@ pub fn Home() -> Element {
             }
         });
     });
-    
+
     rsx! {
         // Keyboard shortcuts handler
         KeyboardShortcuts {
@@ -62,7 +62,7 @@ pub fn Home() -> Element {
             on_settings: move |_| show_settings.set(true),
             on_refresh: move |_| refresh_vms()
         }
-        
+
         div { class: "h-screen flex bg-macos-background",
             // Sidebar
             div { class: "w-64 bg-macos-gray-50 border-r border-macos-border flex flex-col",
@@ -87,7 +87,7 @@ pub fn Home() -> Element {
                         }
                     }
                 }
-                
+
                 // VM list
                 div { class: "flex-1 overflow-y-auto native-scrollbar",
                     if vms().is_empty() {
@@ -116,9 +116,9 @@ pub fn Home() -> Element {
                                     onclick: move |_| {
                                         selected_vm.set(Some(vm_for_click.clone()));
                                     },
-                                    
+
                                     // Status indicator
-                                    div { 
+                                    div {
                                         class: format!("w-2 h-2 rounded-full flex-shrink-0 {}",
                                             match &vm.status {
                                                 VMStatus::Running { .. } => "bg-macos-green-500",
@@ -129,11 +129,11 @@ pub fn Home() -> Element {
                                             }
                                         )
                                     }
-                                    
+
                                     // VM name and info
                                     div { class: "flex-1 min-w-0",
                                         div { class: "text-sm font-medium truncate", "{vm.name}" }
-                                        div { 
+                                        div {
                                             class: format!("text-xs truncate {}",
                                                 if selected_vm().as_ref().map(|v| v.id == vm.id).unwrap_or(false) {
                                                     "text-white/70"
@@ -150,7 +150,7 @@ pub fn Home() -> Element {
                         }
                     }
                 }
-                
+
                 // Sidebar footer
                 div { class: "border-t border-macos-border p-2",
                     button {
@@ -178,7 +178,7 @@ pub fn Home() -> Element {
                     }
                 }
             }
-            
+
             // Main content area
             div { class: "flex-1 flex flex-col overflow-hidden",
                 if let Some(vm) = selected_vm() {
@@ -212,8 +212,8 @@ pub fn Home() -> Element {
                                 }
                             }
                             h3 { class: "text-lg font-medium text-macos-text mb-2", "No VM Selected" }
-                            p { class: "text-sm text-macos-text-secondary mb-4", 
-                                "Select a virtual machine from the sidebar to view details and manage it" 
+                            p { class: "text-sm text-macos-text-secondary mb-4",
+                                "Select a virtual machine from the sidebar to view details and manage it"
                             }
                             if vms().is_empty() {
                                 button {
@@ -226,10 +226,10 @@ pub fn Home() -> Element {
                     }
                 }
             }
-            
+
             // Create VM Modal
             if show_create_modal() {
-                CreateVMModal { 
+                CreateVMModal {
                     show: show_create_modal,
                     on_create: move |_| {
                         refresh_vms();

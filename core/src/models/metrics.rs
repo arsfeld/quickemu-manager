@@ -27,7 +27,7 @@ impl MetricsHistory {
             max_points,
         }
     }
-    
+
     pub fn add_sample(&mut self, metrics: &VMMetrics) {
         if self.cpu.len() >= self.max_points {
             self.cpu.pop_front();
@@ -35,11 +35,11 @@ impl MetricsHistory {
         if self.memory.len() >= self.max_points {
             self.memory.pop_front();
         }
-        
+
         self.cpu.push_back(metrics.cpu_percent);
         self.memory.push_back(metrics.memory_percent);
     }
-    
+
     pub fn cpu_average(&self) -> f32 {
         if self.cpu.is_empty() {
             0.0
@@ -47,7 +47,7 @@ impl MetricsHistory {
             self.cpu.iter().sum::<f32>() / self.cpu.len() as f32
         }
     }
-    
+
     pub fn memory_average(&self) -> f32 {
         if self.memory.is_empty() {
             0.0

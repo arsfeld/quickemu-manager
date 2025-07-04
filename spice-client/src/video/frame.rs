@@ -12,17 +12,16 @@ pub struct VideoFrame {
 
 impl PartialEq for VideoFrame {
     fn eq(&self, other: &Self) -> bool {
-        self.width == other.width 
-            && self.height == other.height 
-            && self.data_url == other.data_url
+        self.width == other.width && self.height == other.height && self.data_url == other.data_url
         // Note: We exclude timestamp from equality comparison
     }
 }
 
 impl VideoFrame {
     pub fn from_surface(surface: &DisplaySurface) -> Self {
-        let data_url = Self::create_data_url(surface.width, surface.height, &surface.data, surface.format);
-        
+        let data_url =
+            Self::create_data_url(surface.width, surface.height, &surface.data, surface.format);
+
         Self {
             width: surface.width,
             height: surface.height,
@@ -57,16 +56,16 @@ impl VideoFrame {
         // Convert RGB to RGBA for web compatibility
         if data.len() >= (width * height * 3) as usize {
             let mut rgba_data = Vec::with_capacity((width * height * 4) as usize);
-            
+
             for i in (0..data.len()).step_by(3) {
                 if i + 2 < data.len() {
-                    rgba_data.push(data[i]);     // R
+                    rgba_data.push(data[i]); // R
                     rgba_data.push(data[i + 1]); // G
                     rgba_data.push(data[i + 2]); // B
-                    rgba_data.push(255);         // A (opaque)
+                    rgba_data.push(255); // A (opaque)
                 }
             }
-            
+
             let encoded = general_purpose::STANDARD.encode(&rgba_data);
             format!("data:image/rgba;base64,{}", encoded)
         } else {
@@ -84,7 +83,7 @@ impl VideoFrame {
                </svg>"##,
             width, height, width, height
         );
-        
+
         let encoded = general_purpose::STANDARD.encode(svg.as_bytes());
         format!("data:image/svg+xml;base64,{}", encoded)
     }

@@ -1,8 +1,8 @@
 use dioxus::prelude::*;
 
+use crate::components::vnc_viewer::VncViewer;
 use crate::models::VM;
 use crate::server_functions::get_vm_screenshot;
-use crate::components::vnc_viewer::VncViewer;
 
 /// VM Screen Modal Component
 #[component]
@@ -23,7 +23,7 @@ pub fn VMScreenModal(vm: VM, on_close: EventHandler<()>) -> Element {
     use_effect(move || {
         let vm_id_clone = vm_id.clone();
         let display_mode = display_mode.read().clone();
-        
+
         if display_mode == DisplayMode::Screenshot {
             spawn(async move {
                 loop {
@@ -32,7 +32,7 @@ pub fn VMScreenModal(vm: VM, on_close: EventHandler<()>) -> Element {
                         Ok(data) => {
                             screenshot_data.set(Some(data));
                             error_message.set(None);
-                        },
+                        }
                         Err(e) => {
                             error_message.set(Some(format!("Failed to get screenshot: {}", e)));
                         }
@@ -42,7 +42,7 @@ pub fn VMScreenModal(vm: VM, on_close: EventHandler<()>) -> Element {
                     // Refresh every 2 seconds
                     #[cfg(target_arch = "wasm32")]
                     gloo_timers::future::TimeoutFuture::new(2000).await;
-                    
+
                     #[cfg(not(target_arch = "wasm32"))]
                     tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
                 }
@@ -67,18 +67,18 @@ pub fn VMScreenModal(vm: VM, on_close: EventHandler<()>) -> Element {
                         // Display mode tabs
                         div { class: "flex mt-2 space-x-2",
                             button {
-                                class: if *display_mode.read() == DisplayMode::VNC { 
+                                class: if *display_mode.read() == DisplayMode::VNC {
                                     "px-3 py-1 text-sm bg-blue-500 text-white rounded"
-                                } else { 
+                                } else {
                                     "px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
                                 },
                                 onclick: move |_| display_mode.set(DisplayMode::VNC),
                                 "VNC Display"
                             }
                             button {
-                                class: if *display_mode.read() == DisplayMode::Screenshot { 
+                                class: if *display_mode.read() == DisplayMode::Screenshot {
                                     "px-3 py-1 text-sm bg-blue-500 text-white rounded"
-                                } else { 
+                                } else {
                                     "px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
                                 },
                                 onclick: move |_| display_mode.set(DisplayMode::Screenshot),
@@ -97,7 +97,7 @@ pub fn VMScreenModal(vm: VM, on_close: EventHandler<()>) -> Element {
                 div {
                     class: "bg-black",
                     style: "height: 600px;",
-                    
+
                     match *display_mode.read() {
                         DisplayMode::VNC => rsx! {
                             VncViewer {
@@ -130,7 +130,7 @@ pub fn VMScreenModal(vm: VM, on_close: EventHandler<()>) -> Element {
                         }
                     }
                 }
-                
+
                 // Footer
                 div {
                     class: "p-4 bg-gray-50 border-t border-macos-border flex items-center justify-between",

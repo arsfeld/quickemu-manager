@@ -1,6 +1,6 @@
+use crate::ui::SpiceDisplay;
 use adw::prelude::*;
 use gtk::{gio, glib};
-use crate::ui::SpiceDisplay;
 
 pub struct VMConsoleWindow {
     window: adw::ApplicationWindow,
@@ -19,13 +19,13 @@ impl VMConsoleWindow {
 
         // Create header bar with controls
         let header_bar = adw::HeaderBar::new();
-        
+
         // Add fullscreen button
         let fullscreen_button = gtk::Button::builder()
             .icon_name("view-fullscreen-symbolic")
             .tooltip_text("Toggle Fullscreen")
             .build();
-        
+
         fullscreen_button.connect_clicked(glib::clone!(
             #[weak]
             window,
@@ -37,7 +37,7 @@ impl VMConsoleWindow {
                 }
             }
         ));
-        
+
         header_bar.pack_end(&fullscreen_button);
 
         // Create toolbar with VM controls
@@ -61,7 +61,7 @@ impl VMConsoleWindow {
         let content_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .build();
-        
+
         content_box.append(&header_bar);
         content_box.append(&toolbar);
 
@@ -70,19 +70,19 @@ impl VMConsoleWindow {
         spice_display.set_vexpand(true);
         spice_display.set_hexpand(true);
         spice_display.set_visible(true);
-        
+
         // Set a background color to see if the widget is there
         spice_display.add_css_class("spice-display-container");
-        
+
         // Wrap in a scrolled window for better handling of different resolutions
         let scrolled_window = gtk::ScrolledWindow::builder()
             .child(&spice_display)
             .vexpand(true)
             .hexpand(true)
             .build();
-        
+
         content_box.append(&scrolled_window);
-        
+
         window.set_content(Some(&content_box));
 
         // Handle window close

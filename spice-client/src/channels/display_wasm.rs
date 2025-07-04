@@ -1,12 +1,12 @@
 //! WebAssembly-specific display channel integration
 
-#[cfg(target_arch = "wasm32")]
-use crate::wasm::canvas::CanvasManager;
-#[cfg(target_arch = "wasm32")]
-use crate::wasm::video_renderer::{WasmVideoRenderer, WasmPerformanceOptimizer};
 use crate::channels::display::{DisplayChannel, DisplaySurface};
 use crate::error::Result;
 use crate::protocol::*;
+#[cfg(target_arch = "wasm32")]
+use crate::wasm::canvas::CanvasManager;
+#[cfg(target_arch = "wasm32")]
+use crate::wasm::video_renderer::{WasmPerformanceOptimizer, WasmVideoRenderer};
 
 #[cfg(target_arch = "wasm32")]
 impl DisplayChannel {
@@ -41,7 +41,7 @@ impl DisplayChannel {
             let y = rect.top;
             let width = (rect.right - rect.left) as u32;
             let height = (rect.bottom - rect.top) as u32;
-            
+
             canvas_manager.update_canvas_region(surface_id, surface, x, y, width, height)?;
         }
 
@@ -81,9 +81,12 @@ impl WasmDisplayManager {
     }
 
     /// Handles video stream creation
-    pub async fn handle_stream_create(&mut self, stream_info: &crate::channels::display::StreamInfo) -> Result<()> {
+    pub async fn handle_stream_create(
+        &mut self,
+        stream_info: &crate::channels::display::StreamInfo,
+    ) -> Result<()> {
         self.video_renderer.create_video_stream(stream_info)?;
-        
+
         // Position video element based on destination rectangle
         self.video_renderer.position_video(
             stream_info.id,
@@ -98,7 +101,7 @@ impl WasmDisplayManager {
     pub async fn handle_stream_data(&mut self, stream_id: u32, data: &[u8]) -> Result<()> {
         // Apply quality adjustment based on performance
         let quality = self.performance_optimizer.get_quality_level();
-        
+
         if quality < 100 {
             // TODO: Implement quality reduction (e.g., downsampling)
         }

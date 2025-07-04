@@ -1,15 +1,15 @@
+use adw::subclass::prelude::*;
+use adw::{prelude::*, ComboRow, SwitchRow};
 use gtk::prelude::*;
 use gtk::{glib, Button};
-use adw::{prelude::*, SwitchRow, ComboRow};
-use adw::subclass::prelude::*;
 
 use crate::AppState;
 use quickemu_core::Theme;
 
 mod imp {
     use super::*;
-    use std::cell::RefCell;
     use gtk::{CompositeTemplate, TemplateChild};
+    use std::cell::RefCell;
 
     #[derive(CompositeTemplate)]
     #[template(resource = "/org/quickemu/Manager/ui/settings_dialog.ui")]
@@ -22,7 +22,7 @@ mod imp {
         pub auto_download_switch: TemplateChild<SwitchRow>,
         #[template_child]
         pub theme_row: TemplateChild<ComboRow>,
-        
+
         pub app_state: RefCell<Option<AppState>>,
     }
 
@@ -75,10 +75,10 @@ impl SettingsDialog {
         let dialog: Self = glib::Object::builder()
             .property("transient-for", parent)
             .build();
-        
+
         let imp = dialog.imp();
         imp.app_state.replace(Some(app_state.clone()));
-        
+
         // Connect close button
         let dialog_weak = dialog.downgrade();
         imp.close_button.connect_clicked(move |_| {
@@ -86,45 +86,54 @@ impl SettingsDialog {
                 dialog.close();
             }
         });
-        
+
         // Connect settings changes
         let app_state_clone = app_state.clone();
-        imp.auto_download_switch.connect_active_notify(move |switch| {
-            let app_state = app_state_clone.clone();
-            let active = switch.is_active();
-            glib::spawn_future_local(async move {
-                if let Err(e) = app_state.config_manager.update_config(|config| {
-                    config.auto_download_tools = active;
-                }).await {
-                    eprintln!("Failed to save config: {}", e);
-                }
+        imp.auto_download_switch
+            .connect_active_notify(move |switch| {
+                let app_state = app_state_clone.clone();
+                let active = switch.is_active();
+                glib::spawn_future_local(async move {
+                    if let Err(e) = app_state
+                        .config_manager
+                        .update_config(|config| {
+                            config.auto_download_tools = active;
+                        })
+                        .await
+                    {
+                        eprintln!("Failed to save config: {}", e);
+                    }
+                });
             });
-        });
 
         let app_state_clone = app_state.clone();
         imp.theme_row.connect_selected_notify(move |combo| {
             let app_state = app_state_clone.clone();
             let selected = combo.selected();
             glib::spawn_future_local(async move {
-                if let Err(e) = app_state.config_manager.update_config(|config| {
-                    config.theme = match selected {
-                        1 => Theme::Light,
-                        2 => Theme::Dark,
-                        _ => Theme::System,
-                    };
-                }).await {
+                if let Err(e) = app_state
+                    .config_manager
+                    .update_config(|config| {
+                        config.theme = match selected {
+                            1 => Theme::Light,
+                            2 => Theme::Dark,
+                            _ => Theme::System,
+                        };
+                    })
+                    .await
+                {
                     eprintln!("Failed to save config: {}", e);
                 }
             });
         });
-        
+
         // Load current settings
         let auto_download_switch = imp.auto_download_switch.clone();
         let theme_row = imp.theme_row.clone();
         glib::spawn_future_local(async move {
             let config = app_state.config_manager.get_config().await;
             auto_download_switch.set_active(config.auto_download_tools);
-            
+
             let theme_index = match config.theme {
                 Theme::System => 0,
                 Theme::Light => 1,
@@ -132,7 +141,7 @@ impl SettingsDialog {
             };
             theme_row.set_selected(theme_index);
         });
-        
+
         dialog
     }
 

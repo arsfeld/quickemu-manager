@@ -48,24 +48,24 @@ impl Default for DisplayMode {
 
 pub trait Display {
     fn create_surface(&mut self, mode: DisplayMode) -> Result<()>;
-    
+
     fn present_frame(&mut self, data: &[u8], format: PixelFormat) -> Result<()>;
-    
+
     fn resize(&mut self, width: u32, height: u32) -> Result<()>;
-    
+
     fn set_cursor(&mut self, cursor: Option<CursorData>) -> Result<()>;
-    
+
     fn set_title(&mut self, title: &str) -> Result<()>;
-    
+
     fn toggle_fullscreen(&mut self) -> Result<()>;
-    
+
     fn get_dimensions(&self) -> (u32, u32);
-    
+
     fn is_fullscreen(&self) -> bool;
-    
+
     /// Get a reference to self as Any for downcasting
     fn as_any(&self) -> &dyn std::any::Any;
-    
+
     /// Get a mutable reference to self as Any for downcasting
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }

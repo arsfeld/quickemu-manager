@@ -5,20 +5,21 @@ use gtk4::{gio, glib, Application, ApplicationWindow, DrawingArea, HeaderBar, Or
 // Type alias to avoid conflict with std::boxed::Box
 type GtkBox = gtk4::Box;
 use spice_client::{
-    SpiceClientShared,
     multimedia::{
-        self, MultimediaBackend,
+        self,
         display::Display,
-        input::{InputEvent, KeyboardEvent, MouseEvent, MouseButton},
+        input::{InputEvent, KeyboardEvent, MouseButton, MouseEvent},
         spice_adapter::{SpiceDisplayAdapter, SpiceInputAdapter},
+        MultimediaBackend,
     },
+    SpiceClientShared,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use std::thread;
-use tracing::{error, info, warn, debug};
+use tokio::sync::Mutex;
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 #[derive(Parser, Debug, Clone)]
@@ -64,29 +65,39 @@ struct SpiceWindow {
 }
 
 impl SpiceWindow {
-    fn new(window: ApplicationWindow, spice_client: SpiceClientShared) -> Result<Self, Box<dyn std::error::Error>> {
+    fn new(
+        window: ApplicationWindow,
+        spice_client: SpiceClientShared,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         // Create GTK4 backend
         let backend = multimedia::gtk4::Gtk4Backend::new()?;
         let mut gtk_display = backend.create_display()?;
-        
+
         // Initialize display with default mode
         gtk_display.create_surface(multimedia::display::DisplayMode {
             width: 1024,
             height: 768,
             fullscreen: false,
         })?;
-        
+
         // Get the drawing area from the GTK4 display
-        let drawing_area = if let Some(display) = gtk_display.as_any().downcast_ref::<multimedia::gtk4::display::Gtk4Display>() {
-            display.get_drawing_area()
+        let drawing_area = if let Some(display) = gtk_display
+            .as_any()
+            .downcast_ref::<multimedia::gtk4::display::Gtk4Display>(
+        ) {
+            display
+                .get_drawing_area()
                 .ok_or("Failed to get drawing area from GTK4 display")?
                 .clone()
         } else {
             return Err("Failed to downcast to Gtk4Display".into());
         };
-        
+
         // Set window reference in the display
-        if let Some(display) = gtk_display.as_any_mut().downcast_mut::<multimedia::gtk4::display::Gtk4Display>() {
+        if let Some(display) = gtk_display
+            .as_any_mut()
+            .downcast_mut::<multimedia::gtk4::display::Gtk4Display>()
+        {
             display.set_window(window.clone().upcast());
         }
 
@@ -107,16 +118,19 @@ impl SpiceWindow {
         // Keyboard event controller
         let key_controller = gtk4::EventControllerKey::new();
         let input_adapter = self.input_adapter.clone();
-        
+
         key_controller.connect_key_pressed(move |_, keyval, keycode, state| {
-            debug!("Key pressed: keyval={}, keycode={}, state={:?}", keyval, keycode, state);
-            
+            debug!(
+                "Key pressed: keyval={}, keycode={}, state={:?}",
+                keyval, keycode, state
+            );
+
             let event = InputEvent::Keyboard(KeyboardEvent::KeyDown {
                 scancode: keycode,
                 keycode: None, // GTK Key type can't be converted to u32
                 modifiers: state.bits(),
             });
-            
+
             // Forward to SPICE via input adapter
             let input_adapter = input_adapter.clone();
             glib::spawn_future_local(async move {
@@ -127,20 +141,23 @@ impl SpiceWindow {
                     }
                 }
             });
-            
+
             glib::Propagation::Proceed
         });
 
         let input_adapter_clone = self.input_adapter.clone();
         key_controller.connect_key_released(move |_, keyval, keycode, state| {
-            debug!("Key released: keyval={}, keycode={}, state={:?}", keyval, keycode, state);
-            
+            debug!(
+                "Key released: keyval={}, keycode={}, state={:?}",
+                keyval, keycode, state
+            );
+
             let event = InputEvent::Keyboard(KeyboardEvent::KeyUp {
                 scancode: keycode,
                 keycode: None, // GTK Key type can't be converted to u32
                 modifiers: state.bits(),
             });
-            
+
             // Forward to SPICE via input adapter
             let input_adapter_clone = input_adapter_clone.clone();
             glib::spawn_future_local(async move {
@@ -158,7 +175,7 @@ impl SpiceWindow {
         // Mouse motion controller
         let motion_controller = gtk4::EventControllerMotion::new();
         let input_adapter = self.input_adapter.clone();
-        
+
         motion_controller.connect_motion(move |_, x, y| {
             let event = InputEvent::Mouse(MouseEvent::Motion {
                 x: x as u32,
@@ -166,7 +183,7 @@ impl SpiceWindow {
                 relative_x: 0, // GTK doesn't provide relative motion easily
                 relative_y: 0,
             });
-            
+
             let input_adapter = input_adapter.clone();
             glib::spawn_future_local(async move {
                 let adapter = input_adapter.lock().await;
@@ -183,18 +200,18 @@ impl SpiceWindow {
         // Mouse button controller
         let click_controller = gtk4::GestureClick::new();
         let input_adapter = self.input_adapter.clone();
-        
+
         click_controller.connect_pressed(move |gesture, n_press, x, y| {
             let button = convert_gtk_button(gesture.current_button());
             debug!("Mouse button {:?} pressed at ({}, {})", button, x, y);
-            
+
             let event = InputEvent::Mouse(MouseEvent::Button {
                 button,
                 pressed: true,
                 x: x as u32,
                 y: y as u32,
             });
-            
+
             let input_adapter = input_adapter.clone();
             glib::spawn_future_local(async move {
                 let adapter = input_adapter.lock().await;
@@ -210,14 +227,14 @@ impl SpiceWindow {
         click_controller.connect_released(move |gesture, n_press, x, y| {
             let button = convert_gtk_button(gesture.current_button());
             debug!("Mouse button {:?} released at ({}, {})", button, x, y);
-            
+
             let event = InputEvent::Mouse(MouseEvent::Button {
                 button,
                 pressed: false,
                 x: x as u32,
                 y: y as u32,
             });
-            
+
             let input_adapter_clone = input_adapter_clone.clone();
             glib::spawn_future_local(async move {
                 let adapter = input_adapter_clone.lock().await;
@@ -232,17 +249,18 @@ impl SpiceWindow {
         self.drawing_area.add_controller(click_controller);
 
         // Scroll controller
-        let scroll_controller = gtk4::EventControllerScroll::new(gtk4::EventControllerScrollFlags::VERTICAL);
+        let scroll_controller =
+            gtk4::EventControllerScroll::new(gtk4::EventControllerScrollFlags::VERTICAL);
         let input_adapter = self.input_adapter.clone();
-        
+
         scroll_controller.connect_scroll(move |_, dx, dy| {
             debug!("Scroll: dx={}, dy={}", dx, dy);
-            
+
             let event = InputEvent::Mouse(MouseEvent::Wheel {
                 delta_x: dx as i32,
                 delta_y: dy as i32,
             });
-            
+
             let input_adapter = input_adapter.clone();
             glib::spawn_future_local(async move {
                 let adapter = input_adapter.lock().await;
@@ -252,13 +270,12 @@ impl SpiceWindow {
                     }
                 }
             });
-            
+
             glib::Propagation::Proceed
         });
 
         self.drawing_area.add_controller(scroll_controller);
     }
-
 }
 
 fn build_ui(app: &Application, args: Args) {
@@ -275,12 +292,12 @@ fn build_ui(app: &Application, args: Args) {
         .title_widget(&gtk4::Label::new(Some(&args.title)))
         .show_title_buttons(true)
         .build();
-    
+
     window.set_titlebar(Some(&header_bar));
 
     // Create SPICE client
     let spice_client = SpiceClientShared::new(args.host.clone(), args.port);
-    
+
     // Create SpiceWindow
     let spice_window = match SpiceWindow::new(window.clone(), spice_client) {
         Ok(sw) => Rc::new(RefCell::new(sw)),
@@ -301,7 +318,7 @@ fn build_ui(app: &Application, args: Args) {
 
     // Setup main container
     let main_box = GtkBox::new(Orientation::Vertical, 0);
-    
+
     // Add drawing area
     let drawing_area = spice_window.borrow().drawing_area.clone();
     drawing_area.set_vexpand(true);
@@ -329,21 +346,21 @@ fn build_ui(app: &Application, args: Args) {
     let spice_window_clone = spice_window.clone();
     let status_bar_clone = status_bar.clone();
     let display_adapter_ref = spice_window.borrow().display_adapter.clone();
-    
+
     // Use glib's async runtime instead of spawning a new thread
     glib::spawn_future_local(async move {
         // Use the existing SPICE client
         let mut client = spice_window_clone.borrow().spice_client.clone();
-        
+
         // Set password if provided
         if let Some(pwd) = password {
             client.set_password(pwd).await;
         }
-        
+
         // Connect in a background thread with Tokio runtime
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Result<(), String>>();
         let client_for_thread = client.clone();
-        
+
         thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async {
@@ -366,68 +383,71 @@ fn build_ui(app: &Application, args: Args) {
                 }
             });
         });
-        
+
         // Handle connection result
         let client_for_adapters = client.clone(); // Keep a clone for the adapters
         glib::spawn_future_local(async move {
             if let Some(result) = rx.recv().await {
                 match result {
-                Ok(()) => {
-                    status_bar_clone.set_label("Connected to SPICE server");
-                    
-                    // Client is already set up, no need to update
-                    
-                    // Set up adapters
-                    glib::spawn_future_local({
-                        let spice_window = spice_window_clone.clone();
-                        let display_adapter_ref = display_adapter_ref.clone();
-                        let client = client_for_adapters.clone(); // Use the cloned client
-                        async move {
-                            // Create display adapter
-                            let gtk_display_arc = spice_window.borrow().gtk_display.clone();
-                            let mut display_guard = gtk_display_arc.lock().await;
-                            if let Some(display) = display_guard.take() {
-                                let display_adapter = SpiceDisplayAdapter::new(
-                                    client.clone(),
-                                    display,
-                                    0, // Primary display channel
+                    Ok(()) => {
+                        status_bar_clone.set_label("Connected to SPICE server");
+
+                        // Client is already set up, no need to update
+
+                        // Set up adapters
+                        glib::spawn_future_local({
+                            let spice_window = spice_window_clone.clone();
+                            let display_adapter_ref = display_adapter_ref.clone();
+                            let client = client_for_adapters.clone(); // Use the cloned client
+                            async move {
+                                // Create display adapter
+                                let gtk_display_arc = spice_window.borrow().gtk_display.clone();
+                                let mut display_guard = gtk_display_arc.lock().await;
+                                if let Some(display) = display_guard.take() {
+                                    let display_adapter = SpiceDisplayAdapter::new(
+                                        client.clone(),
+                                        display,
+                                        0, // Primary display channel
+                                    );
+
+                                    let display_adapter_arc =
+                                        spice_window.borrow().display_adapter.clone();
+                                    let mut adapter_guard = display_adapter_arc.lock().await;
+                                    *adapter_guard = Some(display_adapter);
+                                }
+
+                                // Create input adapter
+                                let input_adapter = SpiceInputAdapter::new(
+                                    client, 0, // Primary inputs channel
                                 );
-                                
-                                let display_adapter_arc = spice_window.borrow().display_adapter.clone();
-                                let mut adapter_guard = display_adapter_arc.lock().await;
-                                *adapter_guard = Some(display_adapter);
+
+                                let input_adapter_arc = spice_window.borrow().input_adapter.clone();
+                                let mut adapter_guard = input_adapter_arc.lock().await;
+                                *adapter_guard = Some(input_adapter);
+
+                                // Start display update timer
+                                glib::timeout_add_local(
+                                    std::time::Duration::from_millis(16),
+                                    move || {
+                                        let adapter = display_adapter_ref.clone();
+                                        glib::spawn_future_local(async move {
+                                            let adapter_guard = adapter.lock().await;
+                                            if let Some(ref adapter) = *adapter_guard {
+                                                if let Err(e) = adapter.update_display().await {
+                                                    debug!("Failed to update display: {}", e);
+                                                }
+                                            }
+                                        });
+                                        glib::ControlFlow::Continue
+                                    },
+                                );
                             }
-                            
-                            // Create input adapter
-                            let input_adapter = SpiceInputAdapter::new(
-                                client,
-                                0, // Primary inputs channel
-                            );
-                            
-                            let input_adapter_arc = spice_window.borrow().input_adapter.clone();
-                            let mut adapter_guard = input_adapter_arc.lock().await;
-                            *adapter_guard = Some(input_adapter);
-                            
-                            // Start display update timer
-                            glib::timeout_add_local(std::time::Duration::from_millis(16), move || {
-                                let adapter = display_adapter_ref.clone();
-                                glib::spawn_future_local(async move {
-                                    let adapter_guard = adapter.lock().await;
-                                    if let Some(ref adapter) = *adapter_guard {
-                                        if let Err(e) = adapter.update_display().await {
-                                            debug!("Failed to update display: {}", e);
-                                        }
-                                    }
-                                });
-                                glib::ControlFlow::Continue
-                            });
-                        }
-                    });
-                }
-                Err(e) => {
-                    error!("Failed to connect to SPICE server: {}", e);
-                    status_bar_clone.set_label(&format!("Connection failed: {}", e));
-                }
+                        });
+                    }
+                    Err(e) => {
+                        error!("Failed to connect to SPICE server: {}", e);
+                        status_bar_clone.set_label(&format!("Connection failed: {}", e));
+                    }
                 }
             }
         });
@@ -468,8 +488,7 @@ fn main() -> glib::ExitCode {
     let filter_level = if args.debug { "debug" } else { "info" };
     tracing_subscriber::registry()
         .with(fmt::layer())
-        .with(EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| EnvFilter::new(filter_level)))
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter_level)))
         .init();
 
     info!("Starting Rusty SPICE GTK4 client");

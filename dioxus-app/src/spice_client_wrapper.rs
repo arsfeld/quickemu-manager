@@ -1,9 +1,9 @@
 // SPICE client wrapper for WebAssembly integration
 // This module provides proper integration with the spice-client library
 
-use tokio::sync::mpsc;
-use spice_client::SpiceError;
 use spice_client::channels::{DisplaySurface, KeyCode, MouseButton};
+use spice_client::SpiceError;
+use tokio::sync::mpsc;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::spawn_local;
@@ -12,11 +12,11 @@ use wasm_bindgen_futures::spawn_local;
 pub enum SpiceMessage {
     Connect(String, Option<String>), // URL, optional password
     Disconnect,
-    KeyDown(u32), // keycode
-    KeyUp(u32),   // keycode
-    MouseMove(i32, i32), // x, y
+    KeyDown(u32),          // keycode
+    KeyUp(u32),            // keycode
+    MouseMove(i32, i32),   // x, y
     MouseButton(u8, bool), // button, pressed
-    MouseWheel(i32), // delta
+    MouseWheel(i32),       // delta
 }
 
 #[derive(Debug, Clone)]
@@ -43,28 +43,32 @@ pub struct SpiceClientWrapper {
 }
 
 impl SpiceClientWrapper {
-    pub fn new() -> (Self, mpsc::UnboundedReceiver<SpiceEvent>, mpsc::UnboundedSender<SpiceMessage>) {
+    pub fn new() -> (
+        Self,
+        mpsc::UnboundedReceiver<SpiceEvent>,
+        mpsc::UnboundedSender<SpiceMessage>,
+    ) {
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         let (message_tx, message_rx) = mpsc::unbounded_channel();
-        
+
         let wrapper = Self {
             event_tx,
             message_rx,
             #[cfg(target_arch = "wasm32")]
             update_callback: None,
         };
-        
+
         (wrapper, event_rx, message_tx)
     }
-    
+
     #[cfg(target_arch = "wasm32")]
-    pub fn set_update_callback<F>(&mut self, callback: F) 
+    pub fn set_update_callback<F>(&mut self, callback: F)
     where
-        F: Fn(u32, &DisplaySurface) + 'static
+        F: Fn(u32, &DisplaySurface) + 'static,
     {
         self.update_callback = Some(Box::new(callback));
     }
-    
+
     pub async fn run(mut self) {
         while let Some(msg) = self.message_rx.recv().await {
             match msg {
@@ -73,7 +77,7 @@ impl SpiceClientWrapper {
                     // In a real implementation, this would use the spice-client library
                     log::info!("SpiceClientWrapper: Simulating connection to {}", url);
                     let _ = self.event_tx.send(SpiceEvent::Connected);
-                    
+
                     // Simulate a display update
                     let surface = DisplaySurface {
                         width: 1024,
@@ -81,12 +85,12 @@ impl SpiceClientWrapper {
                         format: 8, // SPICE_BITMAP_FMT_32BIT
                         data: vec![0; 1024 * 768 * 4],
                     };
-                    
+
                     let _ = self.event_tx.send(SpiceEvent::DisplayUpdate {
                         surface_id: 0,
                         surface: surface.clone(),
                     });
-                    
+
                     #[cfg(target_arch = "wasm32")]
                     if let Some(ref callback) = self.update_callback {
                         callback(0, &surface);
@@ -145,7 +149,7 @@ fn map_keycode_to_spice(keycode: u32) -> Option<KeyCode> {
         88 => Some(KeyCode::Char('X')),
         89 => Some(KeyCode::Char('Y')),
         90 => Some(KeyCode::Char('Z')),
-        
+
         // Numbers
         48 => Some(KeyCode::Char('0')),
         49 => Some(KeyCode::Char('1')),
@@ -157,7 +161,7 @@ fn map_keycode_to_spice(keycode: u32) -> Option<KeyCode> {
         55 => Some(KeyCode::Char('7')),
         56 => Some(KeyCode::Char('8')),
         57 => Some(KeyCode::Char('9')),
-        
+
         // Special keys
         8 => Some(KeyCode::Backspace),
         9 => Some(KeyCode::Tab),
@@ -168,7 +172,7 @@ fn map_keycode_to_spice(keycode: u32) -> Option<KeyCode> {
         38 => Some(KeyCode::ArrowUp),
         39 => Some(KeyCode::ArrowRight),
         40 => Some(KeyCode::ArrowDown),
-        
+
         // Function keys
         112 => Some(KeyCode::Function(1)),
         113 => Some(KeyCode::Function(2)),
@@ -182,7 +186,7 @@ fn map_keycode_to_spice(keycode: u32) -> Option<KeyCode> {
         121 => Some(KeyCode::Function(10)),
         122 => Some(KeyCode::Function(11)),
         123 => Some(KeyCode::Function(12)),
-        
+
         _ => None,
     }
 }
