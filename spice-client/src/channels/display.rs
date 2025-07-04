@@ -12,6 +12,33 @@ mod display_tests;
 #[path = "video_tests.rs"]
 mod video_tests;
 
+// Cache for images referenced by FROM_CACHE types
+struct ImageCache {
+    entries: HashMap<u64, CachedImage>,
+}
+
+struct CachedImage {
+    data: Vec<u8>,
+    width: u32,
+    height: u32,
+}
+
+impl ImageCache {
+    fn new() -> Self {
+        Self {
+            entries: HashMap::new(),
+        }
+    }
+    
+    fn get(&self, id: u64) -> Option<&CachedImage> {
+        self.entries.get(&id)
+    }
+    
+    fn insert(&mut self, id: u64, data: Vec<u8>, width: u32, height: u32) {
+        self.entries.insert(id, CachedImage { data, width, height });
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DisplaySurface {
     pub width: u32,
@@ -35,6 +62,7 @@ pub struct DisplayChannel {
     monitors: Vec<SpiceHead>,
     active_streams: HashMap<u32, StreamInfo>,
     update_callback: Option<Box<dyn Fn(&DisplaySurface) + Send + Sync>>,
+    image_cache: ImageCache,
 }
 
 impl DisplayChannel {
@@ -74,6 +102,7 @@ impl DisplayChannel {
             monitors: Vec::new(),
             active_streams: HashMap::new(),
             update_callback: None,
+            image_cache: ImageCache::new(),
         })
     }
 
@@ -112,6 +141,7 @@ impl DisplayChannel {
             monitors: Vec::new(),
             active_streams: HashMap::new(),
             update_callback: None,
+            image_cache: ImageCache::new(),
         })
     }
     
@@ -151,6 +181,7 @@ impl DisplayChannel {
             monitors: Vec::new(),
             active_streams: HashMap::new(),
             update_callback: None,
+            image_cache: ImageCache::new(),
         })
     }
 
@@ -206,9 +237,25 @@ impl DisplayChannel {
             return None;
         }
         
+        // Check if this is an encoded address (upper 32 bits non-zero)
+        if address > 0xFFFFFFFF {
+            let surface_id = (address >> 32) as u32;
+            let offset = (address & 0xFFFFFFFF) as u32;
+            
+            warn!("SpiceAddress 0x{:x} is encoded: surface_id=0x{:x} ({}) offset=0x{:x} ({})", 
+                  address, surface_id, surface_id, offset, offset);
+            
+            // For now, we don't have a surface cache implemented
+            // In a full implementation, we would look up the surface/cache entry
+            // and return the data from that surface at the given offset
+            warn!("Encoded SpiceAddress not supported yet - no surface cache system");
+            return None;
+        }
+        
+        // Simple offset from message body
         let offset = address as usize;
         if offset >= data.len() {
-            warn!("SpiceAddress {} is out of bounds (data len: {})", address, data.len());
+            warn!("SpiceAddress 0x{:x} ({}) is out of bounds (data len: {})", address, address, data.len());
             return None;
         }
         
@@ -216,7 +263,26 @@ impl DisplayChannel {
     }
     
     /// Decode a SpiceImage from a SpiceAddress
-    fn decode_image(&self, address: SpiceAddress, data: &[u8]) -> Result<Option<(Vec<u8>, u32, u32)>> {
+    fn decode_image(&mut self, address: SpiceAddress, data: &[u8]) -> Result<Option<(Vec<u8>, u32, u32)>> {
+        // Check if this is a special cached image address
+        // SPICE uses high addresses (> 0x10000000) for special encodings
+        if address > 0x10000000 {
+            // This is likely a cached image reference
+            // Extract the cache ID from the address encoding
+            let cache_id = address & 0xFFFFFFFF; // Lower 32 bits might be the cache ID
+            
+            debug!("Detected cached image reference with address 0x{:x}, cache_id: {}", address, cache_id);
+            
+            // Try to get from cache
+            if let Some(cached) = self.image_cache.get(cache_id) {
+                debug!("Found cached image: {}x{}", cached.width, cached.height);
+                return Ok(Some((cached.data.clone(), cached.width, cached.height)));
+            } else {
+                warn!("Cached image with ID {} not found in cache", cache_id);
+                return Ok(None);
+            }
+        }
+        
         let image_data = match self.resolve_address(address, data) {
             Some(d) => d,
             None => return Ok(None),
@@ -230,7 +296,7 @@ impl DisplayChannel {
         debug!("Image descriptor: type={}, size={}x{}, id={}", 
               descriptor.type_, descriptor.width, descriptor.height, descriptor.id);
         
-        match descriptor.type_ {
+        let result = match descriptor.type_ {
             SPICE_IMAGE_TYPE_BITMAP => {
                 // Parse bitmap structure
                 let bitmap = SpiceBitmap::read(&mut cursor)
@@ -266,11 +332,51 @@ impl DisplayChannel {
                 let compressed_data = &image_data[cursor.position() as usize..];
                 self.decode_zlib(compressed_data, descriptor.width, descriptor.height)
             }
+            SPICE_IMAGE_TYPE_FROM_CACHE | SPICE_IMAGE_TYPE_FROM_CACHE_LOSSLESS => {
+                // This is a cached image reference
+                debug!("FROM_CACHE image type, id: {}", descriptor.id);
+                
+                // Try to get from cache
+                if let Some(cached) = self.image_cache.get(descriptor.id) {
+                    debug!("Found cached image: {}x{}", cached.width, cached.height);
+                    Ok(Some((cached.data.clone(), cached.width, cached.height)))
+                } else {
+                    warn!("Cached image with ID {} not found in cache", descriptor.id);
+                    Ok(None)
+                }
+            }
+            SPICE_IMAGE_TYPE_SURFACE => {
+                // This references another surface
+                debug!("SURFACE image type, surface id encoded in descriptor id: {}", descriptor.id);
+                
+                // The descriptor.id might encode the surface ID
+                let surface_id = (descriptor.id & 0xFFFFFFFF) as u32;
+                
+                if let Some(surface) = self.surfaces.get(&surface_id) {
+                    debug!("Found surface {}: {}x{}", surface_id, surface.width, surface.height);
+                    Ok(Some((surface.data.clone(), surface.width, surface.height)))
+                } else {
+                    warn!("Surface {} not found", surface_id);
+                    Ok(None)
+                }
+            }
             _ => {
                 debug!("Unsupported image type: {}", descriptor.type_);
                 Ok(None)
             }
+        }?;
+        
+        // Cache the decoded image if successful (except for FROM_CACHE and SURFACE types)
+        if let Some((ref data, width, height)) = result {
+            if descriptor.type_ != SPICE_IMAGE_TYPE_FROM_CACHE && 
+               descriptor.type_ != SPICE_IMAGE_TYPE_FROM_CACHE_LOSSLESS &&
+               descriptor.type_ != SPICE_IMAGE_TYPE_SURFACE {
+                debug!("Caching decoded image with id: {}", descriptor.id);
+                self.image_cache.insert(descriptor.id, data.clone(), width, height);
+            }
         }
+        
+        Ok(result)
     }
     
     /// Decode a raw bitmap to RGBA format
@@ -492,6 +598,13 @@ impl DisplayChannel {
             x if x == DisplayChannelMessage::DrawCopy as u16 => {
                 debug!("Handle draw copy");
                 
+                // Log raw data for debugging
+                if data.len() < 100 {
+                    debug!("DrawCopy raw data (hex): {:02x?}", data);
+                } else {
+                    debug!("DrawCopy raw data first 100 bytes (hex): {:02x?}", &data[..100]);
+                }
+                
                 // Parse the draw copy message
                 let mut cursor = std::io::Cursor::new(data);
                 if let Ok(draw_copy) = SpiceDrawCopy::read(&mut cursor) {
@@ -504,7 +617,8 @@ impl DisplayChannel {
                           src_area.left, src_area.top, src_area.right, src_area.bottom,
                           draw_copy.data.src_image);
                     
-                    // Try to decode the source image first (before getting mutable reference)
+                    // Try to decode the source image
+                    // Note: decode_image now handles special cached image addresses internally
                     let decoded_image = self.decode_image(draw_copy.data.src_image, data)?;
                     
                     if let Some(surface) = self.surfaces.get_mut(&surface_id) {

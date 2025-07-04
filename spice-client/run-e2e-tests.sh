@@ -216,7 +216,7 @@ run_test() {
     fi
     
     # Run the test
-    if $cmd up --build --abort-on-container-exit; then
+    if $cmd up --build --abort-on-container-exit --exit-code-from test-$impl; then
         echo -e "${GREEN}✓ Test $test_name passed${NC}"
         
         # Collect logs if verbose

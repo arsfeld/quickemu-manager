@@ -135,6 +135,10 @@ name = "spice-test-client"
 path = "src/bin/spice-test-client.rs"
 
 [[bin]]
+name = "spice-e2e-test"
+path = "src/bin/spice-e2e-test.rs"
+
+[[bin]]
 name = "rusty-spice"
 path = "src/bin/rusty-spice.rs"
 required-features = ["backend-sdl2"]
@@ -143,3 +147,7 @@ required-features = ["backend-sdl2"]
 name = "rusty-spice-gtk"
 path = "src/bin/rusty-spice-gtk.rs"
 required-features = ["backend-gtk4"]
+
+[[bin]]
+name = "debug-spice-address"
+path = "src/bin/debug_spice_address.rs"

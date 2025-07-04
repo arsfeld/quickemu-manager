@@ -227,10 +227,10 @@ pub enum DisplayChannelMessage {
 #[brw(little)]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SpiceRect {
-    pub top: i32,
     pub left: i32,
-    pub bottom: i32,
+    pub top: i32,
     pub right: i32,
+    pub bottom: i32,
 }
 
 #[binrw]
@@ -501,7 +501,9 @@ pub struct SpiceBrush {
 #[brw(little)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpiceClip {
-    pub clip_type: u32,  // ClipType enum
+    pub clip_type: u8,  // ClipType enum
+    #[br(pad_before = 3)]  // 3 bytes padding for alignment before u64
+    #[bw(pad_before = 3)]
     pub data: SpiceAddress,  // Address to clip data (RectList or Path)
 }
 
@@ -539,6 +541,8 @@ pub struct SpiceDrawFillData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpiceQMask {
     pub flags: u8,
+    #[br(pad_before = 3)]  // 3 bytes padding for alignment before SpicePoint
+    #[bw(pad_before = 3)]
     pub pos: SpicePoint,
     pub bitmap: SpiceAddress,  // Address to the mask bitmap
 }
