@@ -159,17 +159,17 @@ cargo run --bin rusty-spice-gtk --features backend-gtk4 -- -H localhost -p 5900 
 3. **Input Latency**: Event forwarding could be more direct
 4. **Feature Completeness**: Many SPICE features not yet implemented
 
-## Comparison with SDL2 Implementation
+## Platform Support
 
-| Feature | GTK4 | SDL2 |
-|---------|------|------|
-| Native Look & Feel | ✅ Yes | ❌ No |
-| System Integration | ✅ Excellent | ⚠️ Basic |
-| Performance | ⚠️ Good | ✅ Excellent |
+| Feature | GTK4 | WebAssembly |
+|---------|------|-------------|
+| Native Look & Feel | ✅ Yes | ⚠️ Browser-based |
+| System Integration | ✅ Excellent | ⚠️ Limited |
+| Performance | ✅ Good | ⚠️ Variable |
 | Cross-platform | ✅ Yes | ✅ Yes |
-| Wayland Support | ✅ Native | ⚠️ Limited |
-| Accessibility | ✅ Built-in | ❌ None |
-| UI Flexibility | ✅ High | ⚠️ Low |
+| Wayland Support | ✅ Native | N/A |
+| Accessibility | ✅ Built-in | ✅ Browser-based |
+| UI Flexibility | ✅ High | ⚠️ Limited |
 
 ## Future Enhancements
 

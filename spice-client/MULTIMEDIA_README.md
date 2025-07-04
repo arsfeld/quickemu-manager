@@ -7,21 +7,16 @@ This SPICE client now includes a modular multimedia system that supports video d
 ## Features
 
 - **Generic trait-based API** - Platform-agnostic interfaces for display, audio, and input
-- **Multiple backends** - SDL2 (default), GTK4, and WebAssembly implementations
+- **Multiple backends** - GTK4 and WebAssembly implementations
 - **Feature flags** - Only include the backends you need
 - **Embeddable** - Can be integrated into existing GTK4 applications
 - **Cross-platform executable** - `spice-viewer` binary for standalone use
 
 ## Building
 
-### Default build (SDL2 backend)
+### GTK4 backend (default)
 ```bash
 cargo build --release
-```
-
-### GTK4 backend
-```bash
-cargo build --release --no-default-features --features backend-gtk4
 ```
 
 ### WebAssembly
@@ -87,13 +82,12 @@ Each backend implements these traits:
 
 ### Implemented
 - ✅ Generic trait system
-- ✅ SDL2 backend (display, audio, input)
+- ✅ GTK4 backend (display, audio, input)
 - ✅ WebAssembly backend stubs
 - ✅ Cross-platform executable
 - ✅ Feature flag configuration
 
 ### TODO
-- [ ] GTK4 backend implementation
 - [ ] Integration with SPICE protocol handlers
 - [ ] Video codec support (H.264, VP8/VP9)
 - [ ] Advanced audio features (multiple streams, recording)
@@ -119,4 +113,4 @@ When adding new backends:
 
 ## License
 
-MIT License - See LICENSE file for details
+GPL v3 License - See LICENSE file for details

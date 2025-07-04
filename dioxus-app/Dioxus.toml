@@ -1,26 +1,41 @@
 [application]
-# App name
-name = "quickemu-manager"
+name = "Quickemu Manager"
+asset_dir = "assets"
+default_platform = "desktop"
 
-[web.app]
-# HTML title tag content
-title = "Quickemu Manager"
+[application.desktop]
+out_dir = "dist"
 
-[web.watcher]
-# When watcher is triggered, regenerate the `index.html`
-reload_html = true
-# Which files or dirs will be monitored
-watch_path = ["src"]
+[application.web]
+out_dir = "dist"
 
-# include `assets` in web platform
-[web.resource]
-# Additional CSS style files
-style = []
+[build]
+cargo_args = ["--release"]
 
-# Additional JavaScript files
-script = []
+[[build.target]]
+name = "x86_64-unknown-linux-gnu"
 
-[web.resource.dev]
-# Javascript code file
-# serve: [dev-server] only
-script = []
+[[build.target]]
+name = "x86_64-apple-darwin"
+
+[[build.target]]
+name = "aarch64-apple-darwin"
+
+[[build.target]]
+name = "x86_64-pc-windows-msvc"
+
+[bundle]
+bundle_identifier = "com.quickemu.manager"
+bundle_name = "Quickemu Manager"
+bundle_version = "1.0.0"
+
+[bundle.macos]
+short_description = "Modern VM management application"
+icon = ["assets/icon.icns"]
+
+[bundle.windows]
+icon = ["assets/icon.ico"]
+
+[bundle.linux]
+icon = ["assets/icon.png"]
+categories = ["Utility", "System"]

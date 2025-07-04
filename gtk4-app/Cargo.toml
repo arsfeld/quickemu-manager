@@ -2,6 +2,11 @@
 name = "quickemu-manager-gtk"
 version = "0.1.0"
 edition = "2021"
+license = "GPL-3.0"
+
+[[bin]]
+name = "quickemu-manager"
+path = "src/main.rs"
 
 [dependencies]
 # GTK4 UI dependencies

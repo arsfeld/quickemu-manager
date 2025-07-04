@@ -8,98 +8,120 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
 
 jobs:
-  check:
-    name: Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo check --all-features --workspace
-
   test:
-    name: Test Suite
+    name: Test - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
       
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            libwebkit2gtk-4.1-dev \
-            libssl-dev \
-            pkg-config
-      
+          sudo apt update
+          sudo apt install -y libgtk-4-dev libadwaita-1-dev libwebkit2gtk-4.0-dev
+
+      - name: Install macOS dependencies
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install gtk4 libadwaita
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+        
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+        
       - name: Run tests
         run: cargo test --workspace
 
-  fmt:
-    name: Rustfmt
-    runs-on: ubuntu-latest
+  build:
+    name: Build - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - run: cargo fmt --all -- --check
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli
 
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      
       - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            libwebkit2gtk-4.1-dev \
-            libssl-dev \
-            pkg-config
-      
-      - run: cargo clippy --workspace -- -D warnings
+          sudo apt update
+          sudo apt install -y libgtk-4-dev libadwaita-1-dev libwebkit2gtk-4.0-dev
 
-  coverage:
-    name: Code Coverage
+      - name: Install macOS dependencies
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install gtk4 libadwaita
+
+      - name: Build core library
+        working-directory: core
+        run: cargo build --release
+
+      - name: Build spice-client library
+        working-directory: spice-client
+        run: cargo build --release
+
+      - name: Build spice-client GTK app (Linux/macOS only)
+        if: matrix.os != 'windows-latest'
+        working-directory: spice-client
+        run: cargo build --release --features backend-gtk4 --bin rusty-spice-gtk
+
+      - name: Build GTK4 app (Linux/macOS only)
+        if: matrix.os != 'windows-latest'
+        working-directory: gtk4-app
+        run: cargo build --release
+
+      - name: Build Dioxus app
+        working-directory: dioxus-app
+        run: dx build --release --platform desktop
+
+      - name: Build WASM (Ubuntu only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          cd spice-client
+          wasm-pack build --target web --out-dir pkg
+          cd ../dioxus-app
+          dx build --release --platform web
+
+  spice-client-tests:
+    name: SPICE Client Tests
     runs-on: ubuntu-latest
+    
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
       
-      - name: Install Linux dependencies
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            libwebkit2gtk-4.1-dev \
-            libssl-dev \
-            pkg-config
-      
-      - name: Install tarpaulin
-        run: cargo install cargo-tarpaulin
-      
-      - name: Generate coverage
-        run: cargo tarpaulin --workspace --out xml
-      
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+          sudo apt update
+          sudo apt install -y libgtk-4-dev libadwaita-1-dev
+
+      - name: Run unit tests
+        working-directory: spice-client
+        run: cargo test --lib --features backend-gtk4
+
+      - name: Run integration tests
+        working-directory: spice-client
+        run: cargo test --test integration --features backend-gtk4

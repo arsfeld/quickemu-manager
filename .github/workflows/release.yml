@@ -1,0 +1,322 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-spice-client:
+    name: Build spice-client GTK app - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary: rusty-spice-gtk
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            binary: rusty-spice-gtk
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary: rusty-spice-gtk
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt update
+          sudo apt install -y libgtk-4-dev libadwaita-1-dev
+
+      - name: Install macOS dependencies
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install gtk4 libadwaita
+
+      - name: Build GTK4 spice app
+        working-directory: spice-client
+        run: |
+          cargo build --release --target ${{ matrix.target }} --features backend-gtk4 --bin rusty-spice-gtk
+
+      - name: Create macOS app bundle
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          mkdir -p spice-client/RustySpice.app/Contents/MacOS
+          mkdir -p spice-client/RustySpice.app/Contents/Resources
+          
+          cat > spice-client/RustySpice.app/Contents/Info.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>rusty-spice-gtk</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.quickemu.spice-client</string>
+              <key>CFBundleName</key>
+              <string>Rusty SPICE</string>
+              <key>CFBundleVersion</key>
+              <string>1.0.0</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+          </dict>
+          </plist>
+          EOF
+          
+          cp spice-client/target/${{ matrix.target }}/release/${{ matrix.binary }} spice-client/RustySpice.app/Contents/MacOS/
+          chmod +x spice-client/RustySpice.app/Contents/MacOS/${{ matrix.binary }}
+
+      - name: Upload spice-client artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: spice-client-gtk-${{ matrix.target }}
+          path: |
+            spice-client/target/${{ matrix.target }}/release/${{ matrix.binary }}
+            spice-client/RustySpice.app/
+
+  build-spice-wasm:
+    name: Build spice-client WASM
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Build WASM package
+        working-directory: spice-client
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          wasm-pack build --target web --out-dir pkg
+
+      - name: Upload WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: spice-client-wasm
+          path: spice-client/pkg/
+
+  build-quickemu-manager:
+    name: Build Quickemu Manager - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            gtk_binary: quickemu-manager-gtk
+            dioxus_binary: quickemu-manager-dioxus
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            gtk_binary: quickemu-manager-gtk
+            dioxus_binary: quickemu-manager-dioxus
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            gtk_binary: quickemu-manager-gtk
+            dioxus_binary: quickemu-manager-dioxus
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            gtk_binary: quickemu-manager-gtk.exe
+            dioxus_binary: quickemu-manager-dioxus.exe
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt update
+          sudo apt install -y libgtk-4-dev libadwaita-1-dev libwebkit2gtk-4.0-dev
+
+      - name: Install macOS dependencies
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install gtk4 libadwaita
+
+      - name: Build GTK4 app (Linux/macOS only)
+        if: matrix.os != 'windows-latest'
+        working-directory: gtk4-app
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+          mv target/${{ matrix.target }}/release/quickemu-manager target/${{ matrix.target }}/release/${{ matrix.gtk_binary }}
+
+      - name: Build Dioxus app
+        working-directory: dioxus-app
+        run: |
+          dx build --release --platform desktop --target ${{ matrix.target }}
+          mv dist/quickemu-manager dist/${{ matrix.dioxus_binary }}
+
+      - name: Build Dioxus web app
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: dioxus-app
+        run: |
+          dx build --release --platform web
+
+      - name: Create macOS app bundle
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          # Create .app bundles for both GTK and Dioxus apps
+          for app in gtk4-app dioxus-app; do
+            mkdir -p $app/QuickemuManager.app/Contents/MacOS
+            mkdir -p $app/QuickemuManager.app/Contents/Resources
+            
+            # Create Info.plist
+            cat > $app/QuickemuManager.app/Contents/Info.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>quickemu-manager</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.quickemu.manager</string>
+              <key>CFBundleName</key>
+              <string>Quickemu Manager</string>
+              <key>CFBundleVersion</key>
+              <string>1.0.0</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+          </dict>
+          </plist>
+          EOF
+            
+            if [ "$app" = "gtk4-app" ] && [ -f "gtk4-app/target/${{ matrix.target }}/release/${{ matrix.gtk_binary }}" ]; then
+              cp gtk4-app/target/${{ matrix.target }}/release/${{ matrix.gtk_binary }} $app/QuickemuManager.app/Contents/MacOS/quickemu-manager
+              chmod +x $app/QuickemuManager.app/Contents/MacOS/quickemu-manager
+            elif [ "$app" = "dioxus-app" ]; then
+              cp dioxus-app/dist/${{ matrix.dioxus_binary }} $app/QuickemuManager.app/Contents/MacOS/quickemu-manager
+              chmod +x $app/QuickemuManager.app/Contents/MacOS/quickemu-manager
+            fi
+          done
+
+      - name: Upload GTK4 artifacts
+        if: matrix.os != 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickemu-manager-gtk-${{ matrix.target }}
+          path: |
+            gtk4-app/target/${{ matrix.target }}/release/${{ matrix.gtk_binary }}
+            gtk4-app/QuickemuManager.app/
+
+      - name: Upload Dioxus artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickemu-manager-dioxus-${{ matrix.target }}
+          path: |
+            dioxus-app/dist/${{ matrix.dioxus_binary }}
+            dioxus-app/dist/assets/
+            dioxus-app/QuickemuManager.app/
+
+      - name: Upload Web artifacts
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickemu-manager-web
+          path: |
+            dioxus-app/dist/
+
+  create-release:
+    name: Create Release
+    needs: [build-spice-client, build-spice-wasm, build-quickemu-manager]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create archives
+        run: |
+          cd artifacts
+          
+          # Create platform-specific archives
+          for dir in */; do
+            if [[ "$dir" == *"web"* ]] || [[ "$dir" == *"wasm"* ]]; then
+              zip -r "../${dir%/}.zip" "$dir"
+            elif [[ "$dir" == *"windows"* ]]; then
+              zip -r "../${dir%/}.zip" "$dir"
+            else
+              tar czf "../${dir%/}.tar.gz" "$dir"
+            fi
+          done
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            *.tar.gz
+            *.zip
+          draft: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-crates:
+    name: Publish to crates.io
+    needs: [build-spice-client, build-spice-wasm]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Publish spice-client to crates.io
+        working-directory: spice-client
+        run: |
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        continue-on-error: true
+
+  publish-npm:
+    name: Publish to npm
+    needs: build-spice-wasm
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: spice-client-wasm
+          path: spice-client/pkg
+      
+      - name: Publish to npm
+        working-directory: spice-client/pkg
+        run: |
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -5,7 +5,7 @@
 This guide outlines the architecture for implementing multimedia capabilities (video, audio, input) in the SPICE client library. The design emphasizes:
 
 - **Platform Independence**: Generic traits that work across all platforms
-- **Modular Backends**: SDL2, GTK4, and WebAssembly implementations via feature flags
+- **Modular Backends**: GTK4 and WebAssembly implementations via feature flags
 - **Embeddable**: Can be integrated into GTK4 applications
 - **QEMU Compatibility**: Can replace spice-gtk as a VM viewer
 
@@ -34,10 +34,10 @@ This guide outlines the architecture for implementing multimedia capabilities (v
 │                              │                               │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │              Backend Implementations                  │   │
-│  │  ┌──────────┐  ┌──────────┐  ┌────────────────┐    │   │
-│  │  │   SDL2   │  │   GTK4   │  │  WebAssembly   │    │   │
-│  │  │ (feature)│  │ (feature)│  │  (feature)     │    │   │
-│  │  └──────────┘  └──────────┘  └────────────────┘    │   │
+│  │  ┌──────────┐  ┌────────────────┐                   │   │
+│  │  │   GTK4   │  │  WebAssembly   │                   │   │
+│  │  │ (default)│  │  (feature)     │                   │   │
+│  │  └──────────┘  └────────────────┘                   │   │
 │  └─────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -46,8 +46,7 @@ This guide outlines the architecture for implementing multimedia capabilities (v
 
 ```toml
 [features]
-default = ["backend-sdl2"]  # Default to SDL2 for cross-platform support
-backend-sdl2 = ["dep:sdl2"]
+default = ["backend-gtk4"]  # Default to GTK4 for native desktop support
 backend-gtk4 = ["dep:gtk4", "dep:gdk4"]
 backend-wasm = ["dep:web-sys", "dep:wasm-bindgen"]
 ```
@@ -86,25 +85,19 @@ pub trait InputHandler: Send + Sync {
 2. Update Cargo.toml with feature flags
 3. Create module structure for backends
 
-### Phase 2: SDL2 Backend
-1. Implement Display trait using SDL2
-2. Implement AudioOutput using SDL2 audio
-3. Implement InputHandler for SDL2 events
-4. Create integration module
-
-### Phase 3: GTK4 Backend
+### Phase 2: GTK4 Backend
 1. Implement Display using GTK4 DrawingArea/GL
 2. Implement AudioOutput using GStreamer
 3. Implement InputHandler for GTK4 events
 4. Ensure embeddability in GTK4 apps
 
-### Phase 4: Executable
+### Phase 3: Executable
 1. Create spice-viewer binary
 2. Command-line argument parsing
 3. QEMU integration (URI handling)
 4. Fullscreen and window management
 
-### Phase 5: WebAssembly Support
+### Phase 4: WebAssembly Support
 1. Implement Display using Canvas API
 2. Implement AudioOutput using Web Audio API
 3. Implement InputHandler for browser events
@@ -135,11 +128,8 @@ client.connect("spice://localhost:5900").await?;
 
 ### Feature Selection
 ```toml
-# For SDL2 build (default)
+# For GTK4 build (default)
 spice-client = "0.1"
-
-# For GTK4 build
-spice-client = { version = "0.1", default-features = false, features = ["backend-gtk4"] }
 
 # For WASM build
 spice-client = { version = "0.1", default-features = false, features = ["backend-wasm"] }
@@ -156,7 +146,7 @@ spice-client = { version = "0.1", default-features = false, features = ["backend
 ## Next Steps
 
 1. Implement the generic trait system
-2. Create SDL2 backend as the reference implementation
+2. Create GTK4 backend as the reference implementation
 3. Build the spice-viewer executable
-4. Add GTK4 backend for Linux desktop integration
-5. Implement WASM backend for web deployment
+4. Optimize GTK4 backend performance
+5. Complete WASM backend for web deployment

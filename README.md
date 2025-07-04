@@ -1,22 +1,18 @@
 # ⚡ Quickemu Manager
 
-> **The blazingly fast, multi-platform VM management experience you've been waiting for** 🚀
+A modern VM management application built with Rust, featuring both a GTK4 desktop interface and a cross-platform web interface.
 
-Built with **Rust** 🦀 for uncompromising performance and reliability. Experience VM management at the speed of thought with our revolutionary dual-UI architecture.
+## ✨ Features
 
-## ✨ Why Quickemu Manager?
+- **Cross-platform** - Native GTK4 desktop app for Linux + web interface for all platforms
+- **Auto-discovery** - Automatically finds existing VMs in common directories
+- **VM Management** - Start, stop, and monitor your virtual machines
+- **Modern UI** - Clean interface built with GTK4 and Dioxus
+- **Memory Safe** - Written in Rust for reliability  
 
-🔥 **Blazingly Fast** - Written in Rust, startup in <500ms, native performance  
-🎯 **Zero Friction** - Auto-discovery finds your VMs instantly  
-🌐 **Universal Access** - Native desktop app + web interface  
-📊 **Real-time Intel** - Live metrics, instant status updates  
-🎨 **Beautiful UI** - Modern design that adapts to your workflow  
-⚡ **Lightning Quick** - Sub-second VM operations  
-🔒 **Rock Solid** - Memory-safe Rust prevents crashes  
+## 🏗️ Architecture
 
-## 🏗️ Revolutionary Architecture
-
-**Two Independent Apps, One Powerful Core** 💪
+**Two Applications Sharing a Common Core**
 
 ```
 🖥️  GTK4 Desktop App     🌐  Multi-Platform Web App
@@ -31,27 +27,27 @@ Built with **Rust** 🦀 for uncompromising performance and reliability. Experie
          (quickemu/quickget, OS APIs, Config)
 ```
 
-### 🎪 Choose Your Experience
+### Application Options
 
-**🖥️ GTK4 Desktop** - Lightning-fast native Linux experience  
-**🌐 Dioxus Multi-Platform** - Run anywhere: Linux, Windows, macOS, Web Browser  
-**⚡ Shared Performance** - Same blazing-fast Rust core powers both  
+**GTK4 Desktop** - Native Linux desktop application  
+**Dioxus Multi-Platform** - Cross-platform desktop and web application  
+**Shared Core** - Both applications use the same Rust backend  
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- 🦀 Rust 1.75+ (for that sweet performance)
+- 🦀 Rust 1.75+
 - ⚡ [quickemu](https://github.com/quickemu-project/quickemu) installed
-- 🎯 [quickget](https://github.com/quickemu-project/quickget) (optional, for VM creation magic)
+- 🎯 [quickget](https://github.com/quickemu-project/quickget) (optional, for VM creation)
 
-### 🏃‍♂️ Quick Install
+### 🏃‍♂️ Installation
 
 ```bash
-# Clone the future of VM management
+# Clone the repository
 git clone https://github.com/yourusername/quickemu-manager.git
 cd quickemu-manager
 
-# 🖥️ Build GTK4 Desktop App (Native Linux Power)
+# 🖥️ Build GTK4 Desktop App
 cd gtk4-app
 cargo build --release
 cargo run
@@ -59,7 +55,7 @@ cargo run
 # 🌐 Build Dioxus Multi-Platform App
 cd ../dioxus-app
 
-# Desktop mode (native window, no GTK4 deps!)
+# Desktop mode (native window)
 cargo run --features desktop
 
 # Web server mode (access from any browser)
@@ -69,47 +65,34 @@ cargo run --features server
 cargo build --release --features desktop
 ```
 
-### 🎨 Development with Hot Reload
+### 🎨 Development
 
 ```bash
 # GTK4 app development
 cd gtk4-app && cargo run
 
-# Dioxus app with instant hot reload ⚡
+# Dioxus app with hot reload ⚡
 cd dioxus-app
 dx serve --platform desktop  # Desktop development
 dx serve --platform web      # Web development
 
-# Build everything at once 💪
+# Build everything 💪
 cargo build --workspace
 ```
 
-## 🌟 Feature Showcase
+## 🌟 Features
 
-### ⚡ Performance That Matters
-- **<500ms** startup time - Faster than you can blink
-- **<30MB** memory footprint - Respectful of your resources  
-- **<1%** CPU usage when idle - Silent when you need it
-- **Real-time** updates - No delays, no waiting
-
-### 🎯 Smart VM Discovery
+### 🎯 VM Discovery
 Auto-finds VMs in:
 - `~/.config/quickemu/`
 - `~/VMs/`
 - Custom directories you specify
 
-### 📊 Live Metrics Dashboard
-- 🔥 CPU usage with beautiful charts
-- 💾 RAM consumption tracking  
-- 💿 Disk I/O monitoring
-- 🌐 Network activity
-- ⏱️ Uptime tracking
-
-### 🎮 Effortless VM Control
-- ▶️ **Start/Stop** - One-click VM lifecycle management
-- 🖥️ **Display Launch** - Instant console access
-- ⚙️ **Live Config** - Real-time configuration viewing
-- 📈 **Resource Monitoring** - Keep tabs on performance
+### 🎮 VM Control
+- **Start/Stop** - VM lifecycle management
+- **Display Launch** - Console access
+- **Configuration** - View VM configuration
+- **Status Monitoring** - Track VM status
 
 ## 🛠️ System Dependencies
 
@@ -129,21 +112,21 @@ sudo apt install libgtk-4-dev libadwaita-1-dev
 sudo pacman -S gtk4 libadwaita
 ```
 
-### 🌐 Web App (Zero Dependencies!)
-The Dioxus web app requires **no system dependencies** - just Rust! 🎉
+### 🌐 Web App
+The Dioxus web app requires no additional system dependencies beyond Rust.
 
 ## 🏃‍♂️ Usage
 
-### 🎬 First Launch Experience
-1. **Instant Discovery** - App scans for existing VMs automatically
-2. **Beautiful Gallery** - See all your VMs in a stunning grid layout  
-3. **Real-time Status** - Live indicators show VM states instantly
+### 🎬 First Launch
+1. App scans for existing VMs automatically
+2. VMs are displayed in a grid layout
+3. Status indicators show current VM states
 
 ### 🎮 Daily Workflow
-- **Click to Control** - Start/stop VMs with satisfying one-click actions
-- **Live Monitoring** - Watch metrics update in real-time
-- **Quick Launch** - Open VM consoles instantly
-- **Smart Navigation** - Keyboard shortcuts for power users
+- Start/stop VMs with click actions
+- Monitor VM status updates
+- Launch VM consoles
+- Navigate with keyboard shortcuts
 
 ### 🔧 Configuration
 Settings auto-sync across platforms:
@@ -154,20 +137,20 @@ Settings auto-sync across platforms:
 ## 🏗️ Tech Stack
 
 ### 🦀 Core Foundation
-- **Rust** - Memory safety meets blazing performance
-- **Tokio** - Async runtime for responsive UI
-- **Serde** - Lightning-fast serialization
+- **Rust** - Memory safety and performance
+- **Tokio** - Async runtime
+- **Serde** - Serialization
 
 ### 🖥️ GTK4 Desktop Stack
 - **GTK4** - Native Linux desktop integration
-- **libadwaita** - Modern GNOME design language
-- **Composite Templates** - Efficient UI rendering
+- **libadwaita** - GNOME design system
+- **Composite Templates** - UI rendering
 
 ### 🌐 Dioxus Multi-Platform Stack  
 - **Dioxus** - React-like components in Rust
 - **Desktop Mode** - Native windows via WebView
-- **Web Mode** - Full-stack web application
-- **WASM** - Browser deployment ready
+- **Web Mode** - Web application
+- **WASM** - Browser deployment
 
 ### 🔧 System Integration
 - **sysinfo** - Cross-platform system metrics
@@ -180,7 +163,7 @@ Settings auto-sync across platforms:
 quickemu-manager/
 ├── 🦀 core/                    # Shared Rust core library
 │   ├── models/                 # VM data structures  
-│   └── services/               # Business logic engine
+│   └── services/               # Business logic
 ├── 🖥️ gtk4-app/               # Native GTK4 desktop app
 │   ├── resources/ui/           # GTK4 templates
 │   └── src/ui/                 # Desktop UI components
@@ -190,33 +173,20 @@ quickemu-manager/
 └── 📋 Cargo.toml              # Workspace configuration
 ```
 
-## 🚀 Performance Targets
-
-| Metric | Target | Why It Matters |
-|--------|---------|----------------|
-| 🏃 Startup | <500ms | Instant gratification |
-| 💾 Memory | <30MB base | Respectful resource usage |
-| 🔥 CPU Idle | <1% | Silent operation |
-| 📦 Binary Size | <20MB | Quick downloads |
-| ⚡ UI Response | <16ms | Buttery smooth |
 
 ## 🤝 Contributing
 
-We'd love your help making Quickemu Manager even more awesome! 
-
-**Areas where you can make an impact:**
+Contributions are welcome! Areas for contribution include:
 - 🎨 UI/UX improvements
-- 🐛 Bug hunting and fixes  
+- 🐛 Bug fixes
 - 📱 Platform-specific optimizations
-- 📚 Documentation enhancements
-- 🧪 Testing and quality assurance
+- 📚 Documentation
+- 🧪 Testing
 
 ## 📜 License
 
-MIT License - Build amazing things with this code! 🎉
+GPLv3 License 🎉
 
 ---
 
 **Made with 🦀 Rust and ❤️ for the VM community**
-
-*Experience the future of VM management today* ⚡

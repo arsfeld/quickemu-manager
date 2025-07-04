@@ -1,4 +1,4 @@
-#![cfg(feature = "backend-sdl2")]
+#![cfg(feature = "backend-gtk4")]
 
 use spice_client::multimedia::{
     self,
@@ -10,33 +10,33 @@ use spice_client::multimedia::{
 };
 
 #[test]
-fn test_sdl2_backend_creation() {
-    // This test requires SDL2 to be installed
+fn test_gtk4_backend_creation() {
+    // This test requires GTK4 to be installed
     let backend = multimedia::create_default_backend();
-    assert!(backend.is_ok(), "Failed to create SDL2 backend: {:?}", backend.err());
+    assert!(backend.is_ok(), "Failed to create GTK4 backend: {:?}", backend.err());
 }
 
 #[test]
 #[ignore] // Ignore by default as it requires display
-fn test_sdl2_display_creation() {
+fn test_gtk4_display_creation() {
     let backend = multimedia::create_default_backend().unwrap();
     let display = backend.create_display();
-    assert!(display.is_ok(), "Failed to create SDL2 display: {:?}", display.err());
+    assert!(display.is_ok(), "Failed to create GTK4 display: {:?}", display.err());
 }
 
 #[test]
 #[ignore] // Ignore by default as it requires audio device
-fn test_sdl2_audio_creation() {
+fn test_gtk4_audio_creation() {
     let backend = multimedia::create_default_backend().unwrap();
     let audio = backend.create_audio();
-    assert!(audio.is_ok(), "Failed to create SDL2 audio: {:?}", audio.err());
+    assert!(audio.is_ok(), "Failed to create GTK4 audio: {:?}", audio.err());
 }
 
 #[test]
-fn test_sdl2_input_creation() {
+fn test_gtk4_input_creation() {
     let backend = multimedia::create_default_backend().unwrap();
     let input = backend.create_input();
-    assert!(input.is_ok(), "Failed to create SDL2 input: {:?}", input.err());
+    assert!(input.is_ok(), "Failed to create GTK4 input: {:?}", input.err());
 }
 
 #[test]

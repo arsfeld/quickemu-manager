@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Default values
-IMPLEMENTATION="native"
+IMPLEMENTATION="basic"
 SERVER="debug"
 TEST_DURATION="30"
 CLEAN_AFTER="true"
@@ -33,8 +33,7 @@ SPICE Client E2E Test Runner
 Usage: $(basename "$0") [implementation] [server] [options]
 
 IMPLEMENTATIONS:
-  native        Native Rust binary (default)
-  sdl2          SDL2 backend implementation
+  basic         Basic client without multimedia (default)
   gtk4          GTK4 backend implementation
   wasm-core     WebAssembly core (no browser)
   all           Run all implementations
@@ -56,8 +55,8 @@ EXAMPLES:
   # Quick test with defaults
   $(basename "$0")
 
-  # Test native client against QEMU
-  $(basename "$0") native qemu
+  # Test basic client against QEMU
+  $(basename "$0") basic qemu
 
   # Test all implementations against debug server
   $(basename "$0") all debug
@@ -66,7 +65,7 @@ EXAMPLES:
   $(basename "$0") all all
 
   # Verbose test with longer duration
-  $(basename "$0") native debug -v -d 60
+  $(basename "$0") basic debug -v -d 60
 
 EOF
 }
@@ -76,7 +75,7 @@ parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
             # Implementations
-            native|sdl2|gtk4|wasm-core|all)
+            basic|gtk4|wasm-core|all)
                 IMPLEMENTATION="$1"
                 shift
                 ;;
@@ -160,11 +159,8 @@ run_test() {
     
     # Test profile
     case $impl in
-        native)
+        basic)
             test_profile="test-native"
-            ;;
-        sdl2)
-            test_profile="test-sdl2"
             ;;
         gtk4)
             test_profile="test-gtk4"
@@ -264,7 +260,7 @@ main() {
     
     case $IMPLEMENTATION in
         all)
-            implementations=("native" "sdl2" "gtk4" "wasm-core")
+            implementations=("basic" "gtk4" "wasm-core")
             ;;
         *)
             implementations=("$IMPLEMENTATION")

@@ -5,9 +5,9 @@ edition = "2021"
 authors = ["Your Name <your.email@example.com>"]
 description = "A pure Rust SPICE client library with native and WebAssembly support"
 documentation = "https://docs.rs/spice-client"
-homepage = "https://github.com/yourusername/spice-client"
-repository = "https://github.com/yourusername/spice-client"
-license = "MIT"
+homepage = "https://github.com/arsfeld/quickemu-manager"
+repository = "https://github.com/arsfeld/quickemu-manager"
+license = "GPL-3.0"
 readme = "README.md"
 keywords = ["spice", "remote-desktop", "virtualization", "wasm", "client"]
 categories = ["network-programming", "wasm", "virtualization"]
@@ -39,9 +39,8 @@ wasm-opt = false
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["backend-sdl2"]
+default = []
 test-utils = []
-backend-sdl2 = ["dep:sdl2"]
 backend-gtk4 = ["dep:gtk4", "dep:gdk4", "dep:gdk-pixbuf", "dep:gstreamer", "dep:gstreamer-audio", "dep:gstreamer-video", "dep:gstreamer-app"]
 backend-wasm = []
 
@@ -106,7 +105,6 @@ clap = { version = "4.0", features = ["derive"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Optional backend dependencies
-sdl2 = { version = "0.37", optional = true }
 gtk4 = { version = "0.9", optional = true }
 gdk4 = { version = "0.9", optional = true }
 gdk-pixbuf = { version = "0.20", optional = true }
@@ -138,10 +136,6 @@ path = "src/bin/spice-test-client.rs"
 name = "spice-e2e-test"
 path = "src/bin/spice-e2e-test.rs"
 
-[[bin]]
-name = "rusty-spice"
-path = "src/bin/rusty-spice.rs"
-required-features = ["backend-sdl2"]
 
 [[bin]]
 name = "rusty-spice-gtk"

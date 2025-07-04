@@ -3,7 +3,6 @@
 #   - server-debug: SPICE debug test server
 #   - server-qemu: QEMU-based SPICE server
 #   - test-native: Native Rust client tests
-#   - test-sdl2: SDL2 backend client tests
 #   - test-gtk4: GTK4 backend client tests
 #   - test-wasm-core: WebAssembly core tests (no browser)
 
@@ -127,35 +126,6 @@ services:
       "sleep 5 && timeout $$((TEST_DURATION + 5)) /app/spice-e2e-test --host $$SPICE_HOST --port $$SPICE_PORT --duration $$TEST_DURATION $$TEST_FLAGS -vv"
     ]
 
-  # SDL2 E2E test client
-  test-sdl2:
-    profiles: ["test-sdl2"]
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.e2e-test
-      args:
-        FEATURES: "backend-sdl2"
-    networks:
-      - spice-test
-    volumes:
-      - test-results:/results
-      - ${XDG_RUNTIME_DIR:-/tmp}:/tmp
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-    environment:
-      <<: *common-variables
-      SPICE_HOST: ${SPICE_SERVER:-spice-debug-server}
-      SPICE_PORT: ${SPICE_PORT:-5912}
-      TEST_DURATION: ${TEST_DURATION:-30}
-      TEST_FLAGS: ${TEST_FLAGS:---require-display-channel --require-display-updates}
-      DISPLAY: ${DISPLAY:-:99}
-      WAYLAND_DISPLAY: ${WAYLAND_DISPLAY:-}
-      XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR:-/tmp}
-    depends_on:
-      - ${SPICE_SERVER:-spice-debug-server}
-    command: [
-      "sh", "-c",
-      "if [ -z \"$$WAYLAND_DISPLAY\" ] && [ \"$$DISPLAY\" = \":99\" ]; then Xvfb :99 -screen 0 1024x768x24 & sleep 2; fi && /app/spice-e2e-test --host $$SPICE_HOST --port $$SPICE_PORT --duration $$TEST_DURATION $$TEST_FLAGS -vv"
-    ]
 
   # GTK4 E2E test client
   test-gtk4:

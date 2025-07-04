@@ -10,8 +10,6 @@ pub mod spice_adapter;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "backend-sdl2")]
-pub mod sdl2;
 
 #[cfg(feature = "backend-gtk4")]
 pub mod gtk4;
@@ -77,17 +75,12 @@ pub trait MultimediaBackend {
     fn create_input(&self) -> Result<Self::Input>;
 }
 
-#[cfg(feature = "backend-sdl2")]
-pub fn create_default_backend() -> Result<impl MultimediaBackend> {
-    sdl2::Sdl2Backend::new()
-}
-
-#[cfg(all(feature = "backend-gtk4", not(feature = "backend-sdl2")))]
+#[cfg(feature = "backend-gtk4")]
 pub fn create_default_backend() -> Result<impl MultimediaBackend> {
     gtk4::Gtk4Backend::new()
 }
 
-#[cfg(all(target_arch = "wasm32", not(feature = "backend-sdl2"), not(feature = "backend-gtk4")))]
+#[cfg(all(target_arch = "wasm32", not(feature = "backend-gtk4")))]
 pub fn create_default_backend() -> Result<impl MultimediaBackend> {
     wasm::WasmBackend::new()
 }
