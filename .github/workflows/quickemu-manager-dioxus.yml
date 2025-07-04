@@ -1,4 +1,4 @@
-name: Build Dioxus App
+name: QuickEmu Manager - Dioxus Build
 
 on:
   push:
@@ -7,14 +7,14 @@ on:
       - 'dioxus-app/**'
       - 'core/**'
       - 'spice-client/**'
-      - '.github/workflows/dioxus-app.yml'
+      - '.github/workflows/quickemu-manager-dioxus.yml'
   pull_request:
     branches: [ main, master ]
     paths:
       - 'dioxus-app/**'
       - 'core/**'
       - 'spice-client/**'
-      - '.github/workflows/dioxus-app.yml'
+      - '.github/workflows/quickemu-manager-dioxus.yml'
   workflow_dispatch:
 
 env:

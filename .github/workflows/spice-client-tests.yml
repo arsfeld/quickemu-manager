@@ -1,4 +1,4 @@
-name: SPICE Client Tests
+name: SPICE Client - Tests
 
 on:
   push:

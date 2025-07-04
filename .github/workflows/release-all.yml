@@ -1,4 +1,4 @@
-name: Release
+name: Release All Components
 
 on:
   push:

@@ -1,4 +1,4 @@
-name: Publish spice-client Crate
+name: SPICE Client - Publish
 
 on:
   push:

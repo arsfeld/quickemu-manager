@@ -1,4 +1,4 @@
-name: Build GTK4 App
+name: QuickEmu Manager - GTK4 Build
 
 on:
   push:
@@ -6,13 +6,13 @@ on:
     paths:
       - 'gtk4-app/**'
       - 'core/**'
-      - '.github/workflows/gtk4-app.yml'
+      - '.github/workflows/quickemu-manager-gtk4.yml'
   pull_request:
     branches: [ main, master ]
     paths:
       - 'gtk4-app/**'
       - 'core/**'
-      - '.github/workflows/gtk4-app.yml'
+      - '.github/workflows/quickemu-manager-gtk4.yml'
   workflow_dispatch:
 
 env:
@@ -20,7 +20,7 @@ env:
 
 jobs:
   build:
-    name: Build GTK4 App - ${{ matrix.os }}
+    name: Build QuickEmu Manager GTK4 - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -42,8 +42,6 @@ jobs:
     - name: Install system dependencies (Ubuntu)
       if: matrix.os == 'ubuntu-latest'
       run: |
-        # Add PPA for newer GTK4/libadwaita versions
-        sudo add-apt-repository -y ppa:ubuntuhandbook1/libadwaita
         sudo apt-get update
         sudo apt-get install -y \
           libgtk-4-dev \
@@ -100,8 +98,8 @@ jobs:
       with:
         name: quickemu-manager-gtk4-${{ matrix.target }}
         path: |
-          target/${{ matrix.target }}/release/quickemu-manager-gtk4
-          target/${{ matrix.target }}/release/quickemu-manager-gtk4.exe
+          target/${{ matrix.target }}/release/quickemu-manager
+          target/${{ matrix.target }}/release/quickemu-manager.exe
         if-no-files-found: error
 
   release:
@@ -120,8 +118,8 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          quickemu-manager-gtk4-*/quickemu-manager-gtk4
-          quickemu-manager-gtk4-*/quickemu-manager-gtk4.exe
+          quickemu-manager-gtk4-*/quickemu-manager
+          quickemu-manager-gtk4-*/quickemu-manager.exe
         draft: false
         prerelease: false
       env:
