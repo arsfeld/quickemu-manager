@@ -30,8 +30,6 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - os: macos-latest
             target: aarch64-apple-darwin  # Native build on ARM64 runners
-          - os: macos-latest
-            target: x86_64-apple-darwin   # Cross-compile from ARM64 to x86_64
 
     steps:
     - uses: actions/checkout@v4
@@ -87,10 +85,6 @@ jobs:
     - name: Build GTK4 App
       run: |
         cd gtk4-app
-        # Set PKG_CONFIG_ALLOW_CROSS only for x86_64 cross-compilation on ARM64 macOS
-        if [[ "${{ matrix.target }}" == "x86_64-apple-darwin" && "${{ runner.os }}" == "macOS" ]]; then
-          export PKG_CONFIG_ALLOW_CROSS=1
-        fi
         cargo build --release --target ${{ matrix.target }}
 
     - name: Run tests

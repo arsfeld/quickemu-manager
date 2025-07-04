@@ -146,7 +146,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt update
-          sudo apt install -y libgtk-4-dev libadwaita-1-dev libwebkit2gtk-4.0-dev
+          sudo apt install -y libgtk-4-dev libadwaita-1-dev libwebkit2gtk-4.1-dev
 
       - name: Install macOS dependencies
         if: matrix.os == 'macos-latest'
