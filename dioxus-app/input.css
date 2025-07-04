@@ -1,29 +1,29 @@
 @import "tailwindcss";
 @source "./src/**/*.{rs,html,css}";
 
-/* macOS Color Variables */
+/* Native OS Color Variables - Modern Flat Design */
 @theme {
-  /* macOS System Colors */
-  --color-macos-background: #ffffff;
-  --color-macos-surface: #f5f5f7;
+  /* System Colors - Clean, flat appearance */
+  --color-macos-background: #fafafa;
+  --color-macos-surface: #ffffff;
   --color-macos-card: #ffffff;
-  --color-macos-border: #d2d2d7;
-  --color-macos-border-focus: #007aff;
-  --color-macos-text: #1d1d1f;
-  --color-macos-text-secondary: #6e6e73;
-  --color-macos-text-tertiary: #8e8e93;
+  --color-macos-border: #e5e5e7;
+  --color-macos-border-focus: #0066cc;
+  --color-macos-text: #000000;
+  --color-macos-text-secondary: #666666;
+  --color-macos-text-tertiary: #999999;
   
-  /* macOS Blue */
-  --color-macos-blue-50: #e5f3ff;
-  --color-macos-blue-100: #cce6ff;
-  --color-macos-blue-200: #99cdff;
-  --color-macos-blue-300: #66b5ff;
-  --color-macos-blue-400: #339cff;
-  --color-macos-blue-500: #007aff;
-  --color-macos-blue-600: #0056cc;
-  --color-macos-blue-700: #003d99;
-  --color-macos-blue-800: #002966;
-  --color-macos-blue-900: #001433;
+  /* System Blue - Flatter tones */
+  --color-macos-blue-50: #f0f7ff;
+  --color-macos-blue-100: #e0efff;
+  --color-macos-blue-200: #b3d9ff;
+  --color-macos-blue-300: #80bfff;
+  --color-macos-blue-400: #4da6ff;
+  --color-macos-blue-500: #0066cc;
+  --color-macos-blue-600: #0052a3;
+  --color-macos-blue-700: #003d7a;
+  --color-macos-blue-800: #002952;
+  --color-macos-blue-900: #001429;
   
   /* macOS Gray */
   --color-macos-gray-50: #fafafa;
@@ -49,126 +49,153 @@
   --color-macos-purple-500: #af52de;
   --color-macos-purple-600: #9542be;
   
-  /* Custom Border Radius */
-  --radius-macos: 10px;
-  --radius-macos-lg: 12px;
-  --radius-macos-xl: 16px;
+  /* Custom Border Radius - More subtle */
+  --radius-macos: 6px;
+  --radius-macos-lg: 8px;
+  --radius-macos-xl: 12px;
   
-  /* Custom Shadows */
-  --shadow-macos: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-macos-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
-  --shadow-macos-xl: 0 8px 32px rgba(0, 0, 0, 0.16);
-  --shadow-macos-focus: 0 0 0 3px rgba(0, 122, 255, 0.2);
+  /* Custom Shadows - Minimal, flat design */
+  --shadow-macos: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-macos-lg: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-macos-xl: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --shadow-macos-focus: 0 0 0 2px rgba(0, 102, 204, 0.3);
 }
 
-/* macOS Base Styles */
+/* Native OS Base Styles */
 @layer base {
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-    background-color: var(--color-macos-surface);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background-color: var(--color-macos-background);
     color: var(--color-macos-text);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  
+  * {
+    box-sizing: border-box;
+  }
+  
+  ::selection {
+    background-color: var(--color-macos-blue-500);
+    color: white;
   }
 }
 
 /* macOS Component Styles */
 @layer components {
   .btn-macos {
-    background-color: var(--color-macos-background);
+    background-color: var(--color-macos-surface);
     color: var(--color-macos-text);
     font-weight: 400;
     font-size: 13px;
-    padding: 6px 16px;
-    min-width: 80px;
+    padding: 5px 12px;
+    min-width: 64px;
     border: 1px solid var(--color-macos-border);
-    border-radius: 6px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    transition: all 0.1s ease-out;
+    border-radius: var(--radius-macos);
+    box-shadow: none;
+    transition: all 0.15s ease;
     cursor: pointer;
     text-align: center;
     white-space: nowrap;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
   }
   
   .btn-macos:hover {
-    background-color: var(--color-macos-gray-100);
-    border-color: #b8b8b8;
+    background-color: var(--color-macos-gray-50);
+    border-color: var(--color-macos-gray-300);
   }
   
   .btn-macos:active {
-    background-color: var(--color-macos-gray-200);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+    background-color: var(--color-macos-gray-100);
+    transform: scale(0.98);
   }
   
   .btn-macos:disabled {
-    opacity: 0.6;
+    opacity: 0.4;
     cursor: not-allowed;
+    transform: none;
   }
   
   .btn-macos-primary {
-    background-color: var(--color-macos-background);
-    color: var(--color-macos-text);
-    font-weight: 400;
+    background-color: var(--color-macos-blue-500);
+    color: white;
+    font-weight: 500;
     font-size: 13px;
-    padding: 6px 16px;
-    min-width: 80px;
-    border: 1px solid var(--color-macos-border);
-    border-radius: 6px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    transition: all 0.1s ease-out;
+    padding: 5px 12px;
+    min-width: 64px;
+    border: 1px solid var(--color-macos-blue-500);
+    border-radius: var(--radius-macos);
+    box-shadow: none;
+    transition: all 0.15s ease;
     cursor: pointer;
     text-align: center;
     white-space: nowrap;
-    
-    background-color: var(--color-macos-blue-500);
-    color: white;
-    border-color: var(--color-macos-blue-500);
-    font-weight: 500;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
   }
   
   .btn-macos-primary:hover {
     background-color: var(--color-macos-blue-600);
     border-color: var(--color-macos-blue-600);
+    transform: translateY(-1px);
   }
   
   .btn-macos-primary:active {
-    background-color: #0051a5;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+    background-color: var(--color-macos-blue-700);
+    transform: scale(0.98);
   }
   
   .btn-macos-primary:disabled {
-    opacity: 0.6;
+    opacity: 0.4;
     cursor: not-allowed;
+    transform: none;
   }
   
   .btn-macos-destructive {
-    background-color: var(--color-macos-background);
-    color: var(--color-macos-text);
+    background-color: var(--color-macos-surface);
+    color: var(--color-macos-red-500);
     font-weight: 400;
     font-size: 13px;
-    padding: 6px 16px;
-    min-width: 80px;
-    border: 1px solid var(--color-macos-border);
-    border-radius: 6px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    transition: all 0.1s ease-out;
+    padding: 5px 12px;
+    min-width: 64px;
+    border: 1px solid var(--color-macos-red-500);
+    border-radius: var(--radius-macos);
+    box-shadow: none;
+    transition: all 0.15s ease;
     cursor: pointer;
     text-align: center;
     white-space: nowrap;
-    
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  
+  .btn-macos-destructive:hover {
     background-color: var(--color-macos-red-500);
     color: white;
     border-color: var(--color-macos-red-500);
   }
   
-  .btn-macos-destructive:hover {
+  .btn-macos-destructive:active {
     background-color: var(--color-macos-red-600);
-    border-color: var(--color-macos-red-600);
+    transform: scale(0.98);
   }
   
   .btn-macos-destructive:disabled {
-    opacity: 0.6;
+    opacity: 0.4;
     cursor: not-allowed;
+    transform: none;
   }
   
   .card-macos {
@@ -176,23 +203,34 @@
     border-radius: var(--radius-macos-lg);
     box-shadow: var(--shadow-macos);
     border: 1px solid var(--color-macos-border);
-    padding: 16px;
+    padding: 20px;
+    transition: all 0.2s ease;
+  }
+  
+  .card-macos:hover {
+    box-shadow: var(--shadow-macos-lg);
+    transform: translateY(-2px);
   }
   
   .input-macos {
     width: 100%;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border: 1px solid var(--color-macos-border);
     border-radius: var(--radius-macos);
-    background-color: var(--color-macos-background);
+    background-color: var(--color-macos-surface);
     color: var(--color-macos-text);
-    transition: all 0.15s ease-out;
+    font-size: 13px;
+    transition: all 0.15s ease;
+    outline: none;
   }
   
   .input-macos:focus {
     border-color: var(--color-macos-border-focus);
     box-shadow: var(--shadow-macos-focus);
-    outline: none;
+  }
+  
+  .input-macos::placeholder {
+    color: var(--color-macos-text-tertiary);
   }
   
   .sidebar-item {
@@ -214,10 +252,12 @@
   
   .modal-macos {
     background-color: var(--color-macos-card);
-    border-radius: var(--radius-macos-xl);
+    border-radius: var(--radius-macos-lg);
     box-shadow: var(--shadow-macos-xl);
-    border: 1px solid var(--color-macos-border);
-    backdrop-filter: blur(20px);
+    border: none;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: hidden;
   }
   
   .status-running {
@@ -241,7 +281,7 @@
   }
 }
 
-/* macOS Utilities */
+/* Native OS Utilities */
 @layer utilities {
   .glass-macos {
     backdrop-filter: blur(20px);
@@ -249,6 +289,41 @@
   }
   
   .focus-ring-macos:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-macos-blue-500);
+  }
+  
+  /* Native scrollbar styling */
+  .native-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  .native-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .native-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--color-macos-gray-400);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  
+  .native-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-macos-gray-500);
+  }
+  
+  /* Disable text selection on UI elements */
+  .no-select {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+  }
+  
+  /* Native-style focus states */
+  .native-focus:focus {
     outline: none;
     box-shadow: 0 0 0 2px var(--color-macos-blue-500);
   }

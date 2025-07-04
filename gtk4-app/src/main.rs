@@ -22,6 +22,11 @@ fn main() -> glib::ExitCode {
     // Load resources
     gio::resources_register_include!("resources.gresource")
         .expect("Failed to register resources");
+    
+    // Verify that the template resource exists
+    let resources = gio::resources_enumerate_children("/org/quickemu/Manager/ui", gio::ResourceLookupFlags::NONE)
+        .expect("Failed to enumerate resources");
+    println!("Available UI resources: {:?}", resources);
 
     let app = Application::builder()
         .application_id(APP_ID)

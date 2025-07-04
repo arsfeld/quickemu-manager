@@ -7,11 +7,12 @@ use crate::components::spice_viewer::SpiceViewer;
 
 /// Console Component - Supports both VNC and SPICE protocols
 #[component]
-pub fn VmConsole(vm: VM, on_close: EventHandler<()>) -> Element {
+pub fn VmConsole(vm: VM, on_close: EventHandler<()>, inline_mode: Option<bool>) -> Element {
     let mut console_info = use_signal(|| None::<ConsoleInfo>);
     let mut connection_status = use_signal(|| "disconnected".to_string());
     let mut error_message = use_signal(|| None::<String>);
     let mut is_connecting = use_signal(|| false);
+    let inline = inline_mode.unwrap_or(false);
     
     let vm_id = vm.id.clone();
     let vm_name = vm.name.clone();
@@ -145,20 +146,64 @@ pub fn VmConsole(vm: VM, on_close: EventHandler<()>) -> Element {
     });
 
     rsx! {
-        div {
-            class: "fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50",
-            onclick: move |_| on_close.call(()),
-
-            div {
-                class: "modal-macos p-0 max-w-4xl w-full",
-                onclick: move |e| e.stop_propagation(),
-
-                // Header
-                div {
-                    class: "flex items-center justify-between p-4 border-b border-macos-border",
+        if inline {
+            // Inline mode for desktop layout
+            div { class: "h-full flex flex-col bg-black",
+                if is_connecting() {
                     div {
-                        class: "flex items-center space-x-3",
-                        h2 { class: "text-xl font-semibold", "Console: {vm_name}" }
+                        class: "flex-1 flex flex-col items-center justify-center",
+                        div { class: "animate-spin rounded-full h-8 w-8 border-b-2 border-white" }
+                        p { class: "mt-4 text-white/70 text-sm", "Connecting to console..." }
+                    }
+                } else if let Some(error) = error_message() {
+                    div {
+                        class: "flex-1 flex flex-col items-center justify-center p-4",
+                        p { class: "text-red-400 text-sm", "{error}" }
+                    }
+                } else if let Some(info) = console_info() {
+                    match info.protocol {
+                        ConsoleProtocol::Vnc => rsx! {
+                            crate::components::vnc_viewer::VncViewer {
+                                host: ws_host.clone(),
+                                port: ws_port,
+                                auto_connect: true,
+                                auth_token: None,
+                            }
+                        },
+                        ConsoleProtocol::Spice => rsx! {
+                            crate::components::spice_viewer::SpiceViewer {
+                                host: ws_host.clone(),
+                                port: ws_port,
+                                password: None,
+                                on_status_change: move |status| {
+                                    connection_status.set(status);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    div {
+                        class: "flex-1 flex items-center justify-center",
+                        p { class: "text-white/50 text-sm", "Console not available" }
+                    }
+                }
+            }
+        } else {
+            // Modal mode
+            div {
+                class: "fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50",
+                onclick: move |_| on_close.call(()),
+
+                div {
+                    class: "modal-macos p-0 max-w-4xl w-full",
+                    onclick: move |e| e.stop_propagation(),
+
+                    // Header
+                    div {
+                        class: "flex items-center justify-between p-4 border-b border-macos-border",
+                        div {
+                            class: "flex items-center space-x-3",
+                            h2 { class: "text-lg font-medium", "Console: {vm_name}" }
                         div {
                             class: match connection_status().as_str() {
                                 "connected" => "w-3 h-3 bg-green-500 rounded-full",
@@ -259,7 +304,7 @@ pub fn VmConsole(vm: VM, on_close: EventHandler<()>) -> Element {
                                 if let Some(info) = console_info() {
                                     match info.protocol {
                                         ConsoleProtocol::Vnc => rsx! {
-                                            VncViewer {
+                                            crate::components::vnc_viewer::VncViewer {
                                                 host: ws_host,
                                                 port: ws_port,
                                                 auto_connect: true,
@@ -267,11 +312,13 @@ pub fn VmConsole(vm: VM, on_close: EventHandler<()>) -> Element {
                                             }
                                         },
                                         ConsoleProtocol::Spice => rsx! {
-                                            SpiceViewer {
+                                            crate::components::spice_viewer::SpiceViewer {
                                                 host: ws_host,
                                                 port: ws_port,
-                                                auto_connect: true,
-                                                auth_token: Some(info.auth_token.clone())
+                                                password: None,
+                                                on_status_change: move |status| {
+                                                    connection_status.set(status);
+                                                }
                                             }
                                         }
                                     }
@@ -313,6 +360,7 @@ pub fn VmConsole(vm: VM, on_close: EventHandler<()>) -> Element {
                         onclick: move |_| on_close.call(()),
                         "Close"
                     }
+                }
                 }
             }
         }

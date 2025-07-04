@@ -12,7 +12,7 @@ mod vnc_client;
 #[cfg(target_arch = "wasm32")]
 mod vnc_protocol;
 #[cfg(target_arch = "wasm32")]
-mod spice_client;
+mod spice_client_wrapper;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod server_only;
@@ -35,6 +35,10 @@ const MAIN_CSS: Asset = asset!("/assets/main.css");
 const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
 
 fn main() {
+    #[cfg(not(target_arch = "wasm32"))]
+    dioxus::launch(App);
+    
+    #[cfg(target_arch = "wasm32")]
     dioxus::launch(App);
 }
 
@@ -101,35 +105,8 @@ pub fn Blog(id: i32) -> Element {
 #[component]
 fn Navbar() -> Element {
     rsx! {
-        div {
-            class: "glass-macos border-b border-macos-border",
-            style: "background-color: var(--color-macos-surface); backdrop-filter: blur(20px);",
-            div { class: "container mx-auto px-6 py-4 flex items-center justify-between",
-                div { class: "flex items-center space-x-3",
-                    h2 { 
-                        class: "text-2xl font-semibold",
-                        style: "color: var(--color-macos-text);",
-                        "🖥️ Quickemu Manager" 
-                    }
-                }
-                div { class: "flex space-x-6",
-                    Link {
-                        to: Route::Home {},
-                        class: "sidebar-item",
-                        "VMs"
-                    }
-                    Link {
-                        to: Route::Blog { id: 1 },
-                        class: "sidebar-item",
-                        "About"
-                    }
-                }
-            }
-        }
-
         div { 
-            class: "min-h-screen",
-            style: "background-color: var(--color-macos-surface);",
+            class: "min-h-screen bg-macos-background",
             Outlet::<Route> {}
         }
     }

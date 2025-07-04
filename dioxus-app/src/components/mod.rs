@@ -8,3 +8,6 @@ pub mod settings_modal;
 pub mod vnc_viewer;
 pub mod spice_viewer;
 pub mod vm_console;
+pub mod titlebar;
+pub mod vm_detail;
+pub mod keyboard_shortcuts;

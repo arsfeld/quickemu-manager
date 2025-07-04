@@ -5,8 +5,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::AppState;
-use quickemu_core::{VM, VMStatus};
-use super::VMEditDialog;
+use quickemu_core::{VM, VMStatus, DisplayProtocol};
+use super::{VMEditDialog, MainWindow};
 
 mod imp {
     use super::*;
@@ -76,12 +76,14 @@ mod imp {
             });
         }
 
-        fn launch_console_static(vm: VM, app_state: AppState) {
-            glib::spawn_future_local(async move {
-                if let Err(e) = app_state.vm_manager.launch_display(&vm).await {
-                    eprintln!("Failed to launch console: {}", e);
+        fn launch_console_static(vm: VM, button: gtk::Button) {
+            // Find the parent main window
+            if let Some(window) = button.root() {
+                if let Some(main_window) = window.downcast_ref::<MainWindow>() {
+                    // Use the main window's console view
+                    main_window.show_vm_console(vm);
                 }
-            });
+            }
         }
     }
 
@@ -116,13 +118,11 @@ mod imp {
             
             let connect_button = self.connect_button.get();
             let vm = self.vm.clone();
-            let app_state = self.app_state.clone();
-            connect_button.connect_clicked(move |_| {
+            connect_button.connect_clicked(move |button| {
                 let vm_ref = vm.borrow();
-                let app_state_ref = app_state.borrow();
                 
-                if let (Some(vm), Some(app_state)) = (vm_ref.as_ref(), app_state_ref.as_ref()) {
-                    Self::launch_console_static(vm.clone(), app_state.clone());
+                if let Some(vm) = vm_ref.as_ref() {
+                    Self::launch_console_static(vm.clone(), button.clone());
                 }
             });
             

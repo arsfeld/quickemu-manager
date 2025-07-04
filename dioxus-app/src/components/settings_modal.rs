@@ -39,15 +39,15 @@ pub fn SettingsModal(show: Signal<bool>) -> Element {
     
     rsx! {
         div { 
-            class: "fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4",
+            class: "fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4",
             onclick: move |_| show.set(false),
             
             div { 
-                class: "modal-macos w-full max-w-2xl max-h-[80vh] overflow-hidden",
+                class: "modal-macos w-full max-w-2xl",
                 onclick: move |e| e.stop_propagation(),
                 
                 // Header
-                div { class: "border-b border-gray-200 px-6 py-4 bg-white",
+                div { class: "border-b border-macos-border px-6 py-4",
                     div { class: "flex items-center justify-between",
                         h2 { class: "text-xl font-semibold text-gray-900", "Settings" }
                         button {

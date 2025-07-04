@@ -12,6 +12,7 @@ adw = { version = "0.7", package = "libadwaita", features = ["v1_6"] }
 
 # Core functionality
 quickemu-core = { path = "../core" }
+spice-client = { path = "../spice-client", features = ["backend-gtk4"] }
 
 # Additional dependencies
 tokio = { version = "1", features = ["full"] }
