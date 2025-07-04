@@ -23,7 +23,7 @@ build-core:
     cargo build -p quickemu-core
 
 # Build everything in release mode
-release:
+build-release:
     cargo build --workspace --release
     cd dioxus-app && dx build --platform server --release
 
@@ -80,3 +80,12 @@ distrobox-build:
 # Run GTK4 app in distrobox
 distrobox-run:
     distrobox-enter --name ubuntu-24.04 -- cargo run -p quickemu-manager-gtk
+
+# Create a new release with LLM-generated release notes and version suggestion
+release version="" llm="claude":
+    @scripts/release.py {{version}} --llm {{llm}}
+
+# List recent releases
+list-releases:
+    @echo "Recent releases:"
+    @gh release list --limit 10
