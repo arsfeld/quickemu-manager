@@ -14,6 +14,7 @@ jobs:
     name: Build spice-client GTK app - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -112,6 +113,7 @@ jobs:
     name: Build Quickemu Manager - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
