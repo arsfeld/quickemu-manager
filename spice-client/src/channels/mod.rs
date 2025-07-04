@@ -139,7 +139,6 @@ pub enum KeyCode {
 #[cfg(target_arch = "wasm32")]
 use {
     js_sys::{ArrayBuffer, Uint8Array},
-    std::sync::{Arc, Mutex},
     wasm_bindgen::prelude::*,
     wasm_bindgen_futures::JsFuture,
     web_sys::*,

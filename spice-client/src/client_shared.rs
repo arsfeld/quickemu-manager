@@ -11,7 +11,7 @@ use instant::Duration;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::task::JoinHandle;
