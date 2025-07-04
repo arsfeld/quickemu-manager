@@ -202,11 +202,22 @@ impl ClientBuilder {
 
     /// Build the client
     pub fn build(self) -> Result<SpiceClient> {
-        let mut client = SpiceClient::new(self.host, self.port);
-        if let Some(password) = self.password {
-            client.set_password(password);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mut client = SpiceClient::new(self.host, self.port);
+            if let Some(password) = self.password {
+                client.set_password(password);
+            }
+            Ok(client)
         }
-        Ok(client)
+        #[cfg(target_arch = "wasm32")]
+        {
+            // For WASM, we can't create a client without a canvas element
+            // This builder pattern doesn't work well for WASM
+            Err(SpiceError::Connection(
+                "Cannot create WASM client without canvas element. Use SpiceClient::new() directly.".to_string()
+            ))
+        }
     }
 }
 

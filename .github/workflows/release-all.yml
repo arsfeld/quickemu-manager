@@ -144,7 +144,9 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       
-      # Dioxus CLI not needed for cargo builds
+      - name: Install Dioxus CLI
+        run: |
+          cargo install dioxus-cli
 
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
