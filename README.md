@@ -132,7 +132,6 @@ The Dioxus web app requires no additional system dependencies beyond Rust.
 Settings auto-sync across platforms:
 - **Linux**: `~/.config/quickemu-manager/config.toml`
 - **macOS**: `~/Library/Application Support/quickemu-manager/config.toml`
-- **Windows**: `%APPDATA%\quickemu-manager\config.toml`
 
 ## 🏗️ Tech Stack
 

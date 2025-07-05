@@ -11,10 +11,12 @@ A modern SPICE (Simple Protocol for Independent Computing Environments) client i
 ## ✨ Features
 
 - **Pure Rust** - No C dependencies, memory safe implementation
-- **Cross-platform** - Native support for Linux, macOS, Windows, and WebAssembly
+- **Cross-platform** - Native support for Linux, macOS, Windows*, and WebAssembly
 - **Async/Await** - Modern async API using Tokio
 - **WebAssembly Ready** - Run SPICE clients directly in web browsers
 - **Multiple Channels** - Display, input, cursor, and main channel support
+
+*\* Windows support is included but currently untested. Contributions welcome!*
 
 ## 🏗️ Architecture
 

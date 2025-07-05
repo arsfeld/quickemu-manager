@@ -14,7 +14,6 @@ NC='\033[0m'
 LINUX_TARGET="x86_64-unknown-linux-gnu"
 MACOS_INTEL_TARGET="x86_64-apple-darwin"
 MACOS_ARM_TARGET="aarch64-apple-darwin"
-WINDOWS_TARGET="x86_64-pc-windows-msvc"
 
 # Build spice-client
 echo -e "${BLUE}Building spice-client...${NC}"
@@ -39,7 +38,6 @@ wasm-pack build --target web --out-dir pkg
 cd ..
 
 # Build GTK4 app (Linux and macOS only)
-if [[ "$OSTYPE" != "msys" ]] && [[ "$OSTYPE" != "win32" ]]; then
     echo -e "${BLUE}Building GTK4 app...${NC}"
     cd gtk4-app
     
@@ -53,7 +51,6 @@ if [[ "$OSTYPE" != "msys" ]] && [[ "$OSTYPE" != "win32" ]]; then
     fi
     
     cd ..
-fi
 
 # Build Dioxus app
 echo -e "${BLUE}Building Dioxus app...${NC}"
@@ -71,11 +68,6 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "  Building desktop app for macOS..."
     dx build --release --platform desktop --target $MACOS_INTEL_TARGET
     dx build --release --platform desktop --target $MACOS_ARM_TARGET
-fi
-
-if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
-    echo "  Building desktop app for Windows..."
-    dx build --release --platform desktop --target $WINDOWS_TARGET
 fi
 
 echo "  Building web app..."

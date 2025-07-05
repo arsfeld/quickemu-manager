@@ -21,8 +21,6 @@ name = "x86_64-apple-darwin"
 [[build.target]]
 name = "aarch64-apple-darwin"
 
-[[build.target]]
-name = "x86_64-pc-windows-msvc"
 
 [bundle]
 bundle_identifier = "com.quickemu.manager"
@@ -35,12 +33,6 @@ icon = ["assets/icon.icns"]
 files = {}
 hardened_runtime = true
 
-[bundle.windows]
-icon = ["assets/icon.ico"]
-files = {}
-tsp = false
-webview_install_mode = "Skip"
-allow_downgrades = false
 
 [bundle.linux]
 icon = ["assets/icon.png"]

@@ -142,10 +142,6 @@ jobs:
             target: aarch64-apple-darwin
             gtk_binary: quickemu-manager-gtk
             dioxus_binary: quickemu-manager-dioxus
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            gtk_binary: quickemu-manager-gtk.exe
-            dioxus_binary: quickemu-manager-dioxus.exe
 
     steps:
       - uses: actions/checkout@v4
@@ -171,8 +167,7 @@ jobs:
           brew install gtk4 libadwaita gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly pkg-config
           echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
 
-      - name: Build GTK4 app (Linux/macOS only)
-        if: matrix.os != 'windows-latest'
+      - name: Build GTK4 app
         working-directory: gtk4-app
         run: |
           cargo build --release --target ${{ matrix.target }}

@@ -70,7 +70,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
         
     steps:
       - uses: actions/checkout@v4
@@ -78,10 +78,6 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       
-      - name: Set Windows build environment
-        if: matrix.os == 'windows-latest'
-        run: |
-          echo "RUSTFLAGS=-C link-arg=advapi32.lib -C link-arg=userenv.lib -C link-arg=crypt32.lib" >> $env:GITHUB_ENV
 
       - name: Install Dioxus CLI
         run: cargo install dioxus-cli
@@ -106,13 +102,11 @@ jobs:
         working-directory: spice-client
         run: cargo build --release
 
-      - name: Build spice-client GTK app (Linux/macOS only)
-        if: matrix.os != 'windows-latest'
+      - name: Build spice-client GTK app
         working-directory: spice-client
         run: cargo build --release --features backend-gtk4 --bin rusty-spice-gtk
 
-      - name: Build GTK4 app (Linux/macOS only)
-        if: matrix.os != 'windows-latest'
+      - name: Build GTK4 app
         working-directory: gtk4-app
         run: cargo build --release
 

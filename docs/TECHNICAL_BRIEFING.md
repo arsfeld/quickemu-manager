@@ -4,7 +4,7 @@
 
 ### Core Framework
 - **GTK4**: Native Rust-based desktop UI framework via gtk4-rs
-- **Target Platforms**: Linux (primary), with potential Windows/macOS support
+- **Target Platforms**: Linux (primary), with macOS support
 - **Rendering**: Native GTK4 rendering with composite templates
 
 ### Language & Tools
