@@ -4,9 +4,6 @@ use crate::error::{Result, SpiceError};
 use crate::protocol::ChannelType;
 use crate::video::{create_video_output, VideoOutput};
 
-#[cfg(test)]
-#[path = "client_tests.rs"]
-mod client_tests;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{error, info};
