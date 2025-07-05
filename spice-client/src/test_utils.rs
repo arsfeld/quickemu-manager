@@ -33,7 +33,7 @@ impl MockSpiceServer {
                     let connections = connections_clone.clone();
                     tokio::spawn(async move {
                         // Handle handshake
-                        if let Ok(_) = handle_handshake(&mut stream).await {
+                        if handle_handshake(&mut stream).await.is_ok() {
                             // Store connection by channel ID (simplified)
                             let mut conns = connections.lock().await;
                             let channel_id = conns.len() as u8;

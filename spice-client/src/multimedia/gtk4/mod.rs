@@ -1,5 +1,4 @@
 use super::{MultimediaBackend, MultimediaError, Result};
-use gtk4::{glib, prelude::*};
 use std::sync::{Arc, Mutex};
 
 pub mod audio;
@@ -7,6 +6,7 @@ pub mod display;
 pub mod input;
 
 pub struct Gtk4Backend {
+    #[allow(dead_code)]
     initialized: Arc<Mutex<bool>>,
 }
 
@@ -15,7 +15,7 @@ impl Gtk4Backend {
         // Ensure GTK is initialized
         if !gtk4::is_initialized() {
             gtk4::init()
-                .map_err(|e| MultimediaError::new(format!("Failed to initialize GTK4: {}", e)))?;
+                .map_err(|e| MultimediaError::new(format!("Failed to initialize GTK4: {e}")))?;
         }
 
         Ok(Self {

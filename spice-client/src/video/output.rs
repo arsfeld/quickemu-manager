@@ -5,6 +5,7 @@ use std::sync::Arc;
 /// Trait for video output handling
 #[cfg(not(target_arch = "wasm32"))]
 #[async_trait::async_trait]
+#[allow(async_fn_in_trait)]
 pub trait VideoOutput: Send + Sync {
     /// Update the current frame
     async fn update_frame(&self, surface: &DisplaySurface);
@@ -19,6 +20,7 @@ pub trait VideoOutput: Send + Sync {
 /// Trait for video output handling - WASM version
 #[cfg(target_arch = "wasm32")]
 #[async_trait::async_trait(?Send)]
+#[allow(async_fn_in_trait)]
 pub trait VideoOutput {
     /// Update the current frame
     async fn update_frame(&self, surface: &DisplaySurface);

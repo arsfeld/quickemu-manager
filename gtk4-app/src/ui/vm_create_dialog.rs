@@ -390,7 +390,7 @@ impl VMCreateDialog {
 
         let version = if let Some(model) = imp.version_row.model() {
             if let Some(string_list) = model.downcast_ref::<gtk::StringList>() {
-                let version_index = imp.version_row.selected() as u32;
+                let version_index = imp.version_row.selected();
                 if version_index < string_list.n_items() {
                     string_list.string(version_index).map(|s| s.to_string())
                 } else {
@@ -406,7 +406,7 @@ impl VMCreateDialog {
         let edition = if imp.edition_row.is_visible() {
             if let Some(model) = imp.edition_row.model() {
                 if let Some(string_list) = model.downcast_ref::<gtk::StringList>() {
-                    let edition_index = imp.edition_row.selected() as u32;
+                    let edition_index = imp.edition_row.selected();
                     if edition_index < string_list.n_items() {
                         string_list.string(edition_index).map(|s| s.to_string())
                     } else {

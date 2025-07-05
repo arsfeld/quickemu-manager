@@ -266,7 +266,7 @@ mod imp {
                     eprintln!("SpiceDisplay: Display surface created");
 
                     // Get the drawing area and clone it to avoid lifetime issues
-                    gtk_display.get_drawing_area().map(|area| area.clone())
+                    gtk_display.get_drawing_area().cloned()
                 };
 
                 // Create the SPICE display adapter

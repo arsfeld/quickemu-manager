@@ -16,7 +16,6 @@ use rand::rngs::OsRng;
 use rsa::pkcs8::DecodePublicKey;
 use rsa::{Oaep, RsaPublicKey};
 use sha1::Sha1;
-use std::io::Write;
 
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -144,6 +143,7 @@ use {
     web_sys::*,
 };
 
+#[allow(async_fn_in_trait)]
 pub trait Channel {
     async fn handle_message(&mut self, header: &SpiceDataHeader, data: &[u8]) -> Result<()>;
     fn channel_type(&self) -> ChannelType;
@@ -223,7 +223,7 @@ impl ChannelConnection {
         channel_type: ChannelType,
         channel_id: u8,
     ) -> Result<Self> {
-        let websocket_url = format!("ws://{}:{}", host, port);
+        let websocket_url = format!("ws://{host}:{port}");
         Self::new_websocket(&websocket_url, channel_type, channel_id).await
     }
 
@@ -466,7 +466,7 @@ impl ChannelConnection {
         let mut mess_cursor = std::io::Cursor::new(Vec::new());
         link_mess
             .write(&mut mess_cursor)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to write link message: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("Failed to write link message: {e}")))?;
 
         // Get the message bytes and append capabilities
         let mut mess_bytes = mess_cursor.into_inner();
@@ -490,7 +490,7 @@ impl ChannelConnection {
         let mut header_cursor = std::io::Cursor::new(Vec::new());
         link_header
             .write(&mut header_cursor)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to write link header: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("Failed to write link header: {e}")))?;
         let header_bytes = header_cursor.into_inner();
 
         info!("Sending SPICE link header: {:?}", header_bytes);
@@ -526,7 +526,7 @@ impl ChannelConnection {
         use binrw::BinRead;
         let mut cursor = std::io::Cursor::new(&reply_bytes);
         let reply = SpiceLinkReply::read(&mut cursor)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to parse link reply: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("Failed to parse link reply: {e}")))?;
 
         if reply.magic != SPICE_MAGIC {
             return Err(SpiceError::Protocol(format!(
@@ -545,7 +545,7 @@ impl ChannelConnection {
             use binrw::BinRead;
             let mut data_cursor = std::io::Cursor::new(&link_data);
             let reply_data = SpiceLinkReplyData::read(&mut data_cursor).map_err(|e| {
-                SpiceError::Protocol(format!("Failed to parse link reply data: {}", e))
+                SpiceError::Protocol(format!("Failed to parse link reply data: {e}"))
             })?;
 
             info!(
@@ -575,7 +575,7 @@ impl ChannelConnection {
                     use binrw::BinWrite;
                     let mut auth_cursor = std::io::Cursor::new(Vec::new());
                     auth_mechanism.write(&mut auth_cursor).map_err(|e| {
-                        SpiceError::Protocol(format!("Failed to write auth mechanism: {}", e))
+                        SpiceError::Protocol(format!("Failed to write auth mechanism: {e}"))
                     })?;
                     let auth_bytes = auth_cursor.into_inner();
                     self.send_raw(&auth_bytes).await?;
@@ -758,7 +758,7 @@ impl ChannelConnection {
         use binrw::BinRead;
         let mut cursor = std::io::Cursor::new(&header_bytes);
         let header = SpiceDataHeader::read(&mut cursor)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to parse data header: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("Failed to parse data header: {e}")))?;
 
         debug!(
             "Parsed header: serial={}, type={}, size={}, sub_list={}",
@@ -793,7 +793,7 @@ impl ChannelConnection {
         let mut header_cursor = std::io::Cursor::new(Vec::new());
         header
             .write(&mut header_cursor)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to write data header: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("Failed to write data header: {e}")))?;
         let header_bytes = header_cursor.into_inner();
 
         info!(

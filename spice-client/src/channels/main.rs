@@ -269,10 +269,11 @@ impl MainChannel {
 
         // Fallback to default channels if server doesn't send list
         warn!("Timeout waiting for SPICE_MSG_MAIN_CHANNELS_LIST, using defaults");
-        let mut channels = Vec::new();
-        channels.push((ChannelType::Display, 0));
-        channels.push((ChannelType::Inputs, 0));
-        channels.push((ChannelType::Cursor, 0));
+        let channels = vec![
+            (ChannelType::Display, 0),
+            (ChannelType::Inputs, 0),
+            (ChannelType::Cursor, 0),
+        ];
         Ok(channels)
     }
 
@@ -366,7 +367,7 @@ impl Channel for MainChannel {
 
                 let mut cursor = std::io::Cursor::new(data);
                 let init_msg = crate::protocol::SpiceMsgMainInit::read(&mut cursor)
-                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse Init: {}", e)))?;
+                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse Init: {e}")))?;
 
                 // Debug: Show raw bytes of session_id
                 let session_id_bytes = init_msg.session_id.to_le_bytes();
@@ -406,7 +407,7 @@ impl Channel for MainChannel {
             x if x == MainChannelMessage::MouseMode as u16 => {
                 let mut cursor = std::io::Cursor::new(data);
                 let mouse_mode = SpiceMsgMainMouseMode::read(&mut cursor).map_err(|e| {
-                    SpiceError::Protocol(format!("Failed to parse MouseMode: {}", e))
+                    SpiceError::Protocol(format!("Failed to parse MouseMode: {e}"))
                 })?;
                 info!("Mouse mode changed to: {}", mouse_mode.mode);
                 // TODO: Store mouse mode and notify input handling
@@ -414,7 +415,7 @@ impl Channel for MainChannel {
             x if x == MainChannelMessage::MultiMediaTime as u16 => {
                 let mut cursor = std::io::Cursor::new(data);
                 let mm_time = SpiceMsgMainMultiMediaTime::read(&mut cursor).map_err(|e| {
-                    SpiceError::Protocol(format!("Failed to parse MultiMediaTime: {}", e))
+                    SpiceError::Protocol(format!("Failed to parse MultiMediaTime: {e}"))
                 })?;
                 debug!("Multimedia time: {}", mm_time.time);
                 // TODO: Synchronize with multimedia time
@@ -423,7 +424,7 @@ impl Channel for MainChannel {
                 let mut cursor = std::io::Cursor::new(data);
                 let agent_connected =
                     SpiceMsgMainAgentConnected::read(&mut cursor).map_err(|e| {
-                        SpiceError::Protocol(format!("Failed to parse AgentConnected: {}", e))
+                        SpiceError::Protocol(format!("Failed to parse AgentConnected: {e}"))
                     })?;
                 info!(
                     "Agent connected with error code: {}",
@@ -438,7 +439,7 @@ impl Channel for MainChannel {
             x if x == MainChannelMessage::AgentData as u16 => {
                 let mut cursor = std::io::Cursor::new(data);
                 let agent_data = SpiceMsgMainAgentData::read(&mut cursor).map_err(|e| {
-                    SpiceError::Protocol(format!("Failed to parse AgentData: {}", e))
+                    SpiceError::Protocol(format!("Failed to parse AgentData: {e}"))
                 })?;
                 debug!(
                     "Received agent data: protocol {}, type {}, size {}",
@@ -449,7 +450,7 @@ impl Channel for MainChannel {
             x if x == MainChannelMessage::AgentToken as u16 => {
                 let mut cursor = std::io::Cursor::new(data);
                 let agent_tokens = SpiceMsgMainAgentTokens::read(&mut cursor).map_err(|e| {
-                    SpiceError::Protocol(format!("Failed to parse AgentTokens: {}", e))
+                    SpiceError::Protocol(format!("Failed to parse AgentTokens: {e}"))
                 })?;
                 debug!("Agent tokens: {}", agent_tokens.num_tokens);
                 // TODO: Update agent token count for flow control
@@ -457,7 +458,7 @@ impl Channel for MainChannel {
             x if x == SPICE_MSG_NOTIFY => {
                 let mut cursor = std::io::Cursor::new(data);
                 let notify = SpiceMsgMainNotify::read(&mut cursor)
-                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse Notify: {}", e)))?;
+                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse Notify: {e}")))?;
                 let message = String::from_utf8_lossy(&notify.message);
                 match notify.severity {
                     0 => info!("Server info: {}", message),

@@ -1,4 +1,4 @@
-use super::{Transport, TransportConfig};
+use super::Transport;
 use crate::error::{Result, SpiceError};
 use async_trait::async_trait;
 use std::io;

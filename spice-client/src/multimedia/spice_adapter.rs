@@ -1,13 +1,10 @@
 use super::{
-    display::{CursorData, Display, DisplayMode, PixelFormat},
+    display::{CursorData, Display, PixelFormat},
     input::{InputEvent, KeyboardEvent, MouseButton, MouseEvent},
     Result,
 };
 use crate::channels::cursor::CursorShape;
-use crate::channels::display::DisplaySurface;
-use crate::channels::{
-    InputEvent as SpiceInputEvent, KeyCode as SpiceKeyCode, MouseButton as SpiceMouseButton,
-};
+use crate::channels::MouseButton as SpiceMouseButton;
 use crate::SpiceClientShared;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -139,6 +136,7 @@ impl SpiceDisplayAdapter {
 }
 
 /// Converts SPICE display surface to multimedia pixel format
+#[allow(dead_code)]
 fn convert_spice_format(spice_format: u32) -> PixelFormat {
     match spice_format {
         1 => PixelFormat::Rgba8888, // SPICE_SURFACE_FMT_32_xRGB

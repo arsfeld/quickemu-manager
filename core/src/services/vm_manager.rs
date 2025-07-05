@@ -99,7 +99,7 @@ impl VMManager {
                 } else {
                     "-vnc :0".to_string() // Default to display :0 (port 5900)
                 };
-                println!("Enabling VNC with args: {}", vnc_arg);
+                println!("Enabling VNC with args: {vnc_arg}");
                 cmd.arg("--extra_args").arg(vnc_arg);
             }
             DisplayProtocol::Sdl => {
@@ -154,7 +154,7 @@ impl VMManager {
         system.refresh_processes(sysinfo::ProcessesToUpdate::All, false);
 
         for process in system.processes().values() {
-            if let Some(cmd) = process.cmd().get(0) {
+            if let Some(cmd) = process.cmd().first() {
                 let cmd_str = cmd.to_string_lossy();
                 // Look for qemu processes with our VM config
                 if cmd_str.contains("qemu-system")
@@ -182,7 +182,7 @@ impl VMManager {
         }
 
         // Fallback: Use ps and kill directly
-        if let Ok(output) = std::process::Command::new("ps").args(&["aux"]).output() {
+        if let Ok(output) = std::process::Command::new("ps").args(["aux"]).output() {
             let ps_output = String::from_utf8_lossy(&output.stdout);
             for line in ps_output.lines() {
                 if line.contains("qemu-system") && line.contains(&vm_id.0) {
@@ -192,9 +192,10 @@ impl VMManager {
                             println!("Stopping VM {}: Killing qemu process PID {}", vm_id.0, pid);
 
                             // Use kill command
-                            if let Ok(_) = std::process::Command::new("kill")
+                            if std::process::Command::new("kill")
                                 .arg(pid.to_string())
                                 .output()
+                                .is_ok()
                             {
                                 // Unregister from process monitor if available
                                 if let Some(monitor) = &self.process_monitor {
@@ -228,7 +229,7 @@ impl VMManager {
         system.refresh_processes(ProcessesToUpdate::All, false);
 
         for process in system.processes().values() {
-            if let Some(cmd) = process.cmd().get(0) {
+            if let Some(cmd) = process.cmd().first() {
                 let cmd_str = cmd.to_string_lossy();
 
                 // Look for qemu processes with our VM config
@@ -257,7 +258,7 @@ impl VMManager {
         }
 
         // Fallback: Use ps command directly since sysinfo might have container issues
-        if let Ok(output) = std::process::Command::new("ps").args(&["aux"]).output() {
+        if let Ok(output) = std::process::Command::new("ps").args(["aux"]).output() {
             let ps_output = String::from_utf8_lossy(&output.stdout);
             for line in ps_output.lines() {
                 if line.contains("qemu-system") && line.contains(&vm_id.0) {
@@ -305,10 +306,8 @@ impl VMManager {
                 Ok(mut child) => {
                     if let Some(stdout) = child.stdout.take() {
                         let reader = BufReader::new(stdout);
-                        for line in reader.lines() {
-                            if let Ok(line) = line {
-                                let _ = tx.send(line);
-                            }
+                        for line in reader.lines().map_while(Result::ok) {
+                            let _ = tx.send(line);
                         }
                     }
 
@@ -326,12 +325,12 @@ impl VMManager {
                             }
                         }
                         Err(e) => {
-                            let _ = tx.send(format!("Error waiting for process: {}", e));
+                            let _ = tx.send(format!("Error waiting for process: {e}"));
                         }
                     }
                 }
                 Err(e) => {
-                    let _ = tx.send(format!("Failed to start quickget: {}", e));
+                    let _ = tx.send(format!("Failed to start quickget: {e}"));
                 }
             }
         });
@@ -346,7 +345,7 @@ impl VMManager {
         }
 
         let config_path =
-            output_dir_original.join(format!("{}-{}.conf", template_os, template_version));
+            output_dir_original.join(format!("{template_os}-{template_version}.conf"));
         if config_path.exists() {
             Ok(config_path)
         } else {
@@ -413,7 +412,7 @@ impl VMManager {
                     template_version
                 )
             };
-            println!("Command: {}", cmd_str);
+            println!("Command: {cmd_str}");
 
             // Ensure output directory exists
             if let Err(e) = std::fs::create_dir_all(&output_dir) {
@@ -444,20 +443,16 @@ impl VMManager {
                     // Handle stdout
                     if let Some(stdout) = child.stdout.take() {
                         let reader = BufReader::new(stdout);
-                        for line in reader.lines() {
-                            if let Ok(line) = line {
-                                let _ = tx.send(format!("STDOUT: {}", line));
-                            }
+                        for line in reader.lines().map_while(Result::ok) {
+                            let _ = tx.send(format!("STDOUT: {line}"));
                         }
                     }
 
                     // Handle stderr
                     if let Some(stderr) = child.stderr.take() {
                         let reader = BufReader::new(stderr);
-                        for line in reader.lines() {
-                            if let Ok(line) = line {
-                                let _ = tx.send(format!("STDERR: {}", line));
-                            }
+                        for line in reader.lines().map_while(Result::ok) {
+                            let _ = tx.send(format!("STDERR: {line}"));
                         }
                     }
 
@@ -465,7 +460,7 @@ impl VMManager {
                         Ok(status) => {
                             if status.success() {
                                 let config_path = output_dir
-                                    .join(format!("{}-{}.conf", template_os, template_version));
+                                    .join(format!("{template_os}-{template_version}.conf"));
                                 let _ = tx.send(format!(
                                     "VM created successfully: {}",
                                     config_path.display()
@@ -478,7 +473,7 @@ impl VMManager {
                             }
                         }
                         Err(e) => {
-                            let _ = tx.send(format!("Error waiting for process: {}", e));
+                            let _ = tx.send(format!("Error waiting for process: {e}"));
                         }
                     }
                 }
@@ -502,17 +497,17 @@ impl VMManager {
     pub async fn launch_display(&self, vm: &VM) -> Result<()> {
         match &vm.config.display {
             DisplayProtocol::Spice { port } => {
-                let url = format!("spice://localhost:{}", port);
+                let url = format!("spice://localhost:{port}");
                 // Try to open with system's default spice client
                 if let Err(e) = std::process::Command::new("spicy").arg(&url).spawn() {
                     return Err(anyhow!("Failed to launch spice client: {}", e));
                 }
             }
             DisplayProtocol::Vnc { port } => {
-                let _url = format!("vnc://localhost:{}", port);
+                let _url = format!("vnc://localhost:{port}");
                 // Try to open with system's default vnc client
                 if let Err(e) = std::process::Command::new("vncviewer")
-                    .arg(&format!("localhost:{}", port))
+                    .arg(format!("localhost:{port}"))
                     .spawn()
                 {
                     return Err(anyhow!("Failed to launch VNC client: {}", e));
@@ -557,7 +552,7 @@ impl VMManager {
 
                 // Try to verify if this is actually a VNC port by checking if it's used by QEMU
                 let ps_output = std::process::Command::new("lsof")
-                    .args(&["-i", &format!(":{}", port), "-n", "-P"])
+                    .args(["-i", &format!(":{port}"), "-n", "-P"])
                     .output();
 
                 if let Ok(output) = ps_output {
@@ -615,7 +610,7 @@ impl VMManager {
 
                 // Try to verify if this is actually a VNC port by checking if it's used by QEMU
                 let ps_output = std::process::Command::new("lsof")
-                    .args(&["-i", &format!(":{}", port), "-n", "-P"])
+                    .args(["-i", &format!(":{port}"), "-n", "-P"])
                     .output();
 
                 if let Ok(output) = ps_output {
@@ -659,7 +654,7 @@ impl VMManager {
     /// Check if a port is open and responsive
     async fn is_port_open(&self, host: &str, port: u16) -> bool {
         TcpStream::connect_timeout(
-            &format!("{}:{}", host, port).parse().unwrap(),
+            &format!("{host}:{port}").parse().unwrap(),
             Duration::from_millis(100),
         )
         .is_ok()
@@ -800,6 +795,7 @@ mod tests {
     use super::*;
     use crate::models::{DisplayProtocol, VMConfig};
     use std::fs;
+    use std::time::SystemTime;
     use tempfile::TempDir;
 
     fn create_test_vm_manager() -> VMManager {
@@ -822,8 +818,6 @@ ram="2G"
         VM {
             id: VMId("test-vm".to_string()),
             name: "Test VM".to_string(),
-            os: "Ubuntu".to_string(),
-            version: "22.04".to_string(),
             config_path,
             status: VMStatus::Stopped,
             config: VMConfig {
@@ -837,8 +831,7 @@ ram="2G"
                 ssh_port: None,
                 raw_config: config_content.to_string(),
             },
-            cpu_cores: 2,
-            ram_mb: 2048,
+            last_modified: SystemTime::now(),
         }
     }
 
@@ -889,7 +882,7 @@ ram="2G"
     async fn test_start_already_running_vm() {
         let temp_dir = TempDir::new().unwrap();
         let mut vm = create_test_vm(&temp_dir);
-        vm.status = VMStatus::Running;
+        vm.status = VMStatus::Running { pid: 12345 };
 
         let vm_manager = create_test_vm_manager();
         let result = vm_manager.start_vm(&vm).await;
@@ -910,14 +903,18 @@ ram="2G"
     #[test]
     fn test_vm_template_creation() {
         let template = VMTemplate {
+            name: "Ubuntu 22.04 Desktop".to_string(),
             os: "ubuntu".to_string(),
             version: "22.04".to_string(),
-            name: Some("Ubuntu 22.04 Desktop".to_string()),
+            edition: None,
+            ram: "4G".to_string(),
+            disk_size: "20G".to_string(),
+            cpu_cores: 2,
         };
 
         assert_eq!(template.os, "ubuntu");
         assert_eq!(template.version, "22.04");
-        assert_eq!(template.name, Some("Ubuntu 22.04 Desktop".to_string()));
+        assert_eq!(template.name, "Ubuntu 22.04 Desktop".to_string());
     }
 
     #[tokio::test]

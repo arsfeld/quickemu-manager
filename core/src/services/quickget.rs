@@ -127,12 +127,13 @@ impl QuickgetService {
             .map_err(|e| anyhow!("Failed to parse quickget JSON output: {}", e))?;
 
         // Group by OS and collect versions, icons
-        let mut os_map: HashMap<String, (String, HashSet<String>, Option<String>, Option<String>)> =
-            HashMap::new();
+        // Type alias for better readability
+        type OsInfo = (String, HashSet<String>, Option<String>, Option<String>);
+        let mut os_map: HashMap<String, OsInfo> = HashMap::new();
 
         for entry in entries {
             let entry_key = entry.os.clone();
-            let (display_name, versions, png_icon, svg_icon) =
+            let (_display_name, versions, _png_icon, _svg_icon) =
                 os_map.entry(entry_key.clone()).or_insert_with(|| {
                     (
                         entry.display_name.clone(),
@@ -164,7 +165,7 @@ impl QuickgetService {
 
         // Save to cache
         if let Err(e) = Self::save_cache(&os_list) {
-            log::warn!("Failed to save quickget cache: {}", e);
+            log::warn!("Failed to save quickget cache: {e}");
         } else {
             log::info!("Saved OS list to cache");
         }
@@ -255,7 +256,6 @@ impl QuickgetService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[tokio::test]
     async fn test_quickget_service() {

@@ -9,12 +9,18 @@ pub struct ProcessMonitor {
     vm_processes: Arc<RwLock<HashMap<VMId, u32>>>,
 }
 
-impl ProcessMonitor {
-    pub fn new() -> Self {
+impl Default for ProcessMonitor {
+    fn default() -> Self {
         Self {
             system: Arc::new(RwLock::new(System::new_all())),
             vm_processes: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+}
+
+impl ProcessMonitor {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub async fn register_vm_process(&self, vm_id: VMId, pid: u32) {

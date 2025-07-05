@@ -31,7 +31,7 @@ impl SpiceClient {
         // Set up console error panic hook for better error messages
         console_error_panic_hook::set_once();
 
-        console::log_1(&format!("Creating new SPICE client for {}", websocket_url).into());
+        console::log_1(&format!("Creating new SPICE client for {websocket_url}").into());
 
         Self {
             inner: Arc::new(Mutex::new(None)),
@@ -101,14 +101,14 @@ impl SpiceClient {
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to start event loop: {}", e);
+                        let error_msg = format!("Failed to start event loop: {e}");
                         console::error_1(&error_msg.clone().into());
                         Err(JsValue::from_str(&error_msg))
                     }
                 }
             }
             Err(e) => {
-                let error_msg = format!("Connection failed: {}", e);
+                let error_msg = format!("Connection failed: {e}");
                 console::error_1(&error_msg.clone().into());
                 Err(JsValue::from_str(&error_msg))
             }
@@ -148,14 +148,14 @@ impl SpiceClient {
                 // Check for error state first
                 if let Some(error) = client.get_error_state().await {
                     console::error_1(
-                        &format!("Cannot send key event - client in error state: {}", error).into(),
+                        &format!("Cannot send key event - client in error state: {error}").into(),
                     );
                     return;
                 }
 
                 // TODO: Implement key event sending through the input channel
                 console::log_2(
-                    &format!("Key event: code={}, pressed={}", key_code, is_pressed).into(),
+                    &format!("Key event: code={key_code}, pressed={is_pressed}").into(),
                     &JsValue::NULL,
                 );
             }
@@ -181,7 +181,7 @@ impl SpiceClient {
 
                 // TODO: Implement mouse move event sending through the input channel
                 console::log_2(
-                    &format!("Mouse move: x={}, y={}", x, y).into(),
+                    &format!("Mouse move: x={x}, y={y}").into(),
                     &JsValue::NULL,
                 );
             }
@@ -213,7 +213,7 @@ impl SpiceClient {
 
                 // TODO: Implement mouse button event sending through the input channel
                 console::log_2(
-                    &format!("Mouse button: button={}, pressed={}", button, is_pressed).into(),
+                    &format!("Mouse button: button={button}, pressed={is_pressed}").into(),
                     &JsValue::NULL,
                 );
             }

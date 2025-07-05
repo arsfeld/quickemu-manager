@@ -63,8 +63,8 @@ impl VM {
 
     pub fn get_display_url(&self) -> Option<String> {
         match &self.config.display {
-            DisplayProtocol::Spice { port } => Some(format!("spice://localhost:{}", port)),
-            DisplayProtocol::Vnc { port } => Some(format!("vnc://localhost:{}", port)),
+            DisplayProtocol::Spice { port } => Some(format!("spice://localhost:{port}")),
+            DisplayProtocol::Vnc { port } => Some(format!("vnc://localhost:{port}")),
             _ => None,
         }
     }

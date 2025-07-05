@@ -3,9 +3,7 @@ use crate::multimedia::{
     MultimediaError, Result,
 };
 use gdk_pixbuf;
-use gtk4::{cairo, gdk, glib, prelude::*, DrawingArea};
-use std::cell::RefCell;
-use std::rc::Rc;
+use gtk4::{cairo, gdk, prelude::*, DrawingArea};
 use std::sync::{Arc, Mutex};
 
 pub struct Gtk4Display {
@@ -46,10 +44,9 @@ impl Gtk4Display {
             .build();
 
         let surface_data = self.surface_data.clone();
-        drawing_area.set_draw_func(move |area, cr, width, height| {
+        drawing_area.set_draw_func(move |_area, cr, width, height| {
             eprintln!(
-                "GTK4 Display: Draw function called, area size: {}x{}",
-                width, height
+                "GTK4 Display: Draw function called, area size: {width}x{height}"
             );
 
             // Clear background
@@ -60,11 +57,10 @@ impl Gtk4Display {
             if let Ok(guard) = surface_data.lock() {
                 if let Some(ref data) = *guard {
                     eprintln!(
-                        "GTK4 Display: Drawing surface data {}x{}",
-                        data.width, data.height
+                        "GTK4 Display: Drawing surface data {}x{}", data.width, data.height
                     );
                     if let Err(e) = draw_surface(cr, data, width, height) {
-                        eprintln!("Failed to draw surface: {}", e);
+                        eprintln!("Failed to draw surface: {e}");
                     }
                 } else {
                     eprintln!("GTK4 Display: No surface data available");
@@ -105,11 +101,11 @@ fn draw_surface(
                 surface_data.width as i32,
                 surface_data.height as i32,
             )
-            .map_err(|e| MultimediaError::new(format!("Failed to create Cairo surface: {}", e)))
+            .map_err(|e| MultimediaError::new(format!("Failed to create Cairo surface: {e}")))
             .and_then(|mut surface| {
                 // Copy data to the surface
                 let mut surface_data_ref = surface.data().map_err(|e| {
-                    MultimediaError::new(format!("Failed to get surface data: {}", e))
+                    MultimediaError::new(format!("Failed to get surface data: {e}"))
                 })?;
 
                 let data_slice = surface_data_ref.as_mut();
@@ -143,11 +139,11 @@ fn draw_surface(
                 surface_data.width as i32,
                 surface_data.height as i32,
             )
-            .map_err(|e| MultimediaError::new(format!("Failed to create Cairo surface: {}", e)))
+            .map_err(|e| MultimediaError::new(format!("Failed to create Cairo surface: {e}")))
             .and_then(|mut surface| {
                 // Copy data to the surface
                 let mut surface_data_ref = surface.data().map_err(|e| {
-                    MultimediaError::new(format!("Failed to get surface data: {}", e))
+                    MultimediaError::new(format!("Failed to get surface data: {e}"))
                 })?;
 
                 let data_slice = surface_data_ref.as_mut();
@@ -179,11 +175,11 @@ fn draw_surface(
                 surface_data.width as i32,
                 surface_data.height as i32,
             )
-            .map_err(|e| MultimediaError::new(format!("Failed to create Cairo surface: {}", e)))
+            .map_err(|e| MultimediaError::new(format!("Failed to create Cairo surface: {e}")))
             .and_then(|mut surface| {
                 // Copy data to the surface
                 let mut surface_data_ref = surface.data().map_err(|e| {
-                    MultimediaError::new(format!("Failed to get surface data: {}", e))
+                    MultimediaError::new(format!("Failed to get surface data: {e}"))
                 })?;
 
                 let data_slice = surface_data_ref.as_mut();
@@ -206,9 +202,9 @@ fn draw_surface(
     }
 
     cr.set_source_surface(&surface, 0.0, 0.0)
-        .map_err(|e| MultimediaError::new(format!("Failed to set source surface: {}", e)))?;
+        .map_err(|e| MultimediaError::new(format!("Failed to set source surface: {e}")))?;
     cr.paint()
-        .map_err(|e| MultimediaError::new(format!("Failed to paint surface: {}", e)))?;
+        .map_err(|e| MultimediaError::new(format!("Failed to paint surface: {e}")))?;
 
     Ok(())
 }
@@ -238,25 +234,17 @@ impl Display for Gtk4Display {
 
         if data.len() != expected_size {
             eprintln!(
-                "GTK4 Display: Invalid data size: expected {} bytes, got {} bytes for {}x{} {:?}",
-                expected_size,
-                data.len(),
-                width,
-                height,
-                format
+                "GTK4 Display: Invalid data size: expected {expected_size} bytes, got {} bytes for {width}x{height} {format:?}",
+                data.len()
             );
             return Err(MultimediaError::new(format!(
-                "Invalid data size: expected {} bytes, got {} bytes",
-                expected_size,
+                "Invalid data size: expected {expected_size} bytes, got {} bytes",
                 data.len()
             )));
         }
 
         eprintln!(
-            "GTK4 Display: Presenting frame {}x{} format {:?} with {} bytes",
-            width,
-            height,
-            format,
+            "GTK4 Display: Presenting frame {width}x{height} format {format:?} with {} bytes",
             data.len()
         );
 
@@ -265,7 +253,7 @@ impl Display for Gtk4Display {
             let mut guard = self
                 .surface_data
                 .lock()
-                .map_err(|e| MultimediaError::new(format!("Failed to lock surface data: {}", e)))?;
+                .map_err(|e| MultimediaError::new(format!("Failed to lock surface data: {e}")))?;
 
             *guard = Some(SurfaceData {
                 data: data.to_vec(),
@@ -302,7 +290,7 @@ impl Display for Gtk4Display {
             let mut guard = self
                 .cursor_data
                 .lock()
-                .map_err(|e| MultimediaError::new(format!("Failed to lock cursor data: {}", e)))?;
+                .map_err(|e| MultimediaError::new(format!("Failed to lock cursor data: {e}")))?;
             *guard = cursor.clone();
         }
 

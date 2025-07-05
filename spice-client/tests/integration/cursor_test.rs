@@ -2,13 +2,14 @@ use spice_client::channels::cursor::CursorChannel;
 use spice_client::protocol::*;
 use spice_client::test_utils::MockSpiceServer;
 use tokio::time::Duration;
+use bincode;
 
 #[tokio::test]
 async fn test_cursor_channel_connection() {
     let server = MockSpiceServer::new("127.0.0.1:0").await.unwrap();
     let addr = server.local_addr();
 
-    let channel = CursorChannel::new(&addr.ip().to_string(), addr.port(), 0)
+    let mut channel = CursorChannel::new(&addr.ip().to_string(), addr.port(), 0)
         .await
         .unwrap();
 
@@ -43,7 +44,7 @@ async fn test_cursor_set_message() {
     cursor_data.extend_from_slice(&pixel_data);
 
     server
-        .send_cursor_message(SPICE_MSG_CURSOR_SET, &cursor_data as &[u8])
+        .send_cursor_message(SPICE_MSG_CURSOR_SET, cursor_data)
         .await;
 
     // Process message
@@ -80,7 +81,7 @@ async fn test_cursor_movement() {
         move_data.extend_from_slice(&(*y as i16).to_le_bytes());
 
         server
-            .send_cursor_message(SPICE_MSG_CURSOR_MOVE, &move_data as &[u8])
+            .send_cursor_message(SPICE_MSG_CURSOR_MOVE, move_data)
             .await;
         tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -104,7 +105,7 @@ async fn test_cursor_visibility() {
     // Send hide message
     let empty_data: Vec<u8> = Vec::new();
     server
-        .send_cursor_message(SPICE_MSG_CURSOR_HIDE, &empty_data)
+        .send_cursor_message(SPICE_MSG_CURSOR_HIDE, empty_data)
         .await;
 
     // Wait for processing
@@ -134,14 +135,14 @@ async fn test_cursor_cache_invalidation() {
         cursor_data.extend(vec![0xFF; 16 * 16 * 4]); // pixel data
 
         server
-            .send_cursor_message(SPICE_MSG_CURSOR_SET, &cursor_data as &[u8])
+            .send_cursor_message(SPICE_MSG_CURSOR_SET, cursor_data)
             .await;
     }
 
     // Send invalidate all message
     let empty_data: Vec<u8> = Vec::new();
     server
-        .send_cursor_message(SPICE_MSG_CURSOR_INVAL_ALL, &empty_data)
+        .send_cursor_message(SPICE_MSG_CURSOR_INVAL_ALL, empty_data)
         .await;
 
     // Wait for processing

@@ -88,11 +88,7 @@ impl BinaryDiscovery {
 
     /// Get the directory where we store our local quickemu installation
     fn get_quickemu_dir() -> Option<PathBuf> {
-        if let Some(data_dir) = dirs::data_local_dir() {
-            Some(data_dir.join("quickemu-manager").join("quickemu"))
-        } else {
-            None
-        }
+        dirs::data_local_dir().map(|data_dir| data_dir.join("quickemu-manager").join("quickemu"))
     }
 
     /// Download and install quickemu from GitHub
@@ -150,7 +146,7 @@ impl BinaryDiscovery {
                     // Make executable
                     Self::make_executable(&dest_path)?;
 
-                    println!("Extracted {}", filename);
+                    println!("Extracted {filename}");
                 }
             }
         }
@@ -197,8 +193,7 @@ impl BinaryDiscovery {
     /// Get the discovered quickemu binary path
     pub fn quickemu_path(&self) -> Result<&Path> {
         self.quickemu_path
-            .as_ref()
-            .map(|p| p.as_path())
+            .as_deref()
             .ok_or_else(|| {
                 anyhow!("quickemu not found. Please install quickemu or ensure it's in your PATH.")
             })
@@ -206,7 +201,7 @@ impl BinaryDiscovery {
 
     /// Get the discovered quickget binary path (optional)
     pub fn quickget_path(&self) -> Option<&Path> {
-        self.quickget_path.as_ref().map(|p| p.as_path())
+        self.quickget_path.as_deref()
     }
 
     /// Check if quickemu is available
@@ -295,12 +290,10 @@ impl Default for BinaryDiscovery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
-    use tempfile::TempDir;
 
-    #[test]
-    fn test_binary_discovery_creation() {
-        let discovery = BinaryDiscovery::new();
+    #[tokio::test]
+    async fn test_binary_discovery_creation() {
+        let discovery = BinaryDiscovery::new().await;
         // Should not panic and should attempt discovery
         let _info = discovery.discovery_info();
     }

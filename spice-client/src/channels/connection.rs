@@ -169,7 +169,7 @@ impl ChannelConnection {
 
     async fn send_link_message(&mut self) -> Result<()> {
         // Prepare capabilities
-        let mut common_caps: Vec<u32> = vec![];
+        let common_caps: Vec<u32> = vec![];
         let mut channel_caps: Vec<u32> = vec![];
 
         // Common capabilities for all channels
@@ -222,7 +222,7 @@ impl ChannelConnection {
         self.transport
             .write_all(&header_bytes)
             .await
-            .map_err(|e| SpiceError::Io(e))?;
+            .map_err(SpiceError::Io)?;
 
         // Serialize and send link message
         let mut link_bytes = Vec::new();
@@ -231,7 +231,7 @@ impl ChannelConnection {
         self.transport
             .write_all(&link_bytes)
             .await
-            .map_err(|e| SpiceError::Io(e))?;
+            .map_err(SpiceError::Io)?;
 
         // Send capabilities
         for cap in &common_caps {
@@ -239,7 +239,7 @@ impl ChannelConnection {
             self.transport
                 .write_all(&cap_bytes)
                 .await
-                .map_err(|e| SpiceError::Io(e))?;
+                .map_err(SpiceError::Io)?;
         }
 
         for cap in &channel_caps {
@@ -247,7 +247,7 @@ impl ChannelConnection {
             self.transport
                 .write_all(&cap_bytes)
                 .await
-                .map_err(|e| SpiceError::Io(e))?;
+                .map_err(SpiceError::Io)?;
         }
 
         debug!(
@@ -261,7 +261,7 @@ impl ChannelConnection {
     }
 
     async fn wait_for_link_reply(&mut self) -> Result<SpiceLinkReplyData> {
-        let mut header_buf = vec![0u8; 16];
+        let mut header_buf = [0u8; 16];
 
         // Read the header
         let mut total_read = 0;
@@ -270,7 +270,7 @@ impl ChannelConnection {
                 .transport
                 .read(&mut header_buf[total_read..])
                 .await
-                .map_err(|e| SpiceError::Io(e))?;
+                .map_err(SpiceError::Io)?;
             if n == 0 {
                 return Err(SpiceError::Protocol(
                     "Connection closed while reading link reply header".to_string(),
@@ -297,7 +297,7 @@ impl ChannelConnection {
                 .transport
                 .read(&mut reply_data[total_read..])
                 .await
-                .map_err(|e| SpiceError::Io(e))?;
+                .map_err(SpiceError::Io)?;
             if n == 0 {
                 return Err(SpiceError::Protocol(
                     "Connection closed while reading link reply data".to_string(),
@@ -419,7 +419,7 @@ impl ChannelConnection {
             self.transport
                 .write_all(&auth_mech_bytes)
                 .await
-                .map_err(|e| SpiceError::Io(e))?;
+                .map_err(SpiceError::Io)?;
 
             debug!("Sent authentication mechanism: SPICE_COMMON_CAP_AUTH_SPICE");
         } else {
@@ -433,7 +433,7 @@ impl ChannelConnection {
         self.transport
             .write_all(&encrypted)
             .await
-            .map_err(|e| SpiceError::Io(e))?;
+            .map_err(SpiceError::Io)?;
 
         debug!("Sent encrypted password");
         Ok(())
@@ -441,7 +441,7 @@ impl ChannelConnection {
 
     async fn read_link_result(&mut self) -> Result<()> {
         // The server sends a 4-byte result after authentication
-        let mut result_buf = vec![0u8; 4];
+        let mut result_buf = [0u8; 4];
         let mut total_read = 0;
 
         while total_read < 4 {
@@ -492,7 +492,7 @@ impl ChannelConnection {
 
     pub async fn read_message_with_timeout(
         &mut self,
-        timeout: Duration,
+        _timeout: Duration,
     ) -> Result<(SpiceDataHeader, Vec<u8>)> {
         // For now, just call read_message
         // TODO: Implement actual timeout logic

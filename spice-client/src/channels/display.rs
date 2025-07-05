@@ -105,7 +105,7 @@ impl DisplayChannel {
         let mut cursor = std::io::Cursor::new(Vec::new());
         display_init
             .write(&mut cursor)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to write display init: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("Failed to write display init: {e}")))?;
         let init_data = cursor.into_inner();
 
         connection
@@ -157,7 +157,7 @@ impl DisplayChannel {
         let mut cursor = std::io::Cursor::new(Vec::new());
         display_init
             .write(&mut cursor)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to write display init: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("Failed to write display init: {e}")))?;
         let init_data = cursor.into_inner();
 
         connection
@@ -212,7 +212,7 @@ impl DisplayChannel {
         let mut cursor = std::io::Cursor::new(Vec::new());
         display_init
             .write(&mut cursor)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to write display init: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("Failed to write display init: {e}")))?;
         let init_data = cursor.into_inner();
 
         connection
@@ -352,7 +352,7 @@ impl DisplayChannel {
         // Parse the image descriptor
         let mut cursor = std::io::Cursor::new(image_data);
         let descriptor = SpiceImageDescriptor::read(&mut cursor).map_err(|e| {
-            SpiceError::Protocol(format!("Failed to parse image descriptor: {}", e))
+            SpiceError::Protocol(format!("Failed to parse image descriptor: {e}"))
         })?;
 
         debug!(
@@ -364,7 +364,7 @@ impl DisplayChannel {
             SPICE_IMAGE_TYPE_BITMAP => {
                 // Parse bitmap structure
                 let bitmap = SpiceBitmap::read(&mut cursor)
-                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse bitmap: {}", e)))?;
+                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse bitmap: {e}")))?;
 
                 // Get bitmap data
                 let bitmap_data_offset = bitmap.data as usize;
@@ -525,12 +525,12 @@ impl DisplayChannel {
         use std::io::Read;
 
         let mut decoder = Decoder::new(compressed_data)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to create LZ4 decoder: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("Failed to create LZ4 decoder: {e}")))?;
 
         let mut decompressed = Vec::new();
         decoder
             .read_to_end(&mut decompressed)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to decompress LZ4: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("Failed to decompress LZ4: {e}")))?;
 
         // Assume decompressed data is RGBA
         Ok(Some((decompressed, width, height)))
@@ -543,7 +543,7 @@ impl DisplayChannel {
         let mut decoder = Decoder::new(jpeg_data);
         let pixels = decoder
             .decode()
-            .map_err(|e| SpiceError::Protocol(format!("Failed to decode JPEG: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("Failed to decode JPEG: {e}")))?;
 
         let info = decoder.info().unwrap();
         let width = info.width as u32;
@@ -584,9 +584,9 @@ impl DisplayChannel {
     /// This is a simplified implementation - full LZ support would require implementing the SPICE LZ algorithm
     fn decode_lz(
         &self,
-        compressed_data: &[u8],
-        width: u32,
-        height: u32,
+        _compressed_data: &[u8],
+        _width: u32,
+        _height: u32,
     ) -> Result<Option<(Vec<u8>, u32, u32)>> {
         // TODO: Implement SPICE LZ decompression algorithm
         // For now, return None to fall back to test pattern
@@ -609,7 +609,7 @@ impl DisplayChannel {
 
         decoder
             .read_to_end(&mut decompressed)
-            .map_err(|e| SpiceError::Protocol(format!("Failed to decompress zlib: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("Failed to decompress zlib: {e}")))?;
 
         // Assume decompressed data is RGBA
         Ok(Some((decompressed, width, height)))
@@ -629,7 +629,7 @@ impl DisplayChannel {
                     self.handle_message(&header, &data).await?;
                 }
                 Err(e) => {
-                    eprintln!("DisplayChannel: Error reading message: {}", e);
+                    eprintln!("DisplayChannel: Error reading message: {e}");
                     return Err(e);
                 }
             }
@@ -1008,7 +1008,7 @@ impl DisplayChannel {
                 debug!("Handle stream create");
                 let mut cursor = std::io::Cursor::new(data);
                 let stream_create = SpiceStreamCreate::read(&mut cursor).map_err(|e| {
-                    SpiceError::Protocol(format!("Failed to parse StreamCreate: {}", e))
+                    SpiceError::Protocol(format!("Failed to parse StreamCreate: {e}"))
                 })?;
 
                 info!(
@@ -1037,7 +1037,7 @@ impl DisplayChannel {
                 debug!("Handle stream data");
                 let mut cursor = std::io::Cursor::new(data);
                 let stream_data = SpiceStreamData::read(&mut cursor).map_err(|e| {
-                    SpiceError::Protocol(format!("Failed to parse StreamData: {}", e))
+                    SpiceError::Protocol(format!("Failed to parse StreamData: {e}"))
                 })?;
 
                 debug!(
@@ -1055,7 +1055,7 @@ impl DisplayChannel {
                 debug!("Handle stream destroy");
                 let mut cursor = std::io::Cursor::new(data);
                 let stream_destroy = SpiceStreamDestroy::read(&mut cursor).map_err(|e| {
-                    SpiceError::Protocol(format!("Failed to parse StreamDestroy: {}", e))
+                    SpiceError::Protocol(format!("Failed to parse StreamDestroy: {e}"))
                 })?;
 
                 info!("Destroyed stream {}", stream_destroy.id);
@@ -1133,7 +1133,7 @@ impl Channel for DisplayChannel {
                 debug!("Received surface create");
                 let mut cursor = std::io::Cursor::new(data);
                 let surface_create = SpiceMsgSurfaceCreate::read(&mut cursor).map_err(|e| {
-                    SpiceError::Protocol(format!("Failed to parse SurfaceCreate: {}", e))
+                    SpiceError::Protocol(format!("Failed to parse SurfaceCreate: {e}"))
                 })?;
 
                 info!(
@@ -1163,7 +1163,7 @@ impl Channel for DisplayChannel {
                 debug!("Received surface destroy");
                 let mut cursor = std::io::Cursor::new(data);
                 let surface_destroy = SpiceMsgSurfaceDestroy::read(&mut cursor).map_err(|e| {
-                    SpiceError::Protocol(format!("Failed to parse SurfaceDestroy: {}", e))
+                    SpiceError::Protocol(format!("Failed to parse SurfaceDestroy: {e}"))
                 })?;
 
                 info!("Destroying surface {}", surface_destroy.surface_id);
@@ -1174,7 +1174,7 @@ impl Channel for DisplayChannel {
                 debug!("Received monitors config");
                 let mut cursor = std::io::Cursor::new(data);
                 let monitors_config = SpiceMonitorsConfig::read(&mut cursor).map_err(|e| {
-                    SpiceError::Protocol(format!("Failed to parse MonitorsConfig: {}", e))
+                    SpiceError::Protocol(format!("Failed to parse MonitorsConfig: {e}"))
                 })?;
 
                 info!(
@@ -1198,7 +1198,7 @@ impl Channel for DisplayChannel {
                 // Parse the generation number
                 if data.len() >= 4 {
                     let generation = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
-                    eprintln!("DisplayChannel: SET_ACK generation: {}", generation);
+                    eprintln!("DisplayChannel: SET_ACK generation: {generation}");
 
                     // Send ACK_SYNC response
                     let ack_data = generation.to_le_bytes();

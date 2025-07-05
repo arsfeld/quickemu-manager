@@ -10,12 +10,12 @@ pub fn VMScreenModal(vm: VM, on_close: EventHandler<()>) -> Element {
     let mut screenshot_data = use_signal(|| None::<String>);
     let mut error_message = use_signal(|| None::<String>);
     let mut is_loading = use_signal(|| true);
-    let mut display_mode = use_signal(|| DisplayMode::VNC);
+    let mut display_mode = use_signal(|| DisplayMode::Vnc);
     let vm_id = vm.id.clone();
 
     #[derive(Clone, PartialEq)]
     enum DisplayMode {
-        VNC,
+        Vnc,
         Screenshot,
     }
 
@@ -67,12 +67,12 @@ pub fn VMScreenModal(vm: VM, on_close: EventHandler<()>) -> Element {
                         // Display mode tabs
                         div { class: "flex mt-2 space-x-2",
                             button {
-                                class: if *display_mode.read() == DisplayMode::VNC {
+                                class: if *display_mode.read() == DisplayMode::Vnc {
                                     "px-3 py-1 text-sm bg-blue-500 text-white rounded"
                                 } else {
                                     "px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
                                 },
-                                onclick: move |_| display_mode.set(DisplayMode::VNC),
+                                onclick: move |_| display_mode.set(DisplayMode::Vnc),
                                 "VNC Display"
                             }
                             button {
@@ -99,7 +99,7 @@ pub fn VMScreenModal(vm: VM, on_close: EventHandler<()>) -> Element {
                     style: "height: 600px;",
 
                     match *display_mode.read() {
-                        DisplayMode::VNC => rsx! {
+                        DisplayMode::Vnc => rsx! {
                             VncViewer {
                                 host: "localhost".to_string(),
                                 port: 5900,
@@ -137,7 +137,7 @@ pub fn VMScreenModal(vm: VM, on_close: EventHandler<()>) -> Element {
                     div {
                         class: "flex items-center space-x-2 text-sm text-gray-600",
                         match *display_mode.read() {
-                            DisplayMode::VNC => rsx! {
+                            DisplayMode::Vnc => rsx! {
                                 div { class: "w-2 h-2 bg-purple-500 rounded-full" }
                                 span { "VNC Protocol - Real-time display" }
                             },

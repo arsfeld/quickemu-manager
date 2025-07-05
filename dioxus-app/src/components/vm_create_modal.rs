@@ -343,20 +343,20 @@ pub fn CreateVMModal(show: Signal<bool>, on_create: EventHandler<()>) -> Element
     let mut popular_os_list = use_signal(Vec::<(String, Vec<String>)>::new);
     let mut all_os_list = use_signal(Vec::<(String, Vec<String>)>::new);
     let mut filtered_os_list = use_signal(Vec::<(String, Vec<String>)>::new);
-    let mut search_query = use_signal(|| "".to_string());
-    let mut selected_os = use_signal(|| "".to_string());
-    let mut selected_version = use_signal(|| "".to_string());
-    let mut selected_edition = use_signal(|| "".to_string());
+    let search_query = use_signal(|| "".to_string());
+    let selected_os = use_signal(|| "".to_string());
+    let selected_version = use_signal(|| "".to_string());
+    let selected_edition = use_signal(|| "".to_string());
     let mut available_editions = use_signal(Vec::<String>::new);
-    let mut show_all_os = use_signal(|| false);
+    let show_all_os = use_signal(|| false);
     let mut is_loading_os = use_signal(|| true);
     let mut loading_editions = use_signal(|| false);
 
     // VM Configuration
-    let mut vm_name = use_signal(|| "".to_string());
-    let mut cpu_cores = use_signal(|| 2);
-    let mut ram_gb = use_signal(|| 4);
-    let mut disk_size_gb = use_signal(|| 20);
+    let vm_name = use_signal(|| "".to_string());
+    let cpu_cores = use_signal(|| 2);
+    let ram_gb = use_signal(|| 4);
+    let disk_size_gb = use_signal(|| 20);
     let mut is_creating = use_signal(|| false);
     let mut console_output = use_signal(|| Vec::<String>::new());
     let mut show_console = use_signal(|| false);

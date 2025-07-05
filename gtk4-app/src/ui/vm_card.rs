@@ -247,11 +247,11 @@ impl VMCard {
 
     pub async fn refresh_status(&self, app_state: &AppState) {
         let imp = self.imp();
-        if let Some(mut vm) = imp.vm.borrow_mut().as_mut() {
+        if let Some(vm) = imp.vm.borrow_mut().as_mut() {
             let old_status = vm.status.clone();
 
             // Update VM status from running processes
-            app_state.vm_manager.update_vm_status(&mut vm).await;
+            app_state.vm_manager.update_vm_status(vm).await;
 
             // Only print status changes
             if std::mem::discriminant(&old_status) != std::mem::discriminant(&vm.status) {

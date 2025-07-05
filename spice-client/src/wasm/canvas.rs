@@ -57,7 +57,7 @@ impl CanvasManager {
 
         canvas.set_width(width);
         canvas.set_height(height);
-        canvas.set_id(&format!("spice-display-{}", surface_id));
+        canvas.set_id(&format!("spice-display-{surface_id}"));
 
         // Add CSS class for styling
         canvas.set_class_name("spice-display-canvas");
@@ -89,7 +89,7 @@ impl CanvasManager {
     /// Updates a canvas with surface data
     pub fn update_canvas(&self, surface_id: u32, surface: &DisplaySurface) -> Result<()> {
         let display = self.canvases.get(&surface_id).ok_or_else(|| {
-            SpiceError::Protocol(format!("Canvas not found for surface {}", surface_id))
+            SpiceError::Protocol(format!("Canvas not found for surface {surface_id}"))
         })?;
 
         // Ensure canvas size matches surface
@@ -126,7 +126,7 @@ impl CanvasManager {
         height: u32,
     ) -> Result<()> {
         let display = self.canvases.get(&surface_id).ok_or_else(|| {
-            SpiceError::Protocol(format!("Canvas not found for surface {}", surface_id))
+            SpiceError::Protocol(format!("Canvas not found for surface {surface_id}"))
         })?;
 
         // Extract the region data

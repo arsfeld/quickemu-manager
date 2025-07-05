@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::interval;
+use bincode;
 
 #[derive(Debug, Clone)]
 struct FrameRateMonitor {
@@ -53,7 +54,7 @@ async fn test_independent_display_frame_rates() {
         .unwrap();
 
     // Create surfaces for both displays
-    let surface1 = SpiceSurfaceCreate {
+    let surface1 = SpiceMsgSurfaceCreate {
         surface_id: 0,
         width: 1920,
         height: 1080,
@@ -61,7 +62,7 @@ async fn test_independent_display_frame_rates() {
         flags: 0,
     };
 
-    let surface2 = SpiceSurfaceCreate {
+    let surface2 = SpiceMsgSurfaceCreate {
         surface_id: 1,
         width: 1280,
         height: 720,
@@ -70,10 +71,10 @@ async fn test_independent_display_frame_rates() {
     };
 
     server
-        .send_display_message_to_channel(0, SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface1)
+        .send_display_message_to_channel(0, SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface1).unwrap())
         .await;
     server
-        .send_display_message_to_channel(1, SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface2)
+        .send_display_message_to_channel(1, SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface2).unwrap())
         .await;
 
     // Wait for surfaces to be created
@@ -106,7 +107,7 @@ async fn test_independent_display_frame_rates() {
                 .send_display_message_to_channel(
                     0,
                     DisplayChannelMessage::StreamData as u16,
-                    &stream_data,
+                    bincode::serialize(&stream_data).unwrap(),
                 )
                 .await;
 
@@ -134,7 +135,7 @@ async fn test_independent_display_frame_rates() {
                 .send_display_message_to_channel(
                     1,
                     DisplayChannelMessage::StreamData as u16,
-                    &stream_data,
+                    bincode::serialize(&stream_data).unwrap(),
                 )
                 .await;
 
@@ -176,7 +177,7 @@ async fn test_display_switching_during_video() {
 
     // Create multiple surfaces
     for i in 0..3 {
-        let surface = SpiceSurfaceCreate {
+        let surface = SpiceMsgSurfaceCreate {
             surface_id: i,
             width: 1920,
             height: 1080,
@@ -184,7 +185,7 @@ async fn test_display_switching_during_video() {
             flags: 0,
         };
         server
-            .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface)
+            .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface).unwrap())
             .await;
     }
 
@@ -206,17 +207,17 @@ async fn test_display_switching_during_video() {
         },
         clip: SpiceClip {
             clip_type: 0,
-            data: None,
+            data: 0,
         },
     };
 
     let stream1 = stream0.clone(); // Simplified for test
 
     server
-        .send_display_message(DisplayChannelMessage::StreamCreate as u16, &stream0)
+        .send_display_message(DisplayChannelMessage::StreamCreate as u16, bincode::serialize(&stream0).unwrap())
         .await;
     server
-        .send_display_message(DisplayChannelMessage::StreamCreate as u16, &stream1)
+        .send_display_message(DisplayChannelMessage::StreamCreate as u16, bincode::serialize(&stream1).unwrap())
         .await;
 
     // Send video data to both streams
@@ -236,10 +237,10 @@ async fn test_display_switching_during_video() {
         };
 
         server
-            .send_display_message(DisplayChannelMessage::StreamData as u16, &data0)
+            .send_display_message(DisplayChannelMessage::StreamData as u16, bincode::serialize(&data0).unwrap())
             .await;
         server
-            .send_display_message(DisplayChannelMessage::StreamData as u16, &data1)
+            .send_display_message(DisplayChannelMessage::StreamData as u16, bincode::serialize(&data1).unwrap())
             .await;
 
         tokio::time::sleep(Duration::from_millis(33)).await;
@@ -272,7 +273,7 @@ async fn test_display_switching_during_video() {
     };
 
     server
-        .send_display_message(SPICE_MSG_DISPLAY_MONITORS_CONFIG, &monitors_config)
+        .send_display_message(SPICE_MSG_DISPLAY_MONITORS_CONFIG, bincode::serialize(&monitors_config).unwrap())
         .await;
 
     // Continue streaming after switch
@@ -292,10 +293,10 @@ async fn test_display_switching_during_video() {
         };
 
         server
-            .send_display_message(DisplayChannelMessage::StreamData as u16, &data0)
+            .send_display_message(DisplayChannelMessage::StreamData as u16, bincode::serialize(&data0).unwrap())
             .await;
         server
-            .send_display_message(DisplayChannelMessage::StreamData as u16, &data1)
+            .send_display_message(DisplayChannelMessage::StreamData as u16, bincode::serialize(&data1).unwrap())
             .await;
 
         tokio::time::sleep(Duration::from_millis(33)).await;
@@ -324,7 +325,7 @@ async fn test_multi_display_memory_management() {
 
     // Create 4 high-resolution surfaces
     for i in 0..4 {
-        let surface = SpiceSurfaceCreate {
+        let surface = SpiceMsgSurfaceCreate {
             surface_id: i,
             width: 3840, // 4K
             height: 2160,
@@ -332,7 +333,7 @@ async fn test_multi_display_memory_management() {
             flags: 0,
         };
         server
-            .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface)
+            .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface).unwrap())
             .await;
     }
 
@@ -357,12 +358,12 @@ async fn test_multi_display_memory_management() {
             },
             clip: SpiceClip {
                 clip_type: 0,
-                data: None,
+                data: 0,
             },
         };
 
         server
-            .send_display_message(DisplayChannelMessage::StreamCreate as u16, &stream)
+            .send_display_message(DisplayChannelMessage::StreamCreate as u16, bincode::serialize(&stream).unwrap())
             .await;
     }
 
@@ -377,7 +378,7 @@ async fn test_multi_display_memory_management() {
             };
 
             server
-                .send_display_message(DisplayChannelMessage::StreamData as u16, &data)
+                .send_display_message(DisplayChannelMessage::StreamData as u16, bincode::serialize(&data).unwrap())
                 .await;
         }
 
@@ -390,15 +391,15 @@ async fn test_multi_display_memory_management() {
     for i in 0..4 {
         let destroy = SpiceStreamDestroy { id: i };
         server
-            .send_display_message(DisplayChannelMessage::StreamDestroy as u16, &destroy)
+            .send_display_message(DisplayChannelMessage::StreamDestroy as u16, bincode::serialize(&destroy).unwrap())
             .await;
     }
 
     // Destroy all surfaces
     for i in 0..4 {
-        let destroy = SpiceSurfaceDestroy { surface_id: i };
+        let destroy = SpiceMsgSurfaceDestroy { surface_id: i };
         server
-            .send_display_message(SPICE_MSG_DISPLAY_SURFACE_DESTROY, &destroy)
+            .send_display_message(SPICE_MSG_DISPLAY_SURFACE_DESTROY, bincode::serialize(&destroy).unwrap())
             .await;
     }
 

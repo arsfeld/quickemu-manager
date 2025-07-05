@@ -308,7 +308,7 @@ fn build_ui(app: &Application, args: Args) {
                 gtk4::DialogFlags::DESTROY_WITH_PARENT,
                 gtk4::MessageType::Error,
                 gtk4::ButtonsType::Close,
-                &format!("Failed to initialize: {}", e),
+                &format!("Failed to initialize: {e}"),
             );
             dialog.connect_response(|dialog, _| dialog.close());
             dialog.present();
@@ -371,14 +371,14 @@ fn build_ui(app: &Application, args: Args) {
                         // Start event loop
                         if let Err(e) = client_for_thread.start_event_loop().await {
                             error!("Event loop error: {}", e);
-                            let _ = tx.send(Err(format!("Event loop error: {}", e)));
+                            let _ = tx.send(Err(format!("Event loop error: {e}")));
                         } else {
                             let _ = tx.send(Ok(()));
                         }
                     }
                     Err(e) => {
                         error!("Connection failed: {}", e);
-                        let _ = tx.send(Err(format!("Connection failed: {}", e)));
+                        let _ = tx.send(Err(format!("Connection failed: {e}")));
                     }
                 }
             });
@@ -446,7 +446,7 @@ fn build_ui(app: &Application, args: Args) {
                     }
                     Err(e) => {
                         error!("Failed to connect to SPICE server: {}", e);
-                        status_bar_clone.set_label(&format!("Connection failed: {}", e));
+                        status_bar_clone.set_label(&format!("Connection failed: {e}"));
                     }
                 }
             }

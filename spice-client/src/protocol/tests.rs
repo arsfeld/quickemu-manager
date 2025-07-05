@@ -1,8 +1,6 @@
-#[cfg(test)]
-mod tests {
-    use crate::protocol::*;
-    use binrw::io::Cursor;
-    use binrw::{BinRead, BinWrite};
+use super::*;
+use binrw::io::Cursor;
+use binrw::{BinRead, BinWrite};
 
     #[test]
     fn test_spice_magic_constants() {
@@ -408,4 +406,3 @@ mod tests {
         assert_eq!(DisplayChannelMessage::DrawCopy as u16, 304);
         assert_eq!(DisplayChannelMessage::DrawAlphaBlend as u16, 317);
     }
-}

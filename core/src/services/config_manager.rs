@@ -68,7 +68,7 @@ impl ConfigManager {
     {
         {
             let mut config = self.config.write().await;
-            update_fn(&mut *config);
+            update_fn(&mut config);
         }
         self.save().await
     }
@@ -91,8 +91,6 @@ impl ConfigManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
-    use tempfile::TempDir;
 
     #[tokio::test]
     async fn test_config_manager_creation() {

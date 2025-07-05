@@ -87,7 +87,7 @@ pub async fn init_services() -> Result<()> {
 
         // Add VM directories from config
         let config_manager = CONFIG_MANAGER.read().await;
-        if let Some(ref config_mgr) = config_manager.as_ref() {
+        if let Some(config_mgr) = config_manager.as_ref() {
             let vm_directories = config_mgr.get_all_vm_directories().await;
             discovery.add_watch_directories(vm_directories);
         }

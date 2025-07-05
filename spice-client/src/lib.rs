@@ -132,7 +132,7 @@
 //!
 //! This project is licensed under the MIT License - see the LICENSE file for details.
 
-#![warn(missing_docs)]
+// #![warn(missing_docs)]  // TODO: Add documentation for all public items
 #![warn(rustdoc::missing_crate_level_docs)]
 
 pub mod channels;
@@ -181,7 +181,7 @@ impl ClientBuilder {
         // Parse URI to extract host and port
         let uri = uri.trim_start_matches("spice://");
         let parts: Vec<&str> = uri.split(':').collect();
-        let host = parts.get(0).unwrap_or(&"localhost").to_string();
+        let host = parts.first().unwrap_or(&"localhost").to_string();
         let port = parts
             .get(1)
             .and_then(|p| p.parse::<u16>().ok())

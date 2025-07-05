@@ -83,7 +83,7 @@ impl ConfigParser {
         }
 
         if let Some(disk_size) = &config.disk_size {
-            lines.push(format!("disk_size=\"{}\"", disk_size));
+            lines.push(format!("disk_size=\"{disk_size}\""));
         }
 
         // Display settings
@@ -98,7 +98,7 @@ impl ConfigParser {
         }
 
         if let Some(ssh_port) = config.ssh_port {
-            lines.push(format!("ssh_port={}", ssh_port));
+            lines.push(format!("ssh_port={ssh_port}"));
         }
 
         let content = lines.join("\n") + "\n";

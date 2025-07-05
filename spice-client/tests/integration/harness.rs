@@ -7,6 +7,12 @@ pub struct TestHarness {
     container_name: String,
 }
 
+impl Default for TestHarness {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestHarness {
     pub fn new() -> Self {
         Self {

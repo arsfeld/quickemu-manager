@@ -22,7 +22,7 @@ pub struct SpiceViewerProps {
 pub fn SpiceViewer(props: SpiceViewerProps) -> Element {
     let mut connection_state = use_signal(|| SpiceConnectionState::Disconnected);
     let mut error_message = use_signal(|| None::<String>);
-    let mut display_size = use_signal(|| (800u32, 600u32));
+    let display_size = use_signal(|| (800u32, 600u32));
     let canvas_id = use_memo(move || format!("spice-canvas-{}", props.port));
 
     #[cfg(target_arch = "wasm32")]

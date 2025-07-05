@@ -1,11 +1,9 @@
-#[cfg(test)]
-mod tests {
-    use crate::multimedia::{
-        audio::{AudioFormat, AudioOutput},
-        display::{CursorData, Display, DisplayMode, PixelFormat},
-        input::{InputHandler, KeyCode, KeyboardEvent, MouseButton, MouseEvent},
-        AudioSpec, MultimediaError, Result,
-    };
+use super::{
+    audio::{AudioFormat, AudioOutput},
+    display::{Display, DisplayMode, PixelFormat},
+    input::{InputHandler, KeyCode, LegacyKeyboardEvent, MouseEvent},
+    AudioSpec, MultimediaError, Result,
+};
 
     #[test]
     fn test_pixel_format_bytes_per_pixel() {
@@ -102,6 +100,14 @@ mod tests {
 
         fn is_fullscreen(&self) -> bool {
             self.fullscreen
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            self
         }
     }
 
@@ -248,7 +254,7 @@ mod tests {
     }
 
     impl InputHandler for MockInput {
-        fn handle_keyboard(&mut self, event: KeyboardEvent) -> Result<()> {
+        fn handle_keyboard(&mut self, event: LegacyKeyboardEvent) -> Result<()> {
             if event.pressed {
                 self.last_key = Some(event.key);
             }
@@ -256,8 +262,8 @@ mod tests {
         }
 
         fn handle_mouse(&mut self, event: MouseEvent) -> Result<()> {
-            if let MouseEvent::Move { x, y, .. } = event {
-                self.last_mouse_pos = (x, y);
+            if let MouseEvent::Motion { x, y, .. } = event {
+                self.last_mouse_pos = (x as i32, y as i32);
             }
             Ok(())
         }
@@ -286,7 +292,7 @@ mod tests {
         let mut input = MockInput::new();
 
         // Test keyboard handling
-        let key_event = KeyboardEvent {
+        let key_event = LegacyKeyboardEvent {
             key: KeyCode::A,
             pressed: true,
             shift: false,
@@ -298,11 +304,11 @@ mod tests {
         assert_eq!(input.last_key, Some(KeyCode::A));
 
         // Test mouse handling
-        let mouse_event = MouseEvent::Move {
+        let mouse_event = MouseEvent::Motion {
             x: 100,
             y: 200,
-            dx: 10,
-            dy: 20,
+            relative_x: 10,
+            relative_y: 20,
         };
         input.handle_mouse(mouse_event).unwrap();
         assert_eq!(input.last_mouse_pos, (100, 200));
@@ -316,4 +322,3 @@ mod tests {
         input.warp_mouse(300, 400).unwrap();
         assert_eq!(input.last_mouse_pos, (300, 400));
     }
-}

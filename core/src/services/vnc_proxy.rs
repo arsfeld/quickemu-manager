@@ -62,20 +62,17 @@ impl VncProxy {
         vnc_port: u16,
     ) -> Result<VncConnection> {
         log::info!(
-            "Creating VNC connection for VM '{}' at {}:{}",
-            vm_id,
-            vnc_host,
-            vnc_port
+            "Creating VNC connection for VM '{vm_id}' at {vnc_host}:{vnc_port}"
         );
 
         let connection_id = self.generate_connection_id();
         let auth_token = self.generate_auth_token();
 
-        log::debug!("Generated connection ID: {}", connection_id);
+        log::debug!("Generated connection ID: {connection_id}");
 
         // Find an available port for WebSocket
         let websocket_port = self.find_available_port().await?;
-        log::info!("Found available WebSocket port: {}", websocket_port);
+        log::info!("Found available WebSocket port: {websocket_port}");
 
         let connection = VncConnection {
             id: connection_id.clone(),
@@ -100,18 +97,15 @@ impl VncProxy {
         // Start the WebSocket proxy
         let connections_clone = self.connections.clone();
         let connection_id_clone = connection_id.clone();
-        let vnc_addr = format!("{}:{}", vnc_host, vnc_port);
+        let vnc_addr = format!("{vnc_host}:{vnc_port}");
 
         log::info!(
-            "Starting WebSocket proxy for connection {} on port {}",
-            connection_id,
-            websocket_port
+            "Starting WebSocket proxy for connection {connection_id} on port {websocket_port}"
         );
 
         let proxy_task = tokio::spawn(async move {
             log::debug!(
-                "WebSocket proxy task started for connection {}",
-                connection_id_clone
+                "WebSocket proxy task started for connection {connection_id_clone}"
             );
             if let Err(e) = Self::run_websocket_proxy(
                 websocket_port,
@@ -122,7 +116,7 @@ impl VncProxy {
             )
             .await
             {
-                log::error!("WebSocket proxy error: {}", e);
+                log::error!("WebSocket proxy error: {e}");
             }
             log::debug!("WebSocket proxy task ended");
         });
@@ -144,15 +138,13 @@ impl VncProxy {
         connections: Arc<RwLock<HashMap<String, VncConnection>>>,
         connection_id: String,
     ) -> Result<()> {
-        let ws_addr = format!("0.0.0.0:{}", websocket_port);
-        log::debug!("Attempting to bind WebSocket listener on {}", ws_addr);
+        let ws_addr = format!("0.0.0.0:{websocket_port}");
+        log::debug!("Attempting to bind WebSocket listener on {ws_addr}");
 
         let ws_listener = TcpListener::bind(&ws_addr).await?;
 
         log::info!(
-            "VNC WebSocket proxy listening on {} for connection {}",
-            ws_addr,
-            connection_id
+            "VNC WebSocket proxy listening on {ws_addr} for connection {connection_id}"
         );
 
         // Update connection status
@@ -160,20 +152,17 @@ impl VncProxy {
             let mut conns = connections.write().await;
             if let Some(conn) = conns.get_mut(&connection_id) {
                 conn.status = "ready".to_string();
-                log::debug!("Updated connection {} status to 'ready'", connection_id);
+                log::debug!("Updated connection {connection_id} status to 'ready'");
             }
         }
 
         log::debug!(
-            "Waiting for WebSocket connections on port {}",
-            websocket_port
+            "Waiting for WebSocket connections on port {websocket_port}"
         );
 
         while let Ok((stream, addr)) = ws_listener.accept().await {
             log::info!(
-                "Accepted WebSocket connection from {} for connection {}",
-                addr,
-                connection_id
+                "Accepted WebSocket connection from {addr} for connection {connection_id}"
             );
 
             let vnc_addr = vnc_addr.clone();
@@ -182,7 +171,7 @@ impl VncProxy {
             let connection_id = connection_id.clone();
 
             tokio::spawn(async move {
-                log::debug!("Spawned handler for WebSocket connection from {}", addr);
+                log::debug!("Spawned handler for WebSocket connection from {addr}");
                 if let Err(e) = Self::handle_websocket_connection(
                     stream,
                     vnc_addr,
@@ -192,14 +181,13 @@ impl VncProxy {
                 )
                 .await
                 {
-                    log::error!("WebSocket connection error: {}", e);
+                    log::error!("WebSocket connection error: {e}");
                 }
             });
         }
 
         log::warn!(
-            "WebSocket proxy listener ended for connection {}",
-            connection_id
+            "WebSocket proxy listener ended for connection {connection_id}"
         );
         Ok(())
     }
@@ -212,14 +200,12 @@ impl VncProxy {
         connection_id: String,
     ) -> Result<()> {
         log::debug!(
-            "Handling WebSocket connection for connection {}",
-            connection_id
+            "Handling WebSocket connection for connection {connection_id}"
         );
 
         let ws_stream = accept_async(stream).await?;
         log::debug!(
-            "WebSocket handshake completed for connection {}",
-            connection_id
+            "WebSocket handshake completed for connection {connection_id}"
         );
 
         let (mut ws_sender, mut ws_receiver) = ws_stream.split();
@@ -230,19 +216,17 @@ impl VncProxy {
             log::debug!("Received auth message, validating token");
             if auth_msg != expected_token {
                 log::warn!(
-                    "Invalid authentication token received for connection {}",
-                    connection_id
+                    "Invalid authentication token received for connection {connection_id}"
                 );
                 ws_sender
                     .send(Message::Text("Authentication failed".to_string().into()))
                     .await?;
                 return Err(anyhow!("Invalid authentication token"));
             }
-            log::info!("Authentication successful for connection {}", connection_id);
+            log::info!("Authentication successful for connection {connection_id}");
         } else {
             log::error!(
-                "No authentication message received for connection {}",
-                connection_id
+                "No authentication message received for connection {connection_id}"
             );
             return Err(anyhow!("No authentication message received"));
         }
@@ -258,16 +242,16 @@ impl VncProxy {
             let mut conns = connections.write().await;
             if let Some(conn) = conns.get_mut(&connection_id) {
                 conn.status = "connected".to_string();
-                log::info!("Updated connection {} status to 'connected'", connection_id);
+                log::info!("Updated connection {connection_id} status to 'connected'");
             }
         }
 
         // Connect to VNC/SPICE server
         // Note: This proxy currently only works with VNC protocol
-        log::info!("Attempting to connect to console server at {}", vnc_addr);
+        log::info!("Attempting to connect to console server at {vnc_addr}");
         match TcpStream::connect(&vnc_addr).await {
             Ok(mut vnc_stream) => {
-                log::info!("Successfully connected to console server at {}", vnc_addr);
+                log::info!("Successfully connected to console server at {vnc_addr}");
                 // TODO: Detect protocol and handle accordingly
                 // Currently only VNC protocol is supported
                 let (vnc_reader, vnc_writer) = vnc_stream.split();
@@ -277,31 +261,30 @@ impl VncProxy {
                 let vnc_to_ws = Self::proxy_vnc_to_ws(vnc_reader, ws_sender);
 
                 log::debug!(
-                    "Starting bidirectional proxy for connection {}",
-                    connection_id
+                    "Starting bidirectional proxy for connection {connection_id}"
                 );
 
                 // Run both directions concurrently
                 tokio::select! {
                     result = ws_to_vnc => {
                         if let Err(e) = result {
-                            log::error!("WS to VNC proxy error for connection {}: {}", connection_id, e);
+                            log::error!("WS to VNC proxy error for connection {connection_id}: {e}");
                         } else {
-                            log::debug!("WS to VNC proxy ended normally for connection {}", connection_id);
+                            log::debug!("WS to VNC proxy ended normally for connection {connection_id}");
                         }
                     }
                     result = vnc_to_ws => {
                         if let Err(e) = result {
-                            log::error!("VNC to WS proxy error for connection {}: {}", connection_id, e);
+                            log::error!("VNC to WS proxy error for connection {connection_id}: {e}");
                         } else {
-                            log::debug!("VNC to WS proxy ended normally for connection {}", connection_id);
+                            log::debug!("VNC to WS proxy ended normally for connection {connection_id}");
                         }
                     }
                 }
             }
             Err(e) => {
-                log::error!("Failed to connect to VNC server at {}: {}", vnc_addr, e);
-                return Err(anyhow!("Failed to connect to VNC server: {}", e));
+                log::error!("Failed to connect to VNC server at {vnc_addr}: {e}");
+                return Err(anyhow!("Failed to connect to VNC server: {e}"));
             }
         }
 
@@ -311,15 +294,13 @@ impl VncProxy {
             if let Some(conn) = conns.get_mut(&connection_id) {
                 conn.status = "disconnected".to_string();
                 log::info!(
-                    "Updated connection {} status to 'disconnected'",
-                    connection_id
+                    "Updated connection {connection_id} status to 'disconnected'"
                 );
             }
         }
 
         log::debug!(
-            "WebSocket connection handler completed for connection {}",
-            connection_id
+            "WebSocket connection handler completed for connection {connection_id}"
         );
         Ok(())
     }
@@ -388,7 +369,7 @@ impl VncProxy {
     async fn find_available_port(&self) -> Result<u16> {
         // Try to find an available port in the range 6080-6099
         for port in 6080..6100 {
-            if let Ok(listener) = TcpListener::bind(format!("0.0.0.0:{}", port)).await {
+            if let Ok(listener) = TcpListener::bind(format!("0.0.0.0:{port}")).await {
                 drop(listener);
                 return Ok(port);
             }

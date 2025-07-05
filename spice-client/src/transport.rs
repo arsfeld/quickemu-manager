@@ -1,11 +1,11 @@
 use crate::error::Result;
 use async_trait::async_trait;
-use bytes::{Bytes, BytesMut};
 use std::io;
 
 /// Trait for abstracting network transport (TCP vs WebSocket)
 #[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
+#[allow(async_fn_in_trait)]
 pub trait Transport: Send + Sync {
     /// Read data from the transport
     async fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;
@@ -29,6 +29,7 @@ pub trait Transport: Send + Sync {
 /// Trait for abstracting network transport (TCP vs WebSocket) - WASM version
 #[cfg(target_arch = "wasm32")]
 #[async_trait(?Send)]
+#[allow(async_fn_in_trait)]
 pub trait Transport {
     /// Read data from the transport
     async fn read(&mut self, buf: &mut [u8]) -> io::Result<usize>;

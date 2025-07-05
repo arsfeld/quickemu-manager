@@ -11,7 +11,9 @@ use instant::Duration;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{error, info, warn};
+use tracing::{error, info};
+#[cfg(target_arch = "wasm32")]
+use tracing::warn;
 
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::task::JoinHandle;
@@ -157,7 +159,7 @@ impl SpiceClientShared {
                 .nth(1)
                 .unwrap_or("localhost:8080");
             let parts: Vec<&str> = without_protocol.split(':').collect();
-            let host = parts.get(0).unwrap_or(&"localhost").to_string();
+            let host = parts.first().unwrap_or(&"localhost").to_string();
             let port = parts
                 .get(1)
                 .and_then(|p| p.parse::<u16>().ok())
@@ -488,9 +490,10 @@ impl SpiceClientShared {
             }
 
             inner.main_channel = Some(Arc::new(Mutex::new(main_channel)));
-            return Ok(());
+            Ok(())
         }
 
+        #[cfg(target_arch = "wasm32")]
         Err(SpiceError::Protocol(
             "No connection method available".to_string(),
         ))
@@ -595,7 +598,7 @@ impl SpiceClientShared {
                         error!("Main channel error: {}", e);
                         // Set error state to stop other operations
                         *error_state_clone.lock().unwrap() =
-                            Some(format!("Main channel error: {}", e));
+                            Some(format!("Main channel error: {e}"));
                     }
                 });
                 inner.channel_tasks.push(());
@@ -614,7 +617,7 @@ impl SpiceClientShared {
                         error!("Display channel {} error: {}", channel_id, e);
                         // Set error state to stop other operations
                         *error_state_clone.lock().unwrap() =
-                            Some(format!("Display channel {} error: {}", channel_id, e));
+                            Some(format!("Display channel {channel_id} error: {e}"));
                     }
                 });
                 inner.channel_tasks.push(());
@@ -634,7 +637,7 @@ impl SpiceClientShared {
                         error!("Inputs channel {} error: {}", channel_id, e);
                         // Set error state to stop other operations
                         *error_state_clone.lock().unwrap() =
-                            Some(format!("Inputs channel {} error: {}", channel_id, e));
+                            Some(format!("Inputs channel {channel_id} error: {e}"));
                     }
                 });
                 inner.channel_tasks.push(());
@@ -654,7 +657,7 @@ impl SpiceClientShared {
                         error!("Cursor channel {} error: {}", channel_id, e);
                         // Set error state to stop other operations
                         *error_state_clone.lock().unwrap() =
-                            Some(format!("Cursor channel {} error: {}", channel_id, e));
+                            Some(format!("Cursor channel {channel_id} error: {e}"));
                     }
                 });
                 inner.channel_tasks.push(());
@@ -782,7 +785,7 @@ impl SpiceClientShared {
                     }
                     Err(e) => {
                         error!("Task join error: {}", e);
-                        return Err(SpiceError::Protocol(format!("Task join error: {}", e)));
+                        return Err(SpiceError::Protocol(format!("Task join error: {e}")));
                     }
                 }
             }
@@ -886,7 +889,7 @@ impl SpiceClientShared {
     }
 
     /// Sends a mouse wheel event to the specified inputs channel.
-    pub async fn send_mouse_wheel(&self, channel_id: u8, delta_x: i32, delta_y: i32) -> Result<()> {
+    pub async fn send_mouse_wheel(&self, channel_id: u8, _delta_x: i32, delta_y: i32) -> Result<()> {
         let inner = self.inner.lock().await;
 
         if let Some(inputs_channel_arc) = inner.inputs_channels.get(&channel_id) {

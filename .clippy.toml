@@ -1,0 +1,13 @@
+# Clippy configuration for quickemu-manager workspace
+
+# Set cognitive complexity threshold higher
+cognitive-complexity-threshold = 30
+
+# Allow longer functions
+too-many-lines-threshold = 200
+
+# Allow more arguments
+too-many-arguments-threshold = 10
+
+# Don't warn about MSRV
+msrv = "1.70.0"

@@ -40,7 +40,7 @@ impl MultimediaError {
 impl From<SpiceError> for MultimediaError {
     fn from(err: SpiceError) -> Self {
         Self {
-            message: format!("SPICE error: {}", err),
+            message: format!("SPICE error: {err}"),
         }
     }
 }

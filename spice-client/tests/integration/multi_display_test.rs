@@ -2,6 +2,7 @@ use spice_client::channels::display::DisplayChannel;
 use spice_client::protocol::*;
 use spice_client::test_utils::MockSpiceServer;
 use tokio::time::Duration;
+use bincode;
 
 #[tokio::test]
 async fn test_multi_display_support() {
@@ -15,7 +16,7 @@ async fn test_multi_display_support() {
         .unwrap();
 
     // Test creating multiple surfaces
-    let surface1 = SpiceSurfaceCreate {
+    let surface1 = SpiceMsgSurfaceCreate {
         surface_id: 0,
         width: 1920,
         height: 1080,
@@ -23,7 +24,7 @@ async fn test_multi_display_support() {
         flags: 0,
     };
 
-    let surface2 = SpiceSurfaceCreate {
+    let surface2 = SpiceMsgSurfaceCreate {
         surface_id: 1,
         width: 1920,
         height: 1080,
@@ -33,10 +34,10 @@ async fn test_multi_display_support() {
 
     // Send surface create messages
     server
-        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface1)
+        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface1).unwrap())
         .await;
     server
-        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface2)
+        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface2).unwrap())
         .await;
 
     // Wait for processing
@@ -92,7 +93,7 @@ async fn test_monitors_config() {
 
     // Send monitors config message
     server
-        .send_display_message(SPICE_MSG_DISPLAY_MONITORS_CONFIG, &monitors_config)
+        .send_display_message(SPICE_MSG_DISPLAY_MONITORS_CONFIG, bincode::serialize(&monitors_config).unwrap())
         .await;
 
     // Wait for processing
@@ -123,7 +124,7 @@ async fn test_multi_display_video_streams() {
         .unwrap();
 
     // Create two surfaces first
-    let surface1 = SpiceSurfaceCreate {
+    let surface1 = SpiceMsgSurfaceCreate {
         surface_id: 0,
         width: 1920,
         height: 1080,
@@ -131,7 +132,7 @@ async fn test_multi_display_video_streams() {
         flags: 0,
     };
 
-    let surface2 = SpiceSurfaceCreate {
+    let surface2 = SpiceMsgSurfaceCreate {
         surface_id: 1,
         width: 1920,
         height: 1080,
@@ -140,10 +141,10 @@ async fn test_multi_display_video_streams() {
     };
 
     server
-        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface1)
+        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface1).unwrap())
         .await;
     server
-        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface2)
+        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface2).unwrap())
         .await;
 
     // Create video streams on different surfaces
@@ -164,7 +165,7 @@ async fn test_multi_display_video_streams() {
         },
         clip: SpiceClip {
             clip_type: 0, // NONE
-            data: None,
+            data: 0,
         },
     };
 
@@ -185,15 +186,15 @@ async fn test_multi_display_video_streams() {
         },
         clip: SpiceClip {
             clip_type: 0,
-            data: None,
+            data: 0,
         },
     };
 
     server
-        .send_display_message(DisplayChannelMessage::StreamCreate as u16, &stream1)
+        .send_display_message(DisplayChannelMessage::StreamCreate as u16, bincode::serialize(&stream1).unwrap())
         .await;
     server
-        .send_display_message(DisplayChannelMessage::StreamCreate as u16, &stream2)
+        .send_display_message(DisplayChannelMessage::StreamCreate as u16, bincode::serialize(&stream2).unwrap())
         .await;
 
     // Wait for processing
@@ -214,7 +215,7 @@ async fn test_surface_cleanup_on_reset() {
 
     // Create multiple surfaces
     for i in 0..3 {
-        let surface = SpiceSurfaceCreate {
+        let surface = SpiceMsgSurfaceCreate {
             surface_id: i,
             width: 1920,
             height: 1080,
@@ -222,7 +223,7 @@ async fn test_surface_cleanup_on_reset() {
             flags: 0,
         };
         server
-            .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, &surface)
+            .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface).unwrap())
             .await;
     }
 
@@ -236,7 +237,7 @@ async fn test_surface_cleanup_on_reset() {
 
     // Send reset message
     server
-        .send_display_message(DisplayChannelMessage::Reset as u16, &[])
+        .send_display_message(DisplayChannelMessage::Reset as u16, vec![])
         .await;
 
     // Wait for processing

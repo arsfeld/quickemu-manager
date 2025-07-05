@@ -1,6 +1,7 @@
+#![allow(dead_code)]
+
 use super::*;
 use crate::error::SpiceError;
-use instant::Instant;
 
 #[derive(Debug, Clone)]
 pub struct VideoFrame {
@@ -28,10 +29,7 @@ impl VideoFrame {
             0x2 => VideoFormat::Bgr32,
             0x3 => VideoFormat::Bgra32,
             _ => {
-                return Err(SpiceError::Protocol(format!(
-                    "Unsupported format: {}",
-                    surface.format
-                )))
+                return Err(SpiceError::Protocol(format!("Unsupported format: {}", surface.format)))
             }
         };
 
@@ -59,7 +57,7 @@ impl VideoFrame {
         let png_data = self.encode_as_png(&image_data)?;
         use base64::Engine;
         let base64 = base64::engine::general_purpose::STANDARD.encode(&png_data);
-        Ok(format!("data:image/png;base64,{}", base64))
+        Ok(format!("data:image/png;base64,{base64}"))
     }
 
     fn convert_rgb_to_rgba(&self) -> Vec<u8> {
@@ -92,13 +90,13 @@ impl VideoFrame {
 
         let mut writer = encoder
             .write_header()
-            .map_err(|e| SpiceError::Protocol(format!("PNG header error: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("PNG header error: {e}")))?;
         writer
             .write_image_data(rgba_data)
-            .map_err(|e| SpiceError::Protocol(format!("PNG write error: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("PNG write error: {e}")))?;
         writer
             .finish()
-            .map_err(|e| SpiceError::Protocol(format!("PNG finish error: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("PNG finish error: {e}")))?;
 
         Ok(png_data)
     }
@@ -486,7 +484,7 @@ impl VideoStreamer {
 
         use base64::Engine;
         let base64 = base64::engine::general_purpose::STANDARD.encode(&png_data);
-        Ok(format!("data:image/png;base64,{}", base64))
+        Ok(format!("data:image/png;base64,{base64}"))
     }
 
     pub fn adjust_quality_for_load(&mut self, target_encode_time_us: u64) {
@@ -580,13 +578,13 @@ impl VideoStreamer {
 
         let mut writer = encoder
             .write_header()
-            .map_err(|e| SpiceError::Protocol(format!("PNG header error: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("PNG header error: {e}")))?;
         writer
             .write_image_data(rgba_data)
-            .map_err(|e| SpiceError::Protocol(format!("PNG write error: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("PNG write error: {e}")))?;
         writer
             .finish()
-            .map_err(|e| SpiceError::Protocol(format!("PNG finish error: {}", e)))?;
+            .map_err(|e| SpiceError::Protocol(format!("PNG finish error: {e}")))?;
 
         Ok(png_data)
     }

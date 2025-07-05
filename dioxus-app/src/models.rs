@@ -269,7 +269,7 @@ impl From<AppConfigDto> for quickemu_core::models::config::AppConfig {
 impl AppConfigDto {
     pub fn get_primary_vm_directory(&self) -> String {
         self.vm_directories.first().cloned().unwrap_or_else(|| {
-            if let Some(home) = std::env::var("HOME").ok() {
+            if let Ok(home) = std::env::var("HOME") {
                 format!("{}/VMs", home)
             } else {
                 "/tmp/VMs".to_string()

@@ -132,7 +132,7 @@ pub async fn read_message(
         let n = transport
             .read(&mut header_buf[total_read..])
             .await
-            .map_err(|e| SpiceError::Io(e))?;
+            .map_err(SpiceError::Io)?;
         if n == 0 {
             return Err(SpiceError::Protocol(
                 "Connection closed while reading header".to_string(),
@@ -154,7 +154,7 @@ pub async fn read_message(
         let n = transport
             .read(&mut data[total_read..])
             .await
-            .map_err(|e| SpiceError::Io(e))?;
+            .map_err(SpiceError::Io)?;
         if n == 0 {
             return Err(SpiceError::Protocol(
                 "Connection closed while reading message data".to_string(),
@@ -183,16 +183,16 @@ pub async fn write_message(
     transport
         .write_all(&header_bytes)
         .await
-        .map_err(|e| SpiceError::Io(e))?;
+        .map_err(SpiceError::Io)?;
 
     // Write data
     transport
         .write_all(data)
         .await
-        .map_err(|e| SpiceError::Io(e))?;
+        .map_err(SpiceError::Io)?;
 
     // Flush to ensure data is sent
-    transport.flush().await.map_err(|e| SpiceError::Io(e))?;
+    transport.flush().await.map_err(SpiceError::Io)?;
 
     Ok(())
 }

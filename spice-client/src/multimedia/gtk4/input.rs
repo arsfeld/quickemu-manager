@@ -2,7 +2,7 @@ use crate::multimedia::{
     input::{InputHandler, KeyCode, LegacyKeyboardEvent, MouseButton, MouseEvent},
     Result,
 };
-use gtk4::{gdk, glib};
+use gtk4::gdk;
 use std::sync::{Arc, Mutex};
 
 pub struct Gtk4Input {

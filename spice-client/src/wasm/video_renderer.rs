@@ -109,8 +109,7 @@ impl WasmVideoRenderer {
             4 => "video/h265", // H.265
             _ => {
                 return Err(SpiceError::Protocol(format!(
-                    "Unsupported codec type: {}",
-                    codec_type
+                    "Unsupported codec type: {codec_type}"
                 )))
             }
         };
@@ -118,8 +117,7 @@ impl WasmVideoRenderer {
         // Check if codec is supported
         if !MediaSource::is_type_supported(mime_type) {
             return Err(SpiceError::Protocol(format!(
-                "Codec not supported: {}",
-                mime_type
+                "Codec not supported: {mime_type}"
             )));
         }
 
@@ -139,7 +137,7 @@ impl WasmVideoRenderer {
         let stream = self
             .video_elements
             .get(&stream_id)
-            .ok_or_else(|| SpiceError::Protocol(format!("Video stream {} not found", stream_id)))?;
+            .ok_or_else(|| SpiceError::Protocol(format!("Video stream {stream_id} not found")))?;
 
         if let Some(source_buffer) = &stream.source_buffer {
             if source_buffer.updating() {
@@ -197,10 +195,10 @@ impl WasmVideoRenderer {
                 .set_property("position", "absolute")
                 .map_err(|_| SpiceError::Protocol("Failed to set video position".to_string()))?;
             style
-                .set_property("left", &format!("{}px", x))
+                .set_property("left", &format!("{x}px"))
                 .map_err(|_| SpiceError::Protocol("Failed to set video left".to_string()))?;
             style
-                .set_property("top", &format!("{}px", y))
+                .set_property("top", &format!("{y}px"))
                 .map_err(|_| SpiceError::Protocol("Failed to set video top".to_string()))?;
         }
         Ok(())

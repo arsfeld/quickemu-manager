@@ -66,7 +66,7 @@ impl SpiceClient {
                 .nth(1)
                 .unwrap_or("localhost:8080");
             let parts: Vec<&str> = without_protocol.split(':').collect();
-            let host = parts.get(0).unwrap_or(&"localhost").to_string();
+            let host = parts.first().unwrap_or(&"localhost").to_string();
             let port = parts
                 .get(1)
                 .and_then(|p| p.parse::<u16>().ok())
@@ -161,9 +161,10 @@ impl SpiceClient {
             }
 
             self.main_channel = Some(main_channel);
-            return Ok(());
+            Ok(())
         }
 
+        #[cfg(target_arch = "wasm32")]
         Err(SpiceError::Protocol(
             "No connection method available".to_string(),
         ))
@@ -256,8 +257,8 @@ impl SpiceClient {
                         return Err(e);
                     }
                     Err(e) => {
-                        error!("Task join error: {}", e);
-                        return Err(SpiceError::Protocol(format!("Task join error: {}", e)));
+                        error!("Task join error: {e}");
+                        return Err(SpiceError::Protocol(format!("Task join error: {e}")));
                     }
                 }
             }

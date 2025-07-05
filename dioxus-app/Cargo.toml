@@ -5,6 +5,9 @@ authors = ["Alexandre Rosenfeld <alex@rosenfeld.one>"]
 edition = "2021"
 license = "GPL-3.0"
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "quickemu-manager"
 path = "src/main.rs"
