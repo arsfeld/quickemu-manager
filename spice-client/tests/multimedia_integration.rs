@@ -4,11 +4,12 @@ use spice_client::multimedia::{
     self,
     audio::{AudioFormat, AudioOutput},
     display::{Display, DisplayMode, PixelFormat},
-    input::{InputHandler, KeyCode, KeyboardEvent, MouseButton, MouseEvent},
+    input::{InputHandler, KeyCode, LegacyKeyboardEvent, MouseButton, MouseEvent},
     AudioSpec, MultimediaBackend,
 };
 
 #[test]
+#[ignore] // Ignore by default as it requires display
 fn test_gtk4_backend_creation() {
     // This test requires GTK4 to be installed
     let backend = multimedia::create_default_backend();
@@ -44,6 +45,7 @@ fn test_gtk4_audio_creation() {
 }
 
 #[test]
+#[ignore] // Ignore by default as it requires display
 fn test_gtk4_input_creation() {
     let backend = multimedia::create_default_backend().unwrap();
     let input = backend.create_input();
@@ -117,7 +119,7 @@ fn test_audio_sample_generation() {
 #[test]
 fn test_keyboard_event_creation() {
     let events = vec![
-        KeyboardEvent {
+        LegacyKeyboardEvent {
             key: KeyCode::A,
             pressed: true,
             shift: false,
@@ -125,7 +127,7 @@ fn test_keyboard_event_creation() {
             alt: false,
             super_key: false,
         },
-        KeyboardEvent {
+        LegacyKeyboardEvent {
             key: KeyCode::Escape,
             pressed: true,
             shift: false,
@@ -133,7 +135,7 @@ fn test_keyboard_event_creation() {
             alt: false,
             super_key: false,
         },
-        KeyboardEvent {
+        LegacyKeyboardEvent {
             key: KeyCode::F11,
             pressed: true,
             shift: false,
@@ -156,11 +158,11 @@ fn test_keyboard_event_creation() {
 #[test]
 fn test_mouse_event_creation() {
     let events = vec![
-        MouseEvent::Move {
+        MouseEvent::Motion {
             x: 100,
             y: 200,
-            dx: 10,
-            dy: -5,
+            relative_x: 10,
+            relative_y: -5,
         },
         MouseEvent::Button {
             button: MouseButton::Left,
@@ -176,7 +178,7 @@ fn test_mouse_event_creation() {
 
     for event in events {
         match event {
-            MouseEvent::Move { x, y, .. } => {
+            MouseEvent::Motion { x, y, .. } => {
                 assert!(x >= 0);
                 assert!(y >= 0);
             }

@@ -56,7 +56,12 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libglib2.0-dev libgtk-3-dev pkg-config
+        sudo apt-get install -y libglib2.0-dev libgtk-4-dev pkg-config \
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+          libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base \
+          gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+          gstreamer1.0-plugins-ugly gstreamer1.0-libav \
+          libgstrtspserver-1.0-dev libges-1.0-dev
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -80,7 +85,12 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libglib2.0-dev libgtk-3-dev pkg-config
+        sudo apt-get install -y libglib2.0-dev libgtk-4-dev pkg-config \
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+          libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base \
+          gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+          gstreamer1.0-plugins-ugly gstreamer1.0-libav \
+          libgstrtspserver-1.0-dev libges-1.0-dev
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -121,7 +131,12 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libglib2.0-dev libgtk-3-dev pkg-config
+        sudo apt-get install -y libglib2.0-dev libgtk-4-dev pkg-config \
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+          libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base \
+          gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+          gstreamer1.0-plugins-ugly gstreamer1.0-libav \
+          libgstrtspserver-1.0-dev libges-1.0-dev
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -193,7 +208,12 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libglib2.0-dev libgtk-3-dev pkg-config
+        sudo apt-get install -y libglib2.0-dev libgtk-4-dev pkg-config \
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+          libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base \
+          gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+          gstreamer1.0-plugins-ugly gstreamer1.0-libav \
+          libgstrtspserver-1.0-dev libges-1.0-dev
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -273,7 +293,12 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libglib2.0-dev libgtk-3-dev pkg-config
+        sudo apt-get install -y libglib2.0-dev libgtk-4-dev pkg-config \
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+          libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base \
+          gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+          gstreamer1.0-plugins-ugly gstreamer1.0-libav \
+          libgstrtspserver-1.0-dev libges-1.0-dev
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -301,7 +326,12 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libglib2.0-dev libgtk-3-dev pkg-config
+        sudo apt-get install -y libglib2.0-dev libgtk-4-dev pkg-config \
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+          libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base \
+          gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+          gstreamer1.0-plugins-ugly gstreamer1.0-libav \
+          libgstrtspserver-1.0-dev libges-1.0-dev
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
