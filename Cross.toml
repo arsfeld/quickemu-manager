@@ -1,9 +1,5 @@
 # Cross compilation configuration for cross-platform builds
 # https://github.com/cross-rs/cross
 
-
-[target.x86_64-apple-darwin]
-image = "ghcr.io/cross-rs/x86_64-apple-darwin:latest"
-
 [target.aarch64-apple-darwin]
 image = "ghcr.io/cross-rs/aarch64-apple-darwin:latest"

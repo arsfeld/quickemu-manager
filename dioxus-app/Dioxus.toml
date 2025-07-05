@@ -16,9 +16,6 @@ cargo_args = ["--release"]
 name = "x86_64-unknown-linux-gnu"
 
 [[build.target]]
-name = "x86_64-apple-darwin"
-
-[[build.target]]
 name = "aarch64-apple-darwin"
 
 

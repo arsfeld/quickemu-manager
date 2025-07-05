@@ -12,7 +12,6 @@ NC='\033[0m'
 
 # Platforms
 LINUX_TARGET="x86_64-unknown-linux-gnu"
-MACOS_INTEL_TARGET="x86_64-apple-darwin"
 MACOS_ARM_TARGET="aarch64-apple-darwin"
 
 # Build spice-client
@@ -25,7 +24,6 @@ cargo build --release --target $LINUX_TARGET --features backend-gtk4
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "  Building for macOS..."
-    cargo build --release --target $MACOS_INTEL_TARGET
     cargo build --release --target $MACOS_ARM_TARGET
 fi
 
@@ -46,7 +44,6 @@ cd ..
     
     if [[ "$OSTYPE" == "darwin"* ]]; then
         echo "  Building for macOS..."
-        cargo build --release --target $MACOS_INTEL_TARGET
         cargo build --release --target $MACOS_ARM_TARGET
     fi
     
@@ -66,7 +63,6 @@ dx build --release --platform desktop --target $LINUX_TARGET
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "  Building desktop app for macOS..."
-    dx build --release --platform desktop --target $MACOS_INTEL_TARGET
     dx build --release --platform desktop --target $MACOS_ARM_TARGET
 fi
 
