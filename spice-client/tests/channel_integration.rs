@@ -1,6 +1,6 @@
-use crate::channels::ChannelConnection;
-use crate::error::SpiceError;
-use crate::protocol::*;
+use spice_client::channels::ChannelConnection;
+use spice_client::error::SpiceError;
+use spice_client::protocol::*;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 

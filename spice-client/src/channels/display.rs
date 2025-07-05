@@ -5,9 +5,7 @@ use binrw::BinRead;
 use std::collections::HashMap;
 use tracing::{debug, info, warn};
 
-#[cfg(test)]
-#[path = "display_tests.rs"]
-mod display_tests;
+// Integration tests moved to tests/display_integration.rs
 
 #[path = "video_tests.rs"]
 mod video_tests;

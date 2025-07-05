@@ -7,8 +7,7 @@ pub mod main;
 #[cfg(target_arch = "wasm32")]
 pub mod display_wasm;
 
-#[cfg(test)]
-mod tests;
+// Integration tests moved to tests/channel_integration.rs
 
 use crate::error::{Result, SpiceError};
 use crate::protocol::*;
