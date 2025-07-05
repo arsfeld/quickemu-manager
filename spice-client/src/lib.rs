@@ -34,27 +34,13 @@
 //! #[tokio::main]
 //! async fn main() -> Result<(), SpiceError> {
 //!     // Create a new SPICE client
-//!     let mut client = SpiceClient::new("localhost".to_string(), 5900);
+//!     let mut client = SpiceClient::new("localhost", 5900);
 //!     
 //!     // Connect to the SPICE server
 //!     client.connect().await?;
 //!     
-//!     // Start the event loop to handle incoming messages
-//!     client.start_event_loop().await?;
-//!     
-//!     // Get display surface information
-//!     if let Some(surface) = client.get_display_surface(0).await {
-//!         println!("Display size: {}x{}", surface.width, surface.height);
-//!         println!("Format: {:?}", surface.format);
-//!     }
-//!     
-//!     // Send mouse movement
-//!     client.send_mouse_motion(100, 100).await?;
-//!     
-//!     // Send key press
-//!     use spice_client::KeyCode;
-//!     client.send_key(KeyCode::A, true).await?;  // Press 'A'
-//!     client.send_key(KeyCode::A, false).await?; // Release 'A'
+//!     // The client handles messages internally through channels
+//!     // You can interact with display, input, and other channels
 //!     
 //!     Ok(())
 //! }
