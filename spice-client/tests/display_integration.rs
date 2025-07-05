@@ -51,9 +51,10 @@ async fn test_display_mode_message() {
         socket.write_all(&mode_data).await.unwrap();
     });
 
-    let mut channel = DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
-        .await
-        .unwrap();
+    let mut channel =
+        DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
+            .await
+            .unwrap();
 
     // Process the mode message
     channel.process_next_message().await.unwrap();
@@ -108,9 +109,10 @@ async fn test_display_mark_message() {
         socket.write_all(&header_bytes).await.unwrap();
     });
 
-    let mut channel = DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
-        .await
-        .unwrap();
+    let mut channel =
+        DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
+            .await
+            .unwrap();
 
     // Process the mark message
     channel.process_next_message().await.unwrap();
@@ -166,9 +168,10 @@ async fn test_display_surface_create_message() {
         socket.write_all(&surface_data).await.unwrap();
     });
 
-    let mut channel = DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
-        .await
-        .unwrap();
+    let mut channel =
+        DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
+            .await
+            .unwrap();
 
     // Process the surface create message
     channel.process_next_message().await.unwrap();
@@ -247,9 +250,10 @@ async fn test_display_draw_copy_message() {
         socket.write_all(&draw_data).await.unwrap();
     });
 
-    let mut channel = DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
-        .await
-        .unwrap();
+    let mut channel =
+        DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
+            .await
+            .unwrap();
 
     // Process the mode message first
     // Process the first message
@@ -311,9 +315,10 @@ async fn test_display_stream_create_destroy() {
         socket.write_all(&[0x01, 0x00, 0x00, 0x00]).await.unwrap(); // stream_id = 1
     });
 
-    let mut channel = DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
-        .await
-        .unwrap();
+    let mut channel =
+        DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
+            .await
+            .unwrap();
 
     // Process stream create message
     channel.process_next_message().await.unwrap();
