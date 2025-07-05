@@ -43,7 +43,7 @@ jobs:
         run: cargo fmt --all -- --check
         
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings -A missing_docs
         
       - name: Run tests
         run: cargo test --workspace

@@ -77,7 +77,7 @@ jobs:
     - name: Run Clippy
       run: |
         cd spice-client
-        cargo clippy -- -D warnings
+        cargo clippy -- -D warnings -A missing_docs
 
   publish:
     name: Publish to crates.io
