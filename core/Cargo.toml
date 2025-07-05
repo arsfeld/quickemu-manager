@@ -41,7 +41,8 @@ dirs = "6.0"
 # Logging
 log = "0.4"
 
-# Process management
+# Process management (Unix only)
+[target.'cfg(unix)'.dependencies]
 nix = { version = "0.30", features = ["process"] }
 
 # WebSocket support for VNC proxy
