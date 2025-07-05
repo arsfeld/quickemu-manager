@@ -34,7 +34,7 @@
 //! #[tokio::main]
 //! async fn main() -> Result<(), SpiceError> {
 //!     // Create a new SPICE client
-//!     let mut client = SpiceClient::new("localhost", 5900);
+//!     let mut client = SpiceClient::new("localhost".to_string(), 5900);
 //!     
 //!     // Connect to the SPICE server
 //!     client.connect().await?;
