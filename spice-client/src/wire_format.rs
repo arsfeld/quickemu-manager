@@ -186,10 +186,7 @@ pub async fn write_message(
         .map_err(SpiceError::Io)?;
 
     // Write data
-    transport
-        .write_all(data)
-        .await
-        .map_err(SpiceError::Io)?;
+    transport.write_all(data).await.map_err(SpiceError::Io)?;
 
     // Flush to ensure data is sent
     transport.flush().await.map_err(SpiceError::Io)?;

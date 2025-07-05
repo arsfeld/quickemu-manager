@@ -406,9 +406,8 @@ impl Channel for MainChannel {
             }
             x if x == MainChannelMessage::MouseMode as u16 => {
                 let mut cursor = std::io::Cursor::new(data);
-                let mouse_mode = SpiceMsgMainMouseMode::read(&mut cursor).map_err(|e| {
-                    SpiceError::Protocol(format!("Failed to parse MouseMode: {e}"))
-                })?;
+                let mouse_mode = SpiceMsgMainMouseMode::read(&mut cursor)
+                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse MouseMode: {e}")))?;
                 info!("Mouse mode changed to: {}", mouse_mode.mode);
                 // TODO: Store mouse mode and notify input handling
             }
@@ -438,9 +437,8 @@ impl Channel for MainChannel {
             }
             x if x == MainChannelMessage::AgentData as u16 => {
                 let mut cursor = std::io::Cursor::new(data);
-                let agent_data = SpiceMsgMainAgentData::read(&mut cursor).map_err(|e| {
-                    SpiceError::Protocol(format!("Failed to parse AgentData: {e}"))
-                })?;
+                let agent_data = SpiceMsgMainAgentData::read(&mut cursor)
+                    .map_err(|e| SpiceError::Protocol(format!("Failed to parse AgentData: {e}")))?;
                 debug!(
                     "Received agent data: protocol {}, type {}, size {}",
                     agent_data.protocol, agent_data.type_, agent_data.size

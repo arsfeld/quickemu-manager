@@ -192,11 +192,9 @@ impl BinaryDiscovery {
 
     /// Get the discovered quickemu binary path
     pub fn quickemu_path(&self) -> Result<&Path> {
-        self.quickemu_path
-            .as_deref()
-            .ok_or_else(|| {
-                anyhow!("quickemu not found. Please install quickemu or ensure it's in your PATH.")
-            })
+        self.quickemu_path.as_deref().ok_or_else(|| {
+            anyhow!("quickemu not found. Please install quickemu or ensure it's in your PATH.")
+        })
     }
 
     /// Get the discovered quickget binary path (optional)

@@ -180,10 +180,7 @@ impl SpiceClient {
                 }
 
                 // TODO: Implement mouse move event sending through the input channel
-                console::log_2(
-                    &format!("Mouse move: x={x}, y={y}").into(),
-                    &JsValue::NULL,
-                );
+                console::log_2(&format!("Mouse move: x={x}, y={y}").into(), &JsValue::NULL);
             }
         });
 

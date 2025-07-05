@@ -351,9 +351,8 @@ impl DisplayChannel {
 
         // Parse the image descriptor
         let mut cursor = std::io::Cursor::new(image_data);
-        let descriptor = SpiceImageDescriptor::read(&mut cursor).map_err(|e| {
-            SpiceError::Protocol(format!("Failed to parse image descriptor: {e}"))
-        })?;
+        let descriptor = SpiceImageDescriptor::read(&mut cursor)
+            .map_err(|e| SpiceError::Protocol(format!("Failed to parse image descriptor: {e}")))?;
 
         debug!(
             "Image descriptor: type={}, size={}x{}, id={}",

@@ -1,3 +1,4 @@
+use bincode;
 use spice_client::channels::display::DisplayChannel;
 use spice_client::protocol::*;
 use spice_client::test_utils::MockSpiceServer;
@@ -5,7 +6,6 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::interval;
-use bincode;
 
 #[derive(Debug, Clone)]
 struct FrameRateMonitor {
@@ -71,10 +71,18 @@ async fn test_independent_display_frame_rates() {
     };
 
     server
-        .send_display_message_to_channel(0, SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface1).unwrap())
+        .send_display_message_to_channel(
+            0,
+            SPICE_MSG_DISPLAY_SURFACE_CREATE,
+            bincode::serialize(&surface1).unwrap(),
+        )
         .await;
     server
-        .send_display_message_to_channel(1, SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface2).unwrap())
+        .send_display_message_to_channel(
+            1,
+            SPICE_MSG_DISPLAY_SURFACE_CREATE,
+            bincode::serialize(&surface2).unwrap(),
+        )
         .await;
 
     // Wait for surfaces to be created
@@ -185,7 +193,10 @@ async fn test_display_switching_during_video() {
             flags: 0,
         };
         server
-            .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface).unwrap())
+            .send_display_message(
+                SPICE_MSG_DISPLAY_SURFACE_CREATE,
+                bincode::serialize(&surface).unwrap(),
+            )
             .await;
     }
 
@@ -214,10 +225,16 @@ async fn test_display_switching_during_video() {
     let stream1 = stream0.clone(); // Simplified for test
 
     server
-        .send_display_message(DisplayChannelMessage::StreamCreate as u16, bincode::serialize(&stream0).unwrap())
+        .send_display_message(
+            DisplayChannelMessage::StreamCreate as u16,
+            bincode::serialize(&stream0).unwrap(),
+        )
         .await;
     server
-        .send_display_message(DisplayChannelMessage::StreamCreate as u16, bincode::serialize(&stream1).unwrap())
+        .send_display_message(
+            DisplayChannelMessage::StreamCreate as u16,
+            bincode::serialize(&stream1).unwrap(),
+        )
         .await;
 
     // Send video data to both streams
@@ -237,10 +254,16 @@ async fn test_display_switching_during_video() {
         };
 
         server
-            .send_display_message(DisplayChannelMessage::StreamData as u16, bincode::serialize(&data0).unwrap())
+            .send_display_message(
+                DisplayChannelMessage::StreamData as u16,
+                bincode::serialize(&data0).unwrap(),
+            )
             .await;
         server
-            .send_display_message(DisplayChannelMessage::StreamData as u16, bincode::serialize(&data1).unwrap())
+            .send_display_message(
+                DisplayChannelMessage::StreamData as u16,
+                bincode::serialize(&data1).unwrap(),
+            )
             .await;
 
         tokio::time::sleep(Duration::from_millis(33)).await;
@@ -273,7 +296,10 @@ async fn test_display_switching_during_video() {
     };
 
     server
-        .send_display_message(SPICE_MSG_DISPLAY_MONITORS_CONFIG, bincode::serialize(&monitors_config).unwrap())
+        .send_display_message(
+            SPICE_MSG_DISPLAY_MONITORS_CONFIG,
+            bincode::serialize(&monitors_config).unwrap(),
+        )
         .await;
 
     // Continue streaming after switch
@@ -293,10 +319,16 @@ async fn test_display_switching_during_video() {
         };
 
         server
-            .send_display_message(DisplayChannelMessage::StreamData as u16, bincode::serialize(&data0).unwrap())
+            .send_display_message(
+                DisplayChannelMessage::StreamData as u16,
+                bincode::serialize(&data0).unwrap(),
+            )
             .await;
         server
-            .send_display_message(DisplayChannelMessage::StreamData as u16, bincode::serialize(&data1).unwrap())
+            .send_display_message(
+                DisplayChannelMessage::StreamData as u16,
+                bincode::serialize(&data1).unwrap(),
+            )
             .await;
 
         tokio::time::sleep(Duration::from_millis(33)).await;
@@ -333,7 +365,10 @@ async fn test_multi_display_memory_management() {
             flags: 0,
         };
         server
-            .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface).unwrap())
+            .send_display_message(
+                SPICE_MSG_DISPLAY_SURFACE_CREATE,
+                bincode::serialize(&surface).unwrap(),
+            )
             .await;
     }
 
@@ -363,7 +398,10 @@ async fn test_multi_display_memory_management() {
         };
 
         server
-            .send_display_message(DisplayChannelMessage::StreamCreate as u16, bincode::serialize(&stream).unwrap())
+            .send_display_message(
+                DisplayChannelMessage::StreamCreate as u16,
+                bincode::serialize(&stream).unwrap(),
+            )
             .await;
     }
 
@@ -378,7 +416,10 @@ async fn test_multi_display_memory_management() {
             };
 
             server
-                .send_display_message(DisplayChannelMessage::StreamData as u16, bincode::serialize(&data).unwrap())
+                .send_display_message(
+                    DisplayChannelMessage::StreamData as u16,
+                    bincode::serialize(&data).unwrap(),
+                )
                 .await;
         }
 
@@ -391,7 +432,10 @@ async fn test_multi_display_memory_management() {
     for i in 0..4 {
         let destroy = SpiceStreamDestroy { id: i };
         server
-            .send_display_message(DisplayChannelMessage::StreamDestroy as u16, bincode::serialize(&destroy).unwrap())
+            .send_display_message(
+                DisplayChannelMessage::StreamDestroy as u16,
+                bincode::serialize(&destroy).unwrap(),
+            )
             .await;
     }
 
@@ -399,7 +443,10 @@ async fn test_multi_display_memory_management() {
     for i in 0..4 {
         let destroy = SpiceMsgSurfaceDestroy { surface_id: i };
         server
-            .send_display_message(SPICE_MSG_DISPLAY_SURFACE_DESTROY, bincode::serialize(&destroy).unwrap())
+            .send_display_message(
+                SPICE_MSG_DISPLAY_SURFACE_DESTROY,
+                bincode::serialize(&destroy).unwrap(),
+            )
             .await;
     }
 

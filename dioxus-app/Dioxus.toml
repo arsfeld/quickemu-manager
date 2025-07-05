@@ -32,10 +32,17 @@ bundle_version = "1.0.0"
 [bundle.macos]
 short_description = "Modern VM management application"
 icon = ["assets/icon.icns"]
+files = {}
+hardened_runtime = true
 
 [bundle.windows]
 icon = ["assets/icon.ico"]
+files = {}
+tsp = false
+webview_install_mode = "Skip"
+allow_downgrades = false
 
 [bundle.linux]
 icon = ["assets/icon.png"]
 categories = ["Utility", "System"]
+files = {}

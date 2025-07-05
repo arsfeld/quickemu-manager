@@ -1,8 +1,8 @@
+use bincode;
 use spice_client::channels::display::DisplayChannel;
 use spice_client::protocol::*;
 use spice_client::test_utils::MockSpiceServer;
 use tokio::time::Duration;
-use bincode;
 
 #[tokio::test]
 async fn test_multi_display_support() {
@@ -34,10 +34,16 @@ async fn test_multi_display_support() {
 
     // Send surface create messages
     server
-        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface1).unwrap())
+        .send_display_message(
+            SPICE_MSG_DISPLAY_SURFACE_CREATE,
+            bincode::serialize(&surface1).unwrap(),
+        )
         .await;
     server
-        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface2).unwrap())
+        .send_display_message(
+            SPICE_MSG_DISPLAY_SURFACE_CREATE,
+            bincode::serialize(&surface2).unwrap(),
+        )
         .await;
 
     // Wait for processing
@@ -93,7 +99,10 @@ async fn test_monitors_config() {
 
     // Send monitors config message
     server
-        .send_display_message(SPICE_MSG_DISPLAY_MONITORS_CONFIG, bincode::serialize(&monitors_config).unwrap())
+        .send_display_message(
+            SPICE_MSG_DISPLAY_MONITORS_CONFIG,
+            bincode::serialize(&monitors_config).unwrap(),
+        )
         .await;
 
     // Wait for processing
@@ -141,10 +150,16 @@ async fn test_multi_display_video_streams() {
     };
 
     server
-        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface1).unwrap())
+        .send_display_message(
+            SPICE_MSG_DISPLAY_SURFACE_CREATE,
+            bincode::serialize(&surface1).unwrap(),
+        )
         .await;
     server
-        .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface2).unwrap())
+        .send_display_message(
+            SPICE_MSG_DISPLAY_SURFACE_CREATE,
+            bincode::serialize(&surface2).unwrap(),
+        )
         .await;
 
     // Create video streams on different surfaces
@@ -191,10 +206,16 @@ async fn test_multi_display_video_streams() {
     };
 
     server
-        .send_display_message(DisplayChannelMessage::StreamCreate as u16, bincode::serialize(&stream1).unwrap())
+        .send_display_message(
+            DisplayChannelMessage::StreamCreate as u16,
+            bincode::serialize(&stream1).unwrap(),
+        )
         .await;
     server
-        .send_display_message(DisplayChannelMessage::StreamCreate as u16, bincode::serialize(&stream2).unwrap())
+        .send_display_message(
+            DisplayChannelMessage::StreamCreate as u16,
+            bincode::serialize(&stream2).unwrap(),
+        )
         .await;
 
     // Wait for processing
@@ -223,7 +244,10 @@ async fn test_surface_cleanup_on_reset() {
             flags: 0,
         };
         server
-            .send_display_message(SPICE_MSG_DISPLAY_SURFACE_CREATE, bincode::serialize(&surface).unwrap())
+            .send_display_message(
+                SPICE_MSG_DISPLAY_SURFACE_CREATE,
+                bincode::serialize(&surface).unwrap(),
+            )
             .await;
     }
 

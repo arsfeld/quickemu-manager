@@ -29,7 +29,10 @@ impl VideoFrame {
             0x2 => VideoFormat::Bgr32,
             0x3 => VideoFormat::Bgra32,
             _ => {
-                return Err(SpiceError::Protocol(format!("Unsupported format: {}", surface.format)))
+                return Err(SpiceError::Protocol(format!(
+                    "Unsupported format: {}",
+                    surface.format
+                )))
             }
         };
 

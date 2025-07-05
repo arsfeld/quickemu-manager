@@ -1,8 +1,8 @@
+use bincode;
 use spice_client::channels::cursor::CursorChannel;
 use spice_client::protocol::*;
 use spice_client::test_utils::MockSpiceServer;
 use tokio::time::Duration;
-use bincode;
 
 #[tokio::test]
 async fn test_cursor_channel_connection() {

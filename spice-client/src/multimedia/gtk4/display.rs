@@ -45,9 +45,7 @@ impl Gtk4Display {
 
         let surface_data = self.surface_data.clone();
         drawing_area.set_draw_func(move |_area, cr, width, height| {
-            eprintln!(
-                "GTK4 Display: Draw function called, area size: {width}x{height}"
-            );
+            eprintln!("GTK4 Display: Draw function called, area size: {width}x{height}");
 
             // Clear background
             cr.set_source_rgb(0.0, 0.0, 0.0);
@@ -57,7 +55,8 @@ impl Gtk4Display {
             if let Ok(guard) = surface_data.lock() {
                 if let Some(ref data) = *guard {
                     eprintln!(
-                        "GTK4 Display: Drawing surface data {}x{}", data.width, data.height
+                        "GTK4 Display: Drawing surface data {}x{}",
+                        data.width, data.height
                     );
                     if let Err(e) = draw_surface(cr, data, width, height) {
                         eprintln!("Failed to draw surface: {e}");

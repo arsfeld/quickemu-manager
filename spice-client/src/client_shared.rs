@@ -11,9 +11,9 @@ use instant::Duration;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{error, info};
 #[cfg(target_arch = "wasm32")]
 use tracing::warn;
+use tracing::{error, info};
 
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::task::JoinHandle;
@@ -889,7 +889,12 @@ impl SpiceClientShared {
     }
 
     /// Sends a mouse wheel event to the specified inputs channel.
-    pub async fn send_mouse_wheel(&self, channel_id: u8, _delta_x: i32, delta_y: i32) -> Result<()> {
+    pub async fn send_mouse_wheel(
+        &self,
+        channel_id: u8,
+        _delta_x: i32,
+        delta_y: i32,
+    ) -> Result<()> {
         let inner = self.inner.lock().await;
 
         if let Some(inputs_channel_arc) = inner.inputs_channels.get(&channel_id) {
