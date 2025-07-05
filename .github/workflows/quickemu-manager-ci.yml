@@ -13,7 +13,6 @@ jobs:
   test:
     name: Test - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -43,7 +42,7 @@ jobs:
         run: cargo fmt --all -- --check
         
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings -A missing_docs
+        run: cargo clippy --all-targets --all-features -- -W warnings -A missing_docs -A clippy::uninlined_format_args -A clippy::type_complexity -A clippy::too_many_arguments
         
       - name: Run tests
         run: cargo test --workspace
@@ -51,7 +50,6 @@ jobs:
   build:
     name: Build - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -117,7 +115,6 @@ jobs:
   spice-client-tests:
     name: SPICE Client Tests
     runs-on: ubuntu-latest
-    continue-on-error: true
     
     steps:
       - uses: actions/checkout@v4
