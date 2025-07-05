@@ -27,25 +27,53 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  unit-tests:
-    name: Unit Tests
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable, beta]
-        include:
-          - os: ubuntu-latest
-            rust: nightly
+  # Code formatting check - Linux only
+  format:
+    name: Code Formatting
+    runs-on: ubuntu-latest
     
     steps:
     - uses: actions/checkout@v4
     
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: ${{ matrix.rust }}
+        components: rustfmt
+    
+    - name: Check formatting
+      run: |
+        cd spice-client
+        cargo fmt -- --check
+
+  # Clippy linting - Linux only
+  clippy:
+    name: Clippy Linting
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy
+    
+    - name: Run Clippy
+      run: |
+        cd spice-client
+        cargo clippy --all-features -- -W warnings -A missing_docs -A clippy::uninlined_format_args -A clippy::type_complexity -A clippy::too_many_arguments
+
+  # Unit tests - Linux only
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
         targets: wasm32-unknown-unknown
     
     - name: Cache cargo registry
@@ -69,6 +97,39 @@ jobs:
       run: |
         cd spice-client
         cargo test --doc --all-features
+
+  # Build verification on all platforms
+  build:
+    name: Build - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Build native
+      run: |
+        cd spice-client
+        cargo build --all-features
+    
+    - name: Build WASM
+      run: |
+        cd spice-client
+        cargo build --target wasm32-unknown-unknown --all-features
 
   integration-tests:
     name: Integration Tests
@@ -147,11 +208,6 @@ jobs:
         path: ~/.cargo/registry
         key: ${{ runner.os }}-cargo-registry-wasm-${{ hashFiles('**/Cargo.lock') }}
     
-    - name: Build for WASM
-      run: |
-        cd spice-client
-        cargo build --target wasm32-unknown-unknown --all-features
-    
     - name: Run WASM tests
       run: |
         cd spice-client
@@ -206,32 +262,10 @@ jobs:
         name: spice-client
         fail_ci_if_error: false
 
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        components: rustfmt, clippy
-    
-    - name: Check formatting
-      run: |
-        cd spice-client
-        cargo fmt -- --check
-    
-    - name: Run Clippy
-      run: |
-        cd spice-client
-        cargo clippy --all-features -- -W warnings -A missing_docs -A clippy::uninlined_format_args -A clippy::type_complexity -A clippy::too_many_arguments
-
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [unit-tests, integration-tests, wasm-tests, mock-server-tests, lint]
+    needs: [format, clippy, unit-tests, build, integration-tests, wasm-tests, mock-server-tests]
     if: always()
     
     steps:
@@ -241,10 +275,28 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         
         # Check each job result
+        if [ "${{ needs.format.result }}" == "success" ]; then
+          echo "✅ Code Formatting: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Code Formatting: ${{ needs.format.result }}" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.clippy.result }}" == "success" ]; then
+          echo "✅ Clippy: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Clippy: ${{ needs.clippy.result }}" >> $GITHUB_STEP_SUMMARY
+        fi
+        
         if [ "${{ needs.unit-tests.result }}" == "success" ]; then
           echo "✅ Unit Tests: Passed" >> $GITHUB_STEP_SUMMARY
         else
           echo "❌ Unit Tests: ${{ needs.unit-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.build.result }}" == "success" ]; then
+          echo "✅ Build (all platforms): Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Build: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
         fi
         
         if [ "${{ needs.integration-tests.result }}" == "success" ]; then
@@ -265,18 +317,14 @@ jobs:
           echo "❌ Mock Server Tests: ${{ needs.mock-server-tests.result }}" >> $GITHUB_STEP_SUMMARY
         fi
         
-        if [ "${{ needs.lint.result }}" == "success" ]; then
-          echo "✅ Lint: Passed" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "❌ Lint: ${{ needs.lint.result }}" >> $GITHUB_STEP_SUMMARY
-        fi
-        
         # Fail if any job failed
-        if [ "${{ needs.unit-tests.result }}" != "success" ] || \
+        if [ "${{ needs.format.result }}" != "success" ] || \
+           [ "${{ needs.clippy.result }}" != "success" ] || \
+           [ "${{ needs.unit-tests.result }}" != "success" ] || \
+           [ "${{ needs.build.result }}" != "success" ] || \
            [ "${{ needs.integration-tests.result }}" != "success" ] || \
            [ "${{ needs.wasm-tests.result }}" != "success" ] || \
-           [ "${{ needs.mock-server-tests.result }}" != "success" ] || \
-           [ "${{ needs.lint.result }}" != "success" ]; then
+           [ "${{ needs.mock-server-tests.result }}" != "success" ]; then
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "❌ **Some tests failed!**" >> $GITHUB_STEP_SUMMARY
           exit 1

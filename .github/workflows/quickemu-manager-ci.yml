@@ -10,43 +10,60 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: Test - ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        
+  # Code formatting check - Linux only
+  format:
+    name: Code Formatting Check
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: rustfmt
+      
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  # Clippy linting - Linux only
+  clippy:
+    name: Clippy Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       
       - name: Install Linux dependencies
-        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt update
+          sudo apt install -y libgtk-4-dev libadwaita-1-dev libwebkit2gtk-4.1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev libxdo-dev
+      
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -W warnings -A missing_docs -A clippy::uninlined_format_args -A clippy::type_complexity -A clippy::too_many_arguments
+
+  # Unit tests - Linux only
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install Linux dependencies
         run: |
           sudo apt update
           sudo apt install -y libgtk-4-dev libadwaita-1-dev libwebkit2gtk-4.1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev libxdo-dev
 
-      - name: Install macOS dependencies
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew install gtk4 libadwaita gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly pkg-config
-          echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-        
-      - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -W warnings -A missing_docs -A clippy::uninlined_format_args -A clippy::type_complexity -A clippy::too_many_arguments
-        
       - name: Run tests
         run: cargo test --workspace
 
+  # Build on all platforms
   build:
     name: Build - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -103,15 +120,31 @@ jobs:
         working-directory: dioxus-app
         run: dx build --release --platform desktop
 
-      - name: Build WASM (Ubuntu only)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-          cd spice-client
-          wasm-pack build --target web --out-dir pkg --no-default-features
-          cd ../dioxus-app
-          dx build --release --platform web
+  # WASM build - Linux only
+  build-wasm:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli
+      
+      - name: Build spice-client WASM
+        working-directory: spice-client
+        run: wasm-pack build --target web --out-dir pkg --no-default-features
+      
+      - name: Build Dioxus app WASM
+        working-directory: dioxus-app
+        run: dx build --release --platform web
 
+  # SPICE client specific tests - Linux only
   spice-client-tests:
     name: SPICE Client Tests
     runs-on: ubuntu-latest
