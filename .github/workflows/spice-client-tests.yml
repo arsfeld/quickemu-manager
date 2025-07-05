@@ -288,7 +288,7 @@ jobs:
     - name: Run WASM tests
       run: |
         cd spice-client
-        wasm-pack test --headless --chrome --firefox -- --no-default-features
+        wasm-pack test --headless --chrome --firefox
 
   mock-server-tests:
     name: Mock Server Tests

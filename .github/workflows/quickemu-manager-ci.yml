@@ -92,7 +92,12 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           brew install gtk4 libadwaita gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly pkg-config
-          echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          # Set PKG_CONFIG_PATH for both Intel and Apple Silicon Macs
+          if [[ $(uname -m) == 'arm64' ]]; then
+            echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          else
+            echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/share/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          fi
 
       - name: Build core library
         working-directory: core

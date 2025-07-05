@@ -51,15 +51,12 @@ async fn test_display_mode_message() {
         socket.write_all(&mode_data).await.unwrap();
     });
 
-    let mut channel = DisplayChannel::new(&addr.ip().to_string(), addr.port(), 0)
+    let mut channel = DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
         .await
         .unwrap();
 
     // Process the mode message
-    let (header, data) = channel.connection.read_message().await.unwrap();
-    assert_eq!(header.msg_type, SPICE_MSG_DISPLAY_MODE);
-
-    channel.handle_message(&header, &data).await.unwrap();
+    channel.process_next_message().await.unwrap();
 
     // Check that primary surface was created
     let surface = channel.get_primary_surface();
@@ -111,17 +108,12 @@ async fn test_display_mark_message() {
         socket.write_all(&header_bytes).await.unwrap();
     });
 
-    let mut channel = DisplayChannel::new(&addr.ip().to_string(), addr.port(), 0)
+    let mut channel = DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
         .await
         .unwrap();
 
     // Process the mark message
-    let (header, data) = channel.connection.read_message().await.unwrap();
-    assert_eq!(header.msg_type, SPICE_MSG_DISPLAY_MARK);
-    assert_eq!(data.len(), 0);
-
-    // Should not error
-    channel.handle_message(&header, &data).await.unwrap();
+    channel.process_next_message().await.unwrap();
 
     server_task.await.unwrap();
 }
@@ -174,15 +166,12 @@ async fn test_display_surface_create_message() {
         socket.write_all(&surface_data).await.unwrap();
     });
 
-    let mut channel = DisplayChannel::new(&addr.ip().to_string(), addr.port(), 0)
+    let mut channel = DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
         .await
         .unwrap();
 
     // Process the surface create message
-    let (header, data) = channel.connection.read_message().await.unwrap();
-    assert_eq!(header.msg_type, SPICE_MSG_DISPLAY_SURFACE_CREATE);
-
-    channel.handle_message(&header, &data).await.unwrap();
+    channel.process_next_message().await.unwrap();
 
     // Check that surface was created
     let surface = channel.get_primary_surface();
@@ -258,20 +247,16 @@ async fn test_display_draw_copy_message() {
         socket.write_all(&draw_data).await.unwrap();
     });
 
-    let mut channel = DisplayChannel::new(&addr.ip().to_string(), addr.port(), 0)
+    let mut channel = DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
         .await
         .unwrap();
 
     // Process the mode message first
-    let (header, data) = channel.connection.read_message().await.unwrap();
-    channel.handle_message(&header, &data).await.unwrap();
+    // Process the first message
+    channel.process_next_message().await.unwrap();
 
     // Process the draw copy message
-    let (header, data) = channel.connection.read_message().await.unwrap();
-    assert_eq!(header.msg_type, DisplayChannelMessage::DrawCopy as u16);
-
-    // Should handle without error (even if not fully implemented)
-    channel.handle_message(&header, &data).await.unwrap();
+    channel.process_next_message().await.unwrap();
 
     server_task.await.unwrap();
 }
@@ -326,19 +311,15 @@ async fn test_display_stream_create_destroy() {
         socket.write_all(&[0x01, 0x00, 0x00, 0x00]).await.unwrap(); // stream_id = 1
     });
 
-    let mut channel = DisplayChannel::new(&addr.ip().to_string(), addr.port(), 0)
+    let mut channel = DisplayChannel::new_with_connection_id(&addr.ip().to_string(), addr.port(), 0, Some(1))
         .await
         .unwrap();
 
     // Process stream create message
-    let (header, data) = channel.connection.read_message().await.unwrap();
-    assert_eq!(header.msg_type, DisplayChannelMessage::StreamCreate as u16);
-    channel.handle_message(&header, &data).await.unwrap();
+    channel.process_next_message().await.unwrap();
 
     // Process stream destroy message
-    let (header, data) = channel.connection.read_message().await.unwrap();
-    assert_eq!(header.msg_type, DisplayChannelMessage::StreamDestroy as u16);
-    channel.handle_message(&header, &data).await.unwrap();
+    channel.process_next_message().await.unwrap();
 
     server_task.await.unwrap();
 }

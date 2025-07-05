@@ -267,6 +267,13 @@ impl DisplayChannel {
         self.update_callback = Some(Box::new(callback));
     }
 
+    /// Process a single message from the server
+    /// This is primarily for testing purposes
+    pub async fn process_next_message(&mut self) -> Result<()> {
+        let (header, data) = self.connection.read_message().await?;
+        self.handle_message(&header, &data).await
+    }
+
     fn notify_update(&self, surface_id: u32) {
         if let Some(ref callback) = self.update_callback {
             if let Some(surface) = self.surfaces.get(&surface_id) {
