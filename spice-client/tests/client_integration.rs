@@ -1,5 +1,5 @@
-use spice_client::SpiceClient;
 use spice_client::protocol::*;
+use spice_client::SpiceClient;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -171,7 +171,7 @@ async fn test_multiple_display_channels() {
 
             // Send channels list immediately without waiting for request
             tokio::time::sleep(Duration::from_millis(50)).await;
-            
+
             let channels_header = SpiceDataHeader {
                 serial: 2,
                 msg_type: SPICE_MSG_MAIN_CHANNELS_LIST,
@@ -205,10 +205,11 @@ async fn test_multiple_display_channels() {
 
         server_task.abort(); // Clean shutdown
         Ok::<(), Box<dyn std::error::Error>>(())
-    }).await;
+    })
+    .await;
 
     match test_result {
-        Ok(Ok(())) => {},
+        Ok(Ok(())) => {}
         Ok(Err(e)) => panic!("Test failed: {}", e),
         Err(_) => panic!("Test timed out after 10 seconds"),
     }
