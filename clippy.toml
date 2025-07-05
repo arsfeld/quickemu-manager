@@ -1,0 +1,20 @@
+# Clippy configuration
+
+# Allow certain lints that are too noisy or not helpful
+allow = [
+    "missing_docs",
+    "clippy::uninlined_format_args",
+    "clippy::type_complexity", 
+    "clippy::too_many_arguments",
+    "clippy::module_inception",
+    "clippy::new_without_default",
+]
+
+# Maximum cognitive complexity allowed
+cognitive-complexity-threshold = 30
+
+# Maximum number of lines allowed in a function
+too-many-lines-threshold = 100
+
+# Allow up to this many arguments in functions
+too-many-arguments-threshold = 10

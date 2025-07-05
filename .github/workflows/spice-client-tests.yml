@@ -61,7 +61,7 @@ jobs:
     - name: Run Clippy
       run: |
         cd spice-client
-        cargo clippy --all-features -- -W warnings -A missing_docs -A clippy::uninlined_format_args -A clippy::type_complexity -A clippy::too_many_arguments
+        cargo clippy --all-features
 
   # Unit tests - Linux only
   unit-tests:

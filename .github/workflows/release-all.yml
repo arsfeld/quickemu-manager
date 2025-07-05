@@ -85,7 +85,15 @@ jobs:
           cp spice-client/target/${{ matrix.target }}/release/${{ matrix.binary }} spice-client/RustySpice.app/Contents/MacOS/
           chmod +x spice-client/RustySpice.app/Contents/MacOS/${{ matrix.binary }}
 
-      - name: Upload spice-client artifacts
+      - name: Upload spice-client binary (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: actions/upload-artifact@v4
+        with:
+          name: spice-client-gtk-${{ matrix.target }}
+          path: spice-client/target/${{ matrix.target }}/release/${{ matrix.binary }}
+
+      - name: Upload spice-client artifacts (macOS)
+        if: startsWith(matrix.os, 'macos')
         uses: actions/upload-artifact@v4
         with:
           name: spice-client-gtk-${{ matrix.target }}
@@ -219,8 +227,15 @@ jobs:
             fi
           done
 
-      - name: Upload GTK4 artifacts
-        if: matrix.os != 'windows-latest'
+      - name: Upload GTK4 binary (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickemu-manager-gtk-${{ matrix.target }}
+          path: gtk4-app/target/${{ matrix.target }}/release/${{ matrix.gtk_binary }}
+
+      - name: Upload GTK4 artifacts (macOS)
+        if: startsWith(matrix.os, 'macos')
         uses: actions/upload-artifact@v4
         with:
           name: quickemu-manager-gtk-${{ matrix.target }}
@@ -228,7 +243,17 @@ jobs:
             gtk4-app/target/${{ matrix.target }}/release/${{ matrix.gtk_binary }}
             gtk4-app/QuickemuManager.app/
 
-      - name: Upload Dioxus artifacts
+      - name: Upload Dioxus artifacts (Linux/Windows)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickemu-manager-dioxus-${{ matrix.target }}
+          path: |
+            dioxus-app/dist/${{ matrix.dioxus_binary }}
+            dioxus-app/dist/assets/
+
+      - name: Upload Dioxus artifacts (macOS)
+        if: startsWith(matrix.os, 'macos')
         uses: actions/upload-artifact@v4
         with:
           name: quickemu-manager-dioxus-${{ matrix.target }}
