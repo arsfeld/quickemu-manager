@@ -260,8 +260,7 @@ jobs:
     - name: Cleanup
       if: always()
       run: |
-        cd spice-client
-        docker-compose -f tests/docker/docker-compose.yml down -v || true
+        docker-compose -f docker/docker-compose.yml down -v || true
 
   wasm-tests:
     name: WASM Tests
