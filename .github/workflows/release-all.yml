@@ -115,7 +115,7 @@ jobs:
         working-directory: spice-client
         run: |
           curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-          wasm-pack build --target web --out-dir pkg --no-default-features
+          wasm-pack build --target web --out-dir pkg --no-default-features --no-opt
 
       - name: Upload WASM artifacts
         uses: actions/upload-artifact@v4
@@ -153,7 +153,7 @@ jobs:
       
       - name: Install Dioxus CLI
         run: |
-          cargo install dioxus-cli
+          cargo install dioxus-cli --version 0.6.3 --locked
 
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
@@ -177,7 +177,20 @@ jobs:
         working-directory: dioxus-app
         run: |
           dx build --release --platform desktop --target ${{ matrix.target }}
-          mv dist/quickemu-manager dist/${{ matrix.dioxus_binary }}
+          # Check if the binary exists in dist/ or target/release/
+          if [ -f "dist/quickemu-manager" ]; then
+            mv dist/quickemu-manager dist/${{ matrix.dioxus_binary }}
+          elif [ -f "target/${{ matrix.target }}/release/quickemu-manager" ]; then
+            mkdir -p dist
+            cp target/${{ matrix.target }}/release/quickemu-manager dist/${{ matrix.dioxus_binary }}
+          elif [ -f "target/${{ matrix.target }}/release/quickemu-manager-dioxus" ]; then
+            mkdir -p dist
+            cp target/${{ matrix.target }}/release/quickemu-manager-dioxus dist/${{ matrix.dioxus_binary }}
+          else
+            echo "Error: Could not find built binary"
+            find . -name "quickemu-manager*" -type f -executable
+            exit 1
+          fi
 
       - name: Build Dioxus web app
         if: matrix.os == 'ubuntu-latest'
@@ -246,6 +259,7 @@ jobs:
           path: |
             dioxus-app/dist/${{ matrix.dioxus_binary }}
             dioxus-app/dist/assets/
+          if-no-files-found: warn
 
       - name: Upload Dioxus artifacts (macOS)
         if: startsWith(matrix.os, 'macos')
@@ -256,6 +270,7 @@ jobs:
             dioxus-app/dist/${{ matrix.dioxus_binary }}
             dioxus-app/dist/assets/
             dioxus-app/QuickemuManager.app/
+          if-no-files-found: warn
 
       - name: Upload Web artifacts
         if: matrix.os == 'ubuntu-latest'

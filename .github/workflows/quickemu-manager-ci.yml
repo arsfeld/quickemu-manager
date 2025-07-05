@@ -43,7 +43,7 @@ jobs:
           sudo apt install -y libgtk-4-dev libadwaita-1-dev libwebkit2gtk-4.1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev libxdo-dev libglib2.0-dev
       
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
   # Unit tests - Linux only
   test:
@@ -80,7 +80,7 @@ jobs:
       
 
       - name: Install Dioxus CLI
-        run: cargo install dioxus-cli
+        run: cargo install dioxus-cli --version 0.6.3 --locked
 
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
@@ -128,11 +128,11 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       
       - name: Install Dioxus CLI
-        run: cargo install dioxus-cli
+        run: cargo install dioxus-cli --version 0.6.3 --locked
       
       - name: Build spice-client WASM
         working-directory: spice-client
-        run: wasm-pack build --target web --out-dir pkg --no-default-features
+        run: wasm-pack build --target web --out-dir pkg --no-default-features --no-opt
       
       - name: Build Dioxus app WASM
         working-directory: dioxus-app

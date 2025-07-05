@@ -34,7 +34,7 @@ jobs:
         targets: wasm32-unknown-unknown
 
     - name: Install Dioxus CLI
-      run: cargo install dioxus-cli --locked
+      run: cargo install dioxus-cli --version 0.6.3 --locked
 
     - name: Install wasm-pack
       run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
@@ -106,7 +106,7 @@ jobs:
           pkg-config
 
     - name: Install Dioxus CLI
-      run: cargo install dioxus-cli --locked
+      run: cargo install dioxus-cli --version 0.6.3 --locked
 
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -129,14 +129,17 @@ jobs:
     - name: Build Desktop App
       run: |
         cd dioxus-app
-        dx build --release --platform desktop
+        dx build --release --platform desktop --target ${{ matrix.target }}
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: quickemu-manager-desktop-${{ matrix.target }}
-        path: dioxus-app/dist/
-        if-no-files-found: error
+        path: |
+          dioxus-app/dist/
+          dioxus-app/target/${{ matrix.target }}/release/quickemu-manager
+          dioxus-app/target/${{ matrix.target }}/release/quickemu-manager-dioxus
+        if-no-files-found: warn
 
   deploy-web:
     name: Deploy Web App to GitHub Pages

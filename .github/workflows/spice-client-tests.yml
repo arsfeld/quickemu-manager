@@ -150,8 +150,10 @@ jobs:
     - name: Run client integration tests
       run: |
         cd spice-client
-        cargo test --test client_integration -- --test-threads=1
+        cargo test --test client_integration -- --test-threads=1 --nocapture
       timeout-minutes: 5
+      env:
+        RUST_LOG: debug
 
   # Build verification on all platforms
   build:
@@ -286,7 +288,7 @@ jobs:
     - name: Run WASM tests
       run: |
         cd spice-client
-        wasm-pack test --headless --chrome --firefox
+        wasm-pack test --headless --chrome --firefox -- --no-default-features
 
   mock-server-tests:
     name: Mock Server Tests
