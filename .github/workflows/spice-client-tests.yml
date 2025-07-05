@@ -66,6 +66,7 @@ jobs:
   # Unit tests - Linux only
   unit-tests:
     name: Unit Tests
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     
     steps:
@@ -101,6 +102,7 @@ jobs:
   # Client integration tests  
   client-integration-tests:
     name: Client Integration Tests
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     
     steps:

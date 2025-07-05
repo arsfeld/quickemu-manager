@@ -143,27 +143,3 @@ jobs:
       - name: Build Dioxus app WASM
         working-directory: dioxus-app
         run: dx build --release --platform web
-
-  # SPICE client specific tests - Linux only
-  spice-client-tests:
-    name: SPICE Client Tests
-    runs-on: ubuntu-latest
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y libgtk-4-dev libadwaita-1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
-
-      - name: Run unit tests
-        working-directory: spice-client
-        run: cargo test --lib --features backend-gtk4
-
-      - name: Run integration tests
-        working-directory: spice-client
-        run: cargo test --test integration --features backend-gtk4
