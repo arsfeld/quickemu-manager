@@ -17,7 +17,6 @@ mod imp {
         #[template_child]
         pub header_bar: TemplateChild<adw::HeaderBar>,
         pub create_vm_button: RefCell<Option<gtk::Button>>,
-        pub refresh_button: RefCell<Option<gtk::Button>>,
         pub menu_button: RefCell<Option<gtk::MenuButton>>,
         #[template_child]
         pub vms_container: TemplateChild<gtk::Box>,
@@ -68,7 +67,6 @@ mod imp {
             Self {
                 header_bar: TemplateChild::default(),
                 create_vm_button: RefCell::new(None),
-                refresh_button: RefCell::new(None),
                 menu_button: RefCell::new(None),
                 vms_container: TemplateChild::default(),
                 scrolled_window: TemplateChild::default(),
@@ -126,18 +124,13 @@ impl MainWindow {
         back_button.set_visible(false);
         header_bar.pack_start(&back_button);
 
-        // Create refresh button
-        let refresh_button = gtk::Button::new();
-        refresh_button.set_icon_name("view-refresh-symbolic");
-        refresh_button.set_tooltip_text(Some("Refresh VM List"));
-        header_bar.pack_start(&refresh_button);
-
-        // Create create VM button
+        // Create create VM button as the main button on the left
         let create_vm_button = gtk::Button::new();
+        create_vm_button.set_label("Create VM");
         create_vm_button.set_icon_name("list-add-symbolic");
         create_vm_button.set_tooltip_text(Some("Create New VM"));
         create_vm_button.add_css_class("suggested-action");
-        header_bar.pack_end(&create_vm_button);
+        header_bar.pack_start(&create_vm_button);
 
         // Create menu button
         let menu_button = gtk::MenuButton::new();
@@ -157,7 +150,6 @@ impl MainWindow {
 
         // Store references to buttons
         imp.create_vm_button.replace(Some(create_vm_button.clone()));
-        imp.refresh_button.replace(Some(refresh_button.clone()));
         imp.menu_button.replace(Some(menu_button));
         imp.back_button.replace(Some(back_button.clone()));
 
@@ -168,13 +160,6 @@ impl MainWindow {
             if let Some(window) = window_weak.upgrade() {
                 let dialog = VMCreateDialog::new(&window, app_state_clone.clone());
                 dialog.present();
-            }
-        });
-
-        let window_weak = window.downgrade();
-        refresh_button.connect_clicked(move |_| {
-            if let Some(window) = window_weak.upgrade() {
-                window.refresh_vms();
             }
         });
 
@@ -226,12 +211,12 @@ impl MainWindow {
         let imp = self.imp();
         imp.view_stack.set_visible_child_name("vm_list");
 
-        // Hide back button and show refresh button
+        // Hide back button and show create VM button
         if let Some(back_button) = imp.back_button.borrow().as_ref() {
             back_button.set_visible(false);
         }
-        if let Some(refresh_button) = imp.refresh_button.borrow().as_ref() {
-            refresh_button.set_visible(true);
+        if let Some(create_vm_button) = imp.create_vm_button.borrow().as_ref() {
+            create_vm_button.set_visible(true);
         }
 
         // Clean up console if it exists
@@ -271,12 +256,12 @@ impl MainWindow {
         // Switch to console view
         imp.view_stack.set_visible_child_name("vm_console");
 
-        // Show back button and hide refresh button
+        // Show back button and hide create VM button
         if let Some(back_button) = imp.back_button.borrow().as_ref() {
             back_button.set_visible(true);
         }
-        if let Some(refresh_button) = imp.refresh_button.borrow().as_ref() {
-            refresh_button.set_visible(false);
+        if let Some(create_vm_button) = imp.create_vm_button.borrow().as_ref() {
+            create_vm_button.set_visible(false);
         }
     }
 
@@ -361,7 +346,7 @@ impl MainWindow {
         flowbox.set_selection_mode(gtk::SelectionMode::None);
 
         for vm in vms {
-            let vm_card = VMCard::new(vm.clone(), app_state.clone());
+            let vm_card = VMCard::new(vm.clone(), app_state.clone(), Some(app_state.process_monitor.clone()));
             flowbox.append(vm_card.widget());
         }
 

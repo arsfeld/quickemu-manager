@@ -6,5 +6,6 @@
     <file>ui/vm_card.ui</file>
     <file>ui/vm_create_dialog.ui</file>
     <file>ui/settings_dialog.ui</file>
+    <file>style.css</file>
   </gresource>
 </gresources>

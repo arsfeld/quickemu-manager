@@ -228,6 +228,7 @@ impl VMManager {
         let mut system = System::new();
         system.refresh_processes(ProcessesToUpdate::All, false);
 
+        // First priority: Look for qemu-system processes directly
         for process in system.processes().values() {
             if let Some(cmd) = process.cmd().first() {
                 let cmd_str = cmd.to_string_lossy();
@@ -239,19 +240,53 @@ impl VMManager {
                         arg_str.contains(&vm_id.0) || arg_str.contains(&format!("{}.conf", vm_id.0))
                     })
                 {
+                    println!("Found qemu-system process for VM '{}' with PID {}", vm_id.0, process.pid().as_u32());
                     return VMStatus::Running {
                         pid: process.pid().as_u32(),
                     };
                 }
-                // Also check for quickemu wrapper processes as fallback
+            }
+        }
+
+        // If no qemu-system found, check for quickemu wrapper and try to find its child
+        for process in system.processes().values() {
+            if let Some(cmd) = process.cmd().first() {
+                let cmd_str = cmd.to_string_lossy();
+                
                 if cmd_str.contains("quickemu")
                     && process
                         .cmd()
                         .iter()
                         .any(|arg| arg.to_string_lossy().contains(&vm_id.0))
                 {
+                    // Found quickemu wrapper, now look for its qemu-system child
+                    let wrapper_pid = process.pid().as_u32();
+                    println!("Found quickemu wrapper for VM '{}' with PID {}, looking for qemu-system child", vm_id.0, wrapper_pid);
+                    
+                    // Refresh processes again to ensure we have the latest info
+                    system.refresh_processes(ProcessesToUpdate::All, false);
+                    
+                    // Look for qemu-system processes that might be children of this quickemu
+                    for child_process in system.processes().values() {
+                        if let Some(child_cmd) = child_process.cmd().first() {
+                            if child_cmd.to_string_lossy().contains("qemu-system")
+                                && child_process.cmd().iter().any(|arg| {
+                                    let arg_str = arg.to_string_lossy();
+                                    arg_str.contains(&vm_id.0) || arg_str.contains(&format!("{}.conf", vm_id.0))
+                                })
+                            {
+                                println!("Found qemu-system child process for VM '{}' with PID {}", vm_id.0, child_process.pid().as_u32());
+                                return VMStatus::Running {
+                                    pid: child_process.pid().as_u32(),
+                                };
+                            }
+                        }
+                    }
+                    
+                    // If we couldn't find the qemu-system child, return the wrapper PID as fallback
+                    println!("Warning: Could not find qemu-system child for VM '{}', using wrapper PID {} (metrics may not work)", vm_id.0, wrapper_pid);
                     return VMStatus::Running {
-                        pid: process.pid().as_u32(),
+                        pid: wrapper_pid,
                     };
                 }
             }
@@ -265,6 +300,7 @@ impl VMManager {
                     // Extract PID from ps output (second column)
                     if let Some(pid_str) = line.split_whitespace().nth(1) {
                         if let Ok(pid) = pid_str.parse::<u32>() {
+                            println!("Found qemu-system via ps command for VM '{}' with PID {}", vm_id.0, pid);
                             return VMStatus::Running { pid };
                         }
                     }

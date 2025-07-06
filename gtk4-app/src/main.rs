@@ -1,11 +1,11 @@
 mod ui;
 
 use gtk::prelude::*;
-use gtk::{gio, glib, Application};
+use gtk::{gdk, gio, glib, Application};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use quickemu_core::{BinaryDiscovery, ConfigManager, QuickgetService, VMManager};
+use quickemu_core::{BinaryDiscovery, ConfigManager, ProcessMonitor, QuickgetService, VMManager};
 use ui::MainWindow;
 
 // Import AppState from lib.rs instead of defining it here
@@ -29,6 +29,16 @@ fn main() -> glib::ExitCode {
     )
     .expect("Failed to enumerate resources");
     println!("Available UI resources: {:?}", resources);
+    
+    // Load CSS
+    let css_provider = gtk::CssProvider::new();
+    css_provider.load_from_resource("/org/quickemu/Manager/style.css");
+    
+    gtk::style_context_add_provider_for_display(
+        &gdk::Display::default().expect("Could not connect to a display."),
+        &css_provider,
+        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
 
     let app = Application::builder().application_id(APP_ID).build();
 
@@ -52,9 +62,13 @@ fn build_ui(app: &Application) {
             binary_discovery.discovery_info()
         );
 
-        let vm_manager = VMManager::from_binary_discovery(binary_discovery.clone())
+        let mut vm_manager = VMManager::from_binary_discovery(binary_discovery.clone())
             .await
             .expect("Failed to initialize VMManager");
+        
+        // Initialize process monitor
+        let process_monitor = Arc::new(ProcessMonitor::new());
+        vm_manager.set_process_monitor(process_monitor.clone());
 
         // Initialize quickget service if available
         let quickget_service = binary_discovery
@@ -71,6 +85,7 @@ fn build_ui(app: &Application) {
             config_manager,
             vm_manager: Arc::new(vm_manager),
             quickget_service,
+            process_monitor,
         }
     });
 

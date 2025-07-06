@@ -1,0 +1,98 @@
+/* VM Card Styling */
+.card {
+  background-color: @card_bg_color;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+  transition: all 0.3s cubic-bezier(.25,.8,.25,1);
+}
+
+/* Clickable area styling */
+#clickable_area {
+  border-radius: 12px 12px 0 0;
+  transition: background-color 0.2s ease;
+}
+
+#clickable_area.hover {
+  background-color: alpha(@accent_color, 0.05);
+}
+
+/* Control area styling */
+#control_area {
+  background-color: alpha(@headerbar_bg_color, 0.3);
+  border-radius: 0 0 12px 12px;
+  padding: 8px;
+}
+
+/* Status label colors */
+.success {
+  color: @success_color;
+}
+
+.warning {
+  color: @warning_color;
+}
+
+.error {
+  color: @error_color;
+}
+
+/* Menu button styling */
+.circular {
+  border-radius: 50%;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 4px;
+}
+
+/* Title styling */
+.title-2 {
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+/* Metrics value styling */
+.card .title-2 {
+  color: @text_color;
+}
+
+/* Force metrics text to be visible */
+#cpu_value, #ram_value, #disk_value {
+  color: @text_color;
+  opacity: 1.0;
+}
+
+/* Fallback if theme variables don't work */
+.card #cpu_value, .card #ram_value, .card #disk_value {
+  color: inherit;
+}
+
+/* Metric value class with explicit styling */
+.metric-value {
+  font-size: 1.2em;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.87); /* Dark text for light theme */
+}
+
+/* Dark theme support */
+@media (prefers-color-scheme: dark) {
+  .metric-value {
+    color: rgba(255, 255, 255, 0.87); /* Light text for dark theme */
+  }
+}
+
+/* Hover effect for clickable cards */
+.card[cursor="pointer"]:hover {
+  cursor: pointer;
+}
+
+/* Smooth transitions for metrics */
+.card label {
+  transition: all 0.3s ease;
+}
+
+/* Pill button styling */
+.pill {
+  border-radius: 99px;
+  padding: 4px 16px;
+  min-height: 28px;
+}
