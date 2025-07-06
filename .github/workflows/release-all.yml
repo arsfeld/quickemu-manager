@@ -130,11 +130,9 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             gtk_binary: quickemu-manager-gtk
-            dioxus_binary: quickemu-manager-dioxus
           - os: macos-latest
             target: aarch64-apple-darwin
             gtk_binary: quickemu-manager-gtk
-            dioxus_binary: quickemu-manager-dioxus
 
     steps:
       - uses: actions/checkout@v4
@@ -144,15 +142,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       
-      - name: Install Dioxus CLI
-        run: |
-          cargo install dioxus-cli --version 0.6.3 --locked
-
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt update
-          sudo apt install -y libgtk-4-dev libadwaita-1-dev libwebkit2gtk-4.1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev libxdo-dev libglib2.0-dev
+          sudo apt install -y libgtk-4-dev libadwaita-1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev libxdo-dev libglib2.0-dev
 
       - name: Install macOS dependencies
         if: matrix.os == 'macos-latest'
@@ -166,41 +160,15 @@ jobs:
           cargo build --release --target ${{ matrix.target }}
           mv target/${{ matrix.target }}/release/quickemu-manager target/${{ matrix.target }}/release/${{ matrix.gtk_binary }}
 
-      - name: Build Dioxus app
-        working-directory: dioxus-app
-        run: |
-          dx build --release --platform desktop --target ${{ matrix.target }}
-          # Check if the binary exists in dist/ or target/release/
-          if [ -f "dist/quickemu-manager" ]; then
-            mv dist/quickemu-manager dist/${{ matrix.dioxus_binary }}
-          elif [ -f "target/${{ matrix.target }}/release/quickemu-manager" ]; then
-            mkdir -p dist
-            cp target/${{ matrix.target }}/release/quickemu-manager dist/${{ matrix.dioxus_binary }}
-          elif [ -f "target/${{ matrix.target }}/release/quickemu-manager-dioxus" ]; then
-            mkdir -p dist
-            cp target/${{ matrix.target }}/release/quickemu-manager-dioxus dist/${{ matrix.dioxus_binary }}
-          else
-            echo "Error: Could not find built binary"
-            find . -name "quickemu-manager*" -type f -executable
-            exit 1
-          fi
-
-      - name: Build Dioxus web app
-        if: matrix.os == 'ubuntu-latest'
-        working-directory: dioxus-app
-        run: |
-          dx build --release --platform web
-
       - name: Create macOS app bundle
         if: startsWith(matrix.os, 'macos')
         run: |
-          # Create .app bundles for both GTK and Dioxus apps
-          for app in gtk4-app dioxus-app; do
-            mkdir -p $app/QuickemuManager.app/Contents/MacOS
-            mkdir -p $app/QuickemuManager.app/Contents/Resources
-            
-            # Create Info.plist
-            cat > $app/QuickemuManager.app/Contents/Info.plist << EOF
+          # Create .app bundle for GTK app
+          mkdir -p gtk4-app/QuickemuManager.app/Contents/MacOS
+          mkdir -p gtk4-app/QuickemuManager.app/Contents/Resources
+          
+          # Create Info.plist
+          cat > gtk4-app/QuickemuManager.app/Contents/Info.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -218,15 +186,9 @@ jobs:
           </dict>
           </plist>
           EOF
-            
-            if [ "$app" = "gtk4-app" ] && [ -f "gtk4-app/target/${{ matrix.target }}/release/${{ matrix.gtk_binary }}" ]; then
-              cp gtk4-app/target/${{ matrix.target }}/release/${{ matrix.gtk_binary }} $app/QuickemuManager.app/Contents/MacOS/quickemu-manager
-              chmod +x $app/QuickemuManager.app/Contents/MacOS/quickemu-manager
-            elif [ "$app" = "dioxus-app" ]; then
-              cp dioxus-app/dist/${{ matrix.dioxus_binary }} $app/QuickemuManager.app/Contents/MacOS/quickemu-manager
-              chmod +x $app/QuickemuManager.app/Contents/MacOS/quickemu-manager
-            fi
-          done
+          
+          cp gtk4-app/target/${{ matrix.target }}/release/${{ matrix.gtk_binary }} gtk4-app/QuickemuManager.app/Contents/MacOS/quickemu-manager
+          chmod +x gtk4-app/QuickemuManager.app/Contents/MacOS/quickemu-manager
 
       - name: Upload GTK4 binary (Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -243,35 +205,6 @@ jobs:
           path: |
             gtk4-app/target/${{ matrix.target }}/release/${{ matrix.gtk_binary }}
             gtk4-app/QuickemuManager.app/
-
-      - name: Upload Dioxus artifacts (Linux/Windows)
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: quickemu-manager-dioxus-${{ matrix.target }}
-          path: |
-            dioxus-app/dist/${{ matrix.dioxus_binary }}
-            dioxus-app/dist/assets/
-          if-no-files-found: warn
-
-      - name: Upload Dioxus artifacts (macOS)
-        if: startsWith(matrix.os, 'macos')
-        uses: actions/upload-artifact@v4
-        with:
-          name: quickemu-manager-dioxus-${{ matrix.target }}
-          path: |
-            dioxus-app/dist/${{ matrix.dioxus_binary }}
-            dioxus-app/dist/assets/
-            dioxus-app/QuickemuManager.app/
-          if-no-files-found: warn
-
-      - name: Upload Web artifacts
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: quickemu-manager-web
-          path: |
-            dioxus-app/dist/
 
   create-release:
     name: Create Release

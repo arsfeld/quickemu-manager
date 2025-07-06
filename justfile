@@ -10,13 +10,9 @@ build:
 build-gtk:
     cargo build -p quickemu-manager-gtk
 
-# Build the Dioxus fullstack application
-build-dioxus-fullstack:
-    cd dioxus-app && dx build --platform server --release
-
-# Build the Dioxus web client only
-build-dioxus-web:
-    cd dioxus-app && dx build --platform web --release
+# Build the Slint desktop application
+build-slint:
+    cargo build -p quickemu-manager
 
 # Build the core library
 build-core:
@@ -25,7 +21,6 @@ build-core:
 # Build everything in release mode
 build-release:
     cargo build --workspace --release
-    cd dioxus-app && dx build --platform server --release
 
 # Run the GTK4 desktop application
 run-gtk:
@@ -67,7 +62,6 @@ lint:
 # Clean build artifacts
 clean:
     cargo clean
-    cd dioxus-app && dx clean
 
 # Quick CI check
 ci: fmt lint test

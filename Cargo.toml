@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "gtk4-app", "dioxus-app", "spice-client"]
+members = ["core", "gtk4-app", "slint-app", "spice-client"]
 resolver = "2"
 
 [workspace.dependencies]

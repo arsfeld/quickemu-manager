@@ -79,8 +79,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       
 
-      - name: Install Dioxus CLI
-        run: cargo install dioxus-cli --version 0.6.3 --locked
 
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
@@ -115,9 +113,6 @@ jobs:
         working-directory: gtk4-app
         run: cargo build --release
 
-      - name: Build Dioxus app
-        working-directory: dioxus-app
-        run: dx build --release --platform desktop
 
   # WASM build - Linux only
   build-wasm:
@@ -132,13 +127,7 @@ jobs:
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       
-      - name: Install Dioxus CLI
-        run: cargo install dioxus-cli --version 0.6.3 --locked
       
       - name: Build spice-client WASM
         working-directory: spice-client
         run: wasm-pack build --target web --out-dir pkg --no-default-features --no-opt
-      
-      - name: Build Dioxus app WASM
-        working-directory: dioxus-app
-        run: dx build --release --platform web

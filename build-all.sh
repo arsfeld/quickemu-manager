@@ -49,32 +49,10 @@ cd ..
     
     cd ..
 
-# Build Dioxus app
-echo -e "${BLUE}Building Dioxus app...${NC}"
-cd dioxus-app
-
-if ! command -v dx &> /dev/null; then
-    echo "Installing Dioxus CLI..."
-    cargo install dioxus-cli
-fi
-
-echo "  Building desktop app for Linux..."
-dx build --release --platform desktop --target $LINUX_TARGET
-
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo "  Building desktop app for macOS..."
-    dx build --release --platform desktop --target $MACOS_ARM_TARGET
-fi
-
-echo "  Building web app..."
-dx build --release --platform web
-
-cd ..
 
 echo -e "${GREEN}Build completed successfully!${NC}"
 echo ""
 echo "Build artifacts:"
 echo "  - spice-client: spice-client/target/*/release/"
 echo "  - GTK4 app: gtk4-app/target/*/release/"
-echo "  - Dioxus app: dioxus-app/dist/"
 echo "  - WASM: spice-client/pkg/"
