@@ -1,0 +1,173 @@
+import { StandardButton, Button, ComboBox } from "std-widgets.slint";
+import { AppTheme } from "../styles/theme.slint";
+
+export component SettingsDialog inherits Rectangle {
+    width: 100%;
+    height: 100%;
+    
+    callback apply();
+    callback cancel();
+    
+    in-out property <bool> show-dialog: false;
+    in-out property <string> selected-ui-style: "auto";
+    in-out property <string> selected-color-theme: AppTheme.current-theme;
+    
+    property <[string]> ui-styles: ["auto", "material", "fluent", "cupertino", "native"];
+    property <[string]> ui-style-names: ["Auto-detect", "Material Design", "Windows 11 (Fluent)", "macOS (Cupertino)", "Native"];
+    property <[string]> color-themes: ["light", "dark"];
+    property <[string]> color-theme-names: ["Light", "Dark"];
+    
+    public function show() {
+        self.show-dialog = true;
+    }
+    
+    public function hide() {
+        self.show-dialog = false;
+    }
+    
+    if show-dialog: Rectangle {
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        
+        TouchArea {
+            width: 100%;
+            height: 100%;
+            clicked => {
+                root.hide();
+            }
+        }
+        
+        Rectangle {
+            x: parent.width / 2 - self.width / 2;
+            y: parent.height / 2 - self.height / 2;
+            width: 500px;
+            height: 400px;
+            background: AppTheme.content-background;
+            border-radius: 8px;
+            drop-shadow-blur: 20px;
+            drop-shadow-color: rgba(0, 0, 0, 0.3);
+            
+            TouchArea {
+                // Prevent clicks on dialog from closing it
+                clicked => { }
+            }
+            
+            VerticalLayout {
+                padding: 20px;
+                spacing: 20px;
+                
+                // Title
+                Text {
+                    text: "Settings";
+                    font-size: 20px;
+                    font-weight: 700;
+                    color: AppTheme.text-color;
+                }
+                
+                // UI Style section
+                VerticalLayout {
+                    spacing: 8px;
+                    
+                    Text {
+                        text: "UI Style";
+                        font-size: 16px;
+                        font-weight: 600;
+                        color: AppTheme.text-color;
+                    }
+                    
+                    Text {
+                        text: "Choose how the application looks. Auto-detect will choose based on your platform.";
+                        font-size: 14px;
+                        color: AppTheme.dim-text;
+                        wrap: word-wrap;
+                    }
+                    
+                    ComboBox {
+                        model: root.ui-style-names;
+                        current-index: 0; // Default to auto
+                        selected => {
+                            root.selected-ui-style = root.ui-styles[self.current-index];
+                        }
+                    }
+                }
+                
+                // Color Theme section
+                VerticalLayout {
+                    spacing: 8px;
+                    
+                    Text {
+                        text: "Color Theme";
+                        font-size: 16px;
+                        font-weight: 600;
+                        color: AppTheme.text-color;
+                    }
+                    
+                    Text {
+                        text: "Choose between light and dark color schemes.";
+                        font-size: 14px;
+                        color: AppTheme.dim-text;
+                        wrap: word-wrap;
+                    }
+                    
+                    ComboBox {
+                        model: root.color-theme-names;
+                        current-index: root.selected-color-theme == "dark" ? 1 : 0;
+                        selected => {
+                            root.selected-color-theme = root.color-themes[self.current-index];
+                            // Apply color theme immediately for preview
+                            AppTheme.set-theme(root.selected-color-theme);
+                        }
+                    }
+                }
+                
+                // VM Directories section (placeholder for now)
+                VerticalLayout {
+                    spacing: 8px;
+                    
+                    Text {
+                        text: "VM Directories";
+                        font-size: 16px;
+                        font-weight: 600;
+                        color: AppTheme.text-color;
+                    }
+                    
+                    Text {
+                        text: "Directories where VMs are stored. (Coming soon)";
+                        font-size: 14px;
+                        color: AppTheme.dim-text;
+                        wrap: word-wrap;
+                    }
+                }
+                
+                // Spacer
+                Rectangle {
+                    vertical-stretch: 1;
+                }
+                
+                // Buttons
+                HorizontalLayout {
+                    spacing: 12px;
+                    alignment: end;
+                    
+                    Button {
+                        text: "Cancel";
+                        clicked => { 
+                            root.cancel();
+                            root.hide();
+                        }
+                    }
+                    
+                    Button {
+                        text: "Apply";
+                        primary: true;
+                        clicked => { 
+                            root.apply();
+                            root.hide();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

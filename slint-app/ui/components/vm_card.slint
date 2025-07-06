@@ -1,0 +1,227 @@
+import { StandardButton, Button } from "std-widgets.slint";
+import { AppTheme } from "../styles/theme.slint";
+
+export struct VmInfo {
+    id: string,
+    name: string,
+    os_type: string,
+    status: string,
+    cpu_usage: float,
+    ram_usage: string,
+    disk_io: string,
+}
+
+export component VmCard inherits Rectangle {
+    width: 350px;
+    background: AppTheme.card-background;
+    border-radius: 12px;
+    drop-shadow-blur: 8px;
+    drop-shadow-color: AppTheme.shadow-color;
+    drop-shadow-offset-y: 2px;
+
+    in property <VmInfo> vm-info;
+    
+    callback start();
+    callback stop();
+    callback open-console();
+    callback edit();
+    callback delete();
+    callback clone();
+    callback export();
+
+    property <bool> hovered: false;
+    property <color> hover-background: AppTheme.card-hover-background;
+
+    states [
+        hovered when hovered: {
+            background: hover-background;
+        }
+    ]
+
+    animate background { duration: 300ms; easing: ease; }
+
+    TouchArea {
+        width: 100%;
+        height: 100%;
+        mouse-cursor: pointer;
+        
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                if (vm-info.status == "stopped") {
+                    root.start();
+                } else if (vm-info.status == "running") {
+                    root.open-console();
+                }
+            } else if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                // TODO: Show context menu
+            }
+        }
+        
+        moved => {
+            root.hovered = self.has-hover;
+        }
+    }
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 12px;
+
+        // Header
+        HorizontalLayout {
+            spacing: 12px;
+
+            // OS Icon
+            Rectangle {
+                width: 40px;
+                height: 40px;
+                background: AppTheme.icon-background;
+                border-radius: 8px;
+
+                Text {
+                    text: "💻";
+                    font-size: 20px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+
+            // VM Info
+            VerticalLayout {
+                spacing: 4px;
+
+                Text {
+                    text: vm-info.name;
+                    font-size: 16px;
+                    font-weight: 600;
+                    color: AppTheme.text-color;
+                    overflow: elide;
+                }
+
+                Text {
+                    text: vm-info.os-type;
+                    font-size: 14px;
+                    color: AppTheme.dim-text;
+                }
+            }
+
+            // Status area
+            Rectangle {
+                horizontal-stretch: 1;
+            }
+
+            // Status button/label/console button based on state
+            if vm-info.status == "stopped": Button {
+                text: "Start";
+                primary: true;
+                clicked => { root.start(); }
+            }
+
+            if vm-info.status == "running": Button {
+                text: "Console";
+                clicked => { root.open-console(); }
+            }
+
+            if vm-info.status == "starting": Button {
+                text: "Starting...";
+                enabled: false;
+            }
+
+            if vm-info.status == "stopping": Text {
+                text: "Stopping...";
+                color: AppTheme.dim-text;
+                font-size: 14px;
+                vertical-alignment: center;
+            }
+
+            if vm-info.status == "error": Button {
+                text: "Retry";
+                clicked => { root.start(); }
+            }
+        }
+
+        // Separator
+        Rectangle {
+            height: 1px;
+            background: AppTheme.separator-color;
+        }
+
+        // Metrics (only show when running)
+        if vm-info.status == "running": HorizontalLayout {
+            spacing: 20px;
+            alignment: space-between;
+
+            // CPU
+            VerticalLayout {
+                spacing: 4px;
+                alignment: center;
+
+                Text {
+                    text: "CPU";
+                    font-size: 12px;
+                    color: AppTheme.dim-text;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: round(vm-info.cpu-usage) + "%";
+                    font-size: 20px;
+                    font-weight: 600;
+                    color: AppTheme.text-color;
+                    horizontal-alignment: center;
+                }
+            }
+
+            // RAM
+            VerticalLayout {
+                spacing: 4px;
+                alignment: center;
+
+                Text {
+                    text: "RAM";
+                    font-size: 12px;
+                    color: AppTheme.dim-text;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: vm-info.ram-usage;
+                    font-size: 20px;
+                    font-weight: 600;
+                    color: AppTheme.text-color;
+                    horizontal-alignment: center;
+                }
+            }
+
+            // Disk
+            VerticalLayout {
+                spacing: 4px;
+                alignment: center;
+
+                Text {
+                    text: "Disk I/O";
+                    font-size: 12px;
+                    color: AppTheme.dim-text;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: vm-info.disk-io;
+                    font-size: 20px;
+                    font-weight: 600;
+                    color: AppTheme.text-color;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+
+        // Control area (only show when running)
+        if vm-info.status == "running": HorizontalLayout {
+            alignment: end;
+            
+            Button {
+                text: "Stop VM";
+                clicked => { root.stop(); }
+            }
+        }
+    }
+}

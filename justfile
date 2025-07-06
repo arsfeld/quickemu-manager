@@ -26,26 +26,13 @@ build-release:
 run-gtk:
     cd gtk4-app && cargo run
 
-# Run the Dioxus web application (client-side rendering)
-run-dioxus-web:
-    cd dioxus-app && dx serve --platform web
+# Run the Slint desktop application
+run-slint:
+    cd slint-app && cargo run
 
-# Run the Dioxus fullstack application server (after building)
-run-dioxus-server:
-    cd dioxus-app && cargo run --bin quickemu-manager-ui --release
-
-# Run the Dioxus fullstack application with hot reload
-serve:
-    cd dioxus-app && dx serve --platform server
-
-# Run the Dioxus fullstack application with verbose logging
-serve-verbose:
-    cd dioxus-app && RUST_LOG=info dx serve --platform server
-
-# Serve the Dioxus web client in debug mode
-debug-web:
-    cd dioxus-app && dx build --platform web
-    cd /var/home/arosenfeld/Code/quickemu-manager/target/dx/quickemu-manager-ui/debug/web/public && python3 -m http.server 8080
+# Run the Slint desktop application with verbose logging
+run-slint-verbose:
+    cd slint-app && RUST_LOG=info cargo run
 
 # Run all tests
 test:

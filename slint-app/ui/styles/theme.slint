@@ -1,0 +1,44 @@
+export global AppTheme {
+    // Theme selection
+    in-out property <string> current-theme: "light";
+    
+    // Colors - these will be computed based on theme
+    in-out property <color> window-background: current-theme == "dark" ? #1e1e1e : #f6f5f4;
+    in-out property <color> content-background: current-theme == "dark" ? #2b2b2b : #ffffff;
+    in-out property <color> header-background: current-theme == "dark" ? #2b2b2b : #ffffff;
+    in-out property <color> card-background: current-theme == "dark" ? #303030 : #ffffff;
+    in-out property <color> card-hover-background: current-theme == "dark" ? #3a3a3a : #f9f9f9;
+    
+    in-out property <color> text-color: current-theme == "dark" ? #ffffff : #2e3436;
+    in-out property <color> dim-text: current-theme == "dark" ? #a0a0a0 : #929595;
+    in-out property <color> accent-color: current-theme == "dark" ? #4a9eff : #3584e4;
+    in-out property <color> success-color: current-theme == "dark" ? #45d97e : #33d17a;
+    in-out property <color> warning-color: current-theme == "dark" ? #f9e64f : #f6d32d;
+    in-out property <color> error-color: current-theme == "dark" ? #ff5555 : #e01b24;
+    
+    in-out property <color> separator-color: current-theme == "dark" ? #404040 : #e1e1e1;
+    in-out property <color> shadow-color: current-theme == "dark" ? rgba(0, 0, 0, 0.5) : rgba(0, 0, 0, 0.1);
+    in-out property <color> icon-background: current-theme == "dark" ? #404040 : #f0f0f0;
+    
+    // Toast colors
+    in-out property <color> toast-background: current-theme == "dark" ? #404040 : #323232;
+    in-out property <color> toast-text: #ffffff;
+    
+    // Spacing
+    in property <length> default-spacing: 8px;
+    in property <length> card-padding: 16px;
+    in property <length> header-height: 48px;
+    
+    // Theme switching function
+    public function toggle-theme() {
+        if (current-theme == "light") {
+            current-theme = "dark";
+        } else {
+            current-theme = "light";
+        }
+    }
+    
+    public function set-theme(theme: string) {
+        current-theme = theme;
+    }
+}

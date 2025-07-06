@@ -1,0 +1,32 @@
+[package]
+name = "quickemu-manager"
+version = "0.1.0"
+edition = "2021"
+authors = ["Quickemu Manager Contributors"]
+license = "MIT"
+description = "Slint UI for Quickemu Manager"
+
+[[bin]]
+name = "quickemu-manager"
+path = "src/main.rs"
+
+[dependencies]
+slint = { version = "1.9", features = ["backend-winit", "renderer-femtovg"] }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dirs = "5"
+
+# Local dependencies
+quickemu-core = { path = "../core" }
+spice-client = { path = "../spice-client", features = ["backend-gtk4"] }
+
+[build-dependencies]
+slint-build = "1.9"
+
+[lints]
+workspace = true

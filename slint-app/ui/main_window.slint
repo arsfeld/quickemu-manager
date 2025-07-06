@@ -1,0 +1,128 @@
+import { StandardButton, ScrollView } from "std-widgets.slint";
+import { VmCard, VmInfo } from "components/vm_card.slint";
+import { HeaderBar } from "components/header_bar.slint";
+import { SettingsDialog } from "components/settings_dialog.slint";
+import { AppTheme } from "styles/theme.slint";
+
+export component MainWindow inherits Window {
+    title: "Quickemu Manager";
+    preferred-width: 1200px;
+    preferred-height: 800px;
+    background: AppTheme.window-background;
+
+    callback refresh-vms();
+    callback create-vm();
+    callback show-settings();
+    callback show-about();
+    callback start-vm(string);
+    callback stop-vm(string);
+    callback open-console(string);
+    callback edit-vm(string);
+    callback delete-vm(string);
+    callback clone-vm(string);
+    callback export-vm(string);
+    callback set-theme(string);
+    callback apply-ui-style(string);
+
+    in property <[VmInfo]> vms: [];
+    in-out property <string> current-view: "vm-list";
+    in property <bool> show-back-button: false;
+    
+    out property <string> toast-message: "";
+    out property <bool> show-toast: false;
+
+    VerticalLayout {
+        HeaderBar {
+            show-back-button: root.show-back-button;
+            refresh => { root.refresh-vms(); }
+            create => { root.create-vm(); }
+            settings => { 
+                settings-dialog.show();
+            }
+            about => { root.show-about(); }
+            back => { root.current-view = "vm-list"; }
+        }
+
+        if root.current-view == "vm-list": Rectangle {
+            background: AppTheme.content-background;
+            
+            ScrollView {
+                visible: root.vms.length > 0;
+                
+                VerticalLayout {
+                    spacing: 16px;
+                    padding: 16px;
+                    
+                    for vm in root.vms: VmCard {
+                        vm-info: vm;
+                        start => { root.start-vm(vm.id); }
+                        stop => { root.stop-vm(vm.id); }
+                        open-console => { root.open-console(vm.id); }
+                        edit => { root.edit-vm(vm.id); }
+                        delete => { root.delete-vm(vm.id); }
+                        clone => { root.clone-vm(vm.id); }
+                        export => { root.export-vm(vm.id); }
+                    }
+                }
+            }
+
+            // Empty state
+            if root.vms.length == 0: VerticalLayout {
+                alignment: center;
+                spacing: 20px;
+                
+                Text {
+                    text: "No virtual machines found";
+                    font-size: 24px;
+                    color: AppTheme.dim-text;
+                    horizontal-alignment: center;
+                }
+                
+                Text {
+                    text: "Create a new VM to get started";
+                    font-size: 16px;
+                    color: AppTheme.dim-text;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+
+        if root.current-view == "vm-console": Rectangle {
+            background: AppTheme.content-background;
+            
+            Text {
+                text: "VM Console View";
+                font-size: 18px;
+                color: AppTheme.text-color;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    // Toast overlay
+    if root.show-toast: Rectangle {
+        x: parent.width / 2 - self.width / 2;
+        y: parent.height - 100px;
+        width: 300px;
+        height: 50px;
+        background: AppTheme.toast-background;
+        border-radius: 8px;
+        
+        Text {
+            text: root.toast-message;
+            color: AppTheme.toast-text;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+    
+    // Settings Dialog
+    settings-dialog := SettingsDialog {
+        apply => {
+            // Apply the UI style
+            root.apply-ui-style(self.selected-ui-style);
+            // Color theme is already applied in the dialog
+        }
+    }
+}

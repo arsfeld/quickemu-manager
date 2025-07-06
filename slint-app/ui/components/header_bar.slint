@@ -1,0 +1,80 @@
+import { StandardButton, Button } from "std-widgets.slint";
+import { AppTheme } from "../styles/theme.slint";
+
+export component HeaderBar inherits Rectangle {
+    height: 48px;
+    background: AppTheme.header-background;
+    drop-shadow-blur: 4px;
+    drop-shadow-color: AppTheme.shadow-color;
+    drop-shadow-offset-y: 1px;
+
+    in property <bool> show-back-button: false;
+
+    callback refresh();
+    callback create();
+    callback settings();
+    callback about();
+    callback back();
+
+    HorizontalLayout {
+        padding: 8px;
+        spacing: 8px;
+        alignment: space-between;
+
+        // Left section
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: start;
+
+            // Back button (conditional)
+            if show-back-button: Button {
+                text: "←";
+                width: 40px;
+                clicked => { root.back(); }
+            }
+
+            // Title
+            Text {
+                text: "Quickemu Manager";
+                font-size: 18px;
+                font-weight: 600;
+                color: AppTheme.text-color;
+                vertical-alignment: center;
+            }
+        }
+
+        // Right section
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: end;
+
+            // Refresh button
+            Button {
+                text: "↻";
+                width: 40px;
+                clicked => { root.refresh(); }
+            }
+
+            // Create VM button
+            Button {
+                text: "+ Create VM";
+                primary: true;
+                clicked => { root.create(); }
+            }
+
+            // Theme toggle button
+            Button {
+                text: AppTheme.current-theme == "dark" ? "☀" : "🌙";
+                width: 40px;
+                clicked => { AppTheme.toggle-theme(); }
+            }
+            
+            // Menu button
+            Button {
+                text: "☰";
+                width: 40px;
+                clicked => { root.settings(); }
+            }
+        }
+    }
+}
